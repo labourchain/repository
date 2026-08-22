@@ -28,5 +28,5 @@ jobs:
       - run: pnpm run typecheck
       - run: pnpm run test:coverage
       - run: pnpm run build
-      - name: inspect publish tarball
-        run: npm pack --dry-run
+      - name: verify publish tarball
+        run: pnpm run package:check
