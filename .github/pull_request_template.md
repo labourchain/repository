@@ -2,28 +2,22 @@
 
 <!-- What does this PR change, and why? -->
 
-## Requirement / feature
+## Requirements / Features
 
-<!-- Link or list the governing REQ-* and FEAT-* IDs from docs/. -->
+<!-- Link the relevant docs when product behavior changes. -->
 
-- REQ-:
-- FEAT-:
+- [ ] No product capability changed, or `docs/requirements.md` / `docs/features.md` is updated first.
 
-- [ ] No product capability changed, or the requirements/features layer is updated first.
+## Spec
 
-## Governing spec
+<!-- Link the governing spec when observable behavior or engineering boundaries change. -->
 
-<!-- Link/list the SPEC-* that defines the observable contract. -->
-
-- SPEC-:
-
-- [ ] No observable behavior changed, or the governing spec is updated.
-- [ ] The spec traces back to the listed REQ-* / FEAT-*.
+- [ ] No observable contract changed, or the relevant file under `specs/` is updated.
 
 ## Implementation
 
-- [ ] Tests cover the changed contract/invariant before or alongside implementation.
-- [ ] Code does not add behavior outside the governing spec.
+- [ ] Tests cover the changed contract or invariant.
+- [ ] Code does not add behavior outside the governing Spec.
 
 ## Cordis lifecycle
 
@@ -31,14 +25,7 @@
 - [ ] New resources are owned and disposed by the Cordis lifecycle.
 - [ ] Service/provider dependencies are explicit.
 
-## Repository boundary
-
-- [ ] No RawEntry recognition was added.
-- [ ] No Project/Board semantic aggregation was added.
-- [ ] No Core protocol semantics were copied into this package.
-- [ ] Backend-specific concepts do not leak into the public Repository contract.
-
-## Package boundary
+## Package contents
 
 - [ ] `docs/` and `specs/` remain source-only development artifacts.
 - [ ] No tests, source files, agent/contribution documents, or development scripts leak into the npm package.
