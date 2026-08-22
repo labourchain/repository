@@ -1,7 +1,7 @@
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it } from 'vitest'
 
-import RepositoryService from '../src/index.ts'
+import RepositoryService from '../src/index.js'
 
 describe('RepositoryService lifecycle', () => {
   it('REP-CORDIS-001: mounts the prefixed repository service', async () => {
