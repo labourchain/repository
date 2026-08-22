@@ -23,7 +23,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22.20.0
-          cache: pnpm
       - run: pnpm install --no-frozen-lockfile
       - run: pnpm run typecheck
       - run: pnpm run test:coverage
