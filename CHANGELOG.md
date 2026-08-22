@@ -6,8 +6,9 @@ All notable user-visible changes to this project will be documented here.
 
 ### Added
 
-- Initial spec-driven repository scaffold.
+- Initial spec-driven Repository scaffold.
 - Requirements -> Spec -> Implementation development model.
-- Repository requirements and MVP feature catalog under `docs/`.
-- Draft SPEC-0001 defining the Repository MVP boundary and invariants with REQ/FEAT traceability.
+- Repository requirements and MVP feature description under `docs/`.
+- Draft `specs/repository-mvp.md` defining the strict Repository MVP contract and boundaries.
+- Chinese authoritative README and separate English translation.
 - Package-content verification that keeps `docs/`, `specs/`, tests, sources, and other development artifacts out of the runtime npm package.
