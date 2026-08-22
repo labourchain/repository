@@ -4,6 +4,22 @@
   "private": true,
   "description": "Spec-driven Cordis repository service for LabourChain workspaces, worker relationships, records, and assets",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/labourchain/repository.git"
+  },
+  "homepage": "https://github.com/labourchain/repository#readme",
+  "bugs": {
+    "url": "https://github.com/labourchain/repository/issues"
+  },
+  "keywords": [
+    "labourchain",
+    "cordis",
+    "repository",
+    "workspace",
+    "records",
+    "assets"
+  ],
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
