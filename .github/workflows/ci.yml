@@ -24,6 +24,12 @@ jobs:
         with:
           node-version: 22.20.0
       - run: pnpm install --no-frozen-lockfile
+      - name: upload generated lockfile
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: bootstrap-pnpm-lock
+          path: pnpm-lock.yaml
       - run: pnpm run typecheck
       - run: pnpm run test:coverage
       - run: pnpm run build
