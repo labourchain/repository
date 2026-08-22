@@ -1,0 +1,60 @@
+{
+  "name": "@labourchain/repository",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Spec-driven Cordis repository workspace and fact-storage capability for LabourChain",
+  "keywords": [
+    "labourchain",
+    "cordis",
+    "deepseek-harness",
+    "dsh-plugin",
+    "repository",
+    "workspace"
+  ],
+  "type": "module",
+  "packageManager": "pnpm@11.7.0",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/labourchain/repository.git"
+  },
+  "homepage": "https://github.com/labourchain/repository#readme",
+  "bugs": {
+    "url": "https://github.com/labourchain/repository/issues"
+  },
+  "engines": {
+    "node": "^22.20.0 || >=24.0.0"
+  },
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "import": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/**/*.js",
+    "lib/**/*.d.ts",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsdown --config tsdown.config.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test \"test/**/*.test.ts\"",
+    "test:coverage": "node --experimental-strip-types --experimental-test-coverage --test-coverage-exclude=\"test/**\" --test-coverage-lines=90 --test-coverage-branches=80 --test-coverage-functions=85 --test \"test/**/*.test.ts\"",
+    "check": "pnpm run typecheck && pnpm run test:coverage && pnpm run build",
+    "prepack": "pnpm run check"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "4.0.1",
+    "@types/node": "22.20.1",
+    "tsdown": "0.22.14",
+    "typescript": "6.0.3"
+  }
+}
