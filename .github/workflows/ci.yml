@@ -6,7 +6,7 @@ on:
   pull_request:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   check:
@@ -16,6 +16,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -31,13 +33,16 @@ jobs:
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
 
-      - name: Upload generated lockfile for bootstrap
-        uses: actions/upload-artifact@v4
-        with:
-          name: bootstrap-lockfile
-          path: pnpm-lock.yaml
-          if-no-files-found: error
-          retention-days: 1
+      - name: Commit generated lockfile once
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        run: |
+          if [ -n "$(git status --porcelain -- pnpm-lock.yaml)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add pnpm-lock.yaml
+            git commit -m "chore: add pnpm lockfile"
+            git push origin HEAD:${{ github.head_ref }}
+          fi
 
       - name: Run quality gates
         run: pnpm check
