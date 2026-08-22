@@ -2,8 +2,12 @@
 
 - **Status:** Draft
 - **Target:** first usable Repository service
+- **Source requirements:** REQ-001 through REQ-012 in [`../docs/requirements.md`](../docs/requirements.md)
+- **Source features:** FEAT-001 through FEAT-009 in [`../docs/features.md`](../docs/features.md)
 - **Scope:** workspace membership, Record/Asset acceptance, validation boundary, persistence boundary, retrieval
 - **Out of scope:** raw-entry recognition, Project semantics, analysis, blockchain packing/consensus, production runtime backends
+
+This specification is the contract layer between product requirements/features and implementation. It must not introduce a new product capability that is absent from `docs/`. If implementation work discovers a missing requirement, update the requirements/features layer first and then revise this spec.
 
 ## 1. Purpose
 
@@ -278,7 +282,7 @@ SPEC-0001 may be marked **Implemented** when:
 - `pnpm run typecheck` passes;
 - `pnpm run test:coverage` passes;
 - `pnpm run build` passes;
-- `npm pack --dry-run` contains only intended publish files;
+- `pnpm run package:check` passes and confirms `docs/`/`specs/` remain source-only;
 - CI passes on supported operating systems;
 - README public behavior matches the implementation;
 - package publication remains disabled until a separate release-readiness review confirms the plugin is actually useful and maintainable.
@@ -289,5 +293,7 @@ Changes to any invariant, ownership boundary, or public service behavior require
 
 - an amendment to this spec while it is Draft;
 - a new spec that explicitly supersedes part of SPEC-0001 after it is Accepted.
+
+If the change represents a new or changed product capability, the corresponding `REQ-*` / `FEAT-*` source must be updated before the spec.
 
 Implementation-only refactors that preserve observable behavior do not require a new spec, but must remain covered by tests.
