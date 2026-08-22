@@ -1,9 +1,9 @@
 import { spawnSync } from 'node:child_process'
 
-const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm'
-const result = spawnSync(npm, ['pack', '--dry-run', '--json', '--ignore-scripts'], {
+const result = spawnSync('npm', ['pack', '--dry-run', '--json', '--ignore-scripts'], {
   cwd: process.cwd(),
   encoding: 'utf8',
+  shell: process.platform === 'win32',
 })
 
 if (result.error) throw result.error
