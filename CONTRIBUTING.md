@@ -1,27 +1,32 @@
 # Contributing
 
-Contributions are welcome. This repository uses a Requirements -> Spec -> Implementation workflow so product intent, formal contracts, and code remain separable and traceable.
+Contributions are welcome. This repository uses a three-layer development workflow so product needs, engineering contracts, and implementation remain distinct.
 
 ## Before coding
 
-1. Read `README.md` and `AGENTS.md`.
-2. Find the relevant `REQ-*` and `FEAT-*` under `docs/`.
-3. Find the governing `SPEC-*` under `specs/`.
-4. Keep the change inside Repository's boundary: workspace membership, accepted Record/Asset storage and validation orchestration, and retrieval.
+1. Read the authoritative Chinese `README.md` and the English `AGENTS.md`.
+2. Read `docs/requirements.md` and `docs/features.md` for the current product need.
+3. Read `specs/repository-mvp.md` for the strict engineering contract.
 
-If the desired behavior is not represented by an existing requirement/feature, update `docs/` first. If requirements/features are accepted but the contract is missing or incomplete, update `specs/` before implementation.
+If implementation work reveals a missing product need, update `docs/` first. If the product need is already clear but the engineering contract is incomplete, update the Spec before implementation.
 
-## Three-layer change rule
+## Development flow
 
-For new or changed behavior, the normal sequence is:
+For new or changed behavior:
 
 ```text
-REQ-* -> FEAT-* -> SPEC-* -> tests -> implementation
+Requirements / Features
+        ↓
+Spec
+        ↓
+Tests
+        ↓
+Implementation
 ```
 
-A spec must not silently invent a new product capability. Code must not silently broaden a spec.
+Requirements describe what the product needs. The Spec owns strict boundaries, invariants, lifecycle rules, provider contracts, errors, and acceptance behavior. Code should satisfy the Spec without broadening it implicitly.
 
-Pure refactors that preserve observable behavior do not require requirement/spec changes, but must keep existing tests passing.
+Pure refactors that preserve observable behavior do not require requirements/spec changes, but existing tests must remain valid.
 
 ## Pull requests
 
@@ -29,23 +34,20 @@ Prefer small PRs with one reason to change.
 
 A behavior-changing PR should include:
 
-- the relevant `REQ-*` / `FEAT-*` references;
-- the governing `SPEC-*`;
-- tests for the invariant or contract being changed;
+- the relevant requirement or feature document update when product behavior changes;
+- the relevant Spec update when the engineering contract changes;
+- tests for the changed contract or invariant;
 - implementation;
-- README/CHANGELOG updates when user-visible behavior changes;
+- README/CHANGELOG updates when the human-visible project state changes;
 - no unrelated refactors.
 
-## Source-only development artifacts
+## Development documents and packaging
 
-The following are maintained in Git but are not runtime package contents:
+`docs/` and `specs/` are maintained in Git for humans and coding agents but are not runtime package contents.
 
-- `docs/` requirements/features;
-- `specs/` formal development specifications;
-- `test/` and `scripts/`;
-- `AGENTS.md`, `CONTRIBUTING.md`, and `CHANGELOG.md`.
+Tests, scripts, agent instructions, and contribution documents are also development artifacts unless a later packaging decision explicitly changes that.
 
-Do not add them to the npm package allowlist. The package verification gate rejects development-artifact leakage.
+Do not add these files to the npm package allowlist. `pnpm run package:check` verifies the actual tarball.
 
 ## Validation
 
@@ -56,8 +58,8 @@ pnpm run check
 pnpm run package:check
 ```
 
-CI repeats frozen dependency installation, type checking, coverage-gated tests, build, and actual tarball-content verification on supported platforms.
+CI repeats frozen dependency installation, type checking, coverage-gated tests, build, and tarball-content verification on supported platforms.
 
 ## Maintainability
 
-Readable, explicit code is preferred over abstraction added for hypothetical future features. Cordis services and effects should make ownership/lifecycle visible. New providers should implement a narrow capability rather than coupling the domain service to a specific database or external system.
+Prefer readable, explicit code over abstractions for hypothetical future requirements. Cordis services and effects should make ownership and lifecycle visible. New providers should implement narrow capabilities rather than coupling Repository behavior to a particular database or external system.
