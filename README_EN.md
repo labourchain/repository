@@ -12,15 +12,15 @@ The repository is currently in the MVP development stage and is implemented as a
 
 ## Documentation
 
-`docs/` is not limited to development requirements. It is the long-term project documentation space for theoretical and product material formed around Repository, and may later be published through GitHub Pages or another documentation site.
+`docs/` is the long-term project documentation space. It contains conceptual, product, and other material that may later be published through GitHub Pages or another documentation site.
 
-Current documents:
+Main entry points:
 
-- [`docs/theory/labour-model.md`](./docs/theory/labour-model.md): the political-economy theory baseline for workers, living labour, dead labour, repositories, and projects;
+- [`docs/concepts/`](./docs/concepts/): long-lived conceptual baseline and standard terminology;
 - [`docs/requirements.md`](./docs/requirements.md): the single source of truth for Repository product requirements;
-- [`specs/repository-mvp.md`](./specs/repository-mvp.md): the engineering contract, boundaries, invariants, and acceptance criteria projected from the requirements.
+- [`specs/repository-mvp.md`](./specs/repository-mvp.md): engineering contracts, boundaries, invariants, and acceptance criteria projected from the requirements.
 
-Theory documents provide a long-term conceptual baseline, but they do not replace the requirements layer. If requirements, Spec, or implementation conflict with the theory baseline, the conflict should be reviewed explicitly rather than silently resolved in code.
+`docs/concepts/` splits the domain model into topic-focused documents. [`docs/concepts/README.md`](./docs/concepts/README.md) is the concept index and terminology table. Concepts are a long-term comparison baseline, not a replacement for product requirements. If concepts, requirements, Spec, or implementation diverge, the mismatch must be reviewed explicitly rather than resolved silently in code.
 
 ## Development model
 
@@ -37,7 +37,7 @@ Implementation
   src/ + test/
 ```
 
-Theory documents sit outside this development chain and provide longer-lived conceptual context and comparison baselines.
+Concept documents sit outside this development chain and provide stable terminology and domain-model baselines.
 
 Requirements state what the product needs. The Spec turns those needs into a verifiable engineering contract. Implementation and tests satisfy the Spec.
 
@@ -46,15 +46,16 @@ If implementation work exposes a missing product need, update the requirements f
 ## Repository structure
 
 ```text
-README.md            Chinese project README (authoritative)
-README_EN.md         English translation
-AGENTS.md            Agent development instructions (English)
-docs/                theory, requirements, and other project documentation
-specs/               engineering specifications
-src/                 Cordis plugin implementation
-test/                tests
-scripts/             engineering and release checks
-.github/              CI and PR configuration
+README.md             Chinese project README (authoritative)
+README_EN.md          English translation
+AGENTS.md             Agent development instructions (English)
+docs/concepts/        conceptual baseline and terminology
+docs/requirements.md  product-requirement source of truth
+specs/                engineering specifications
+src/                  Cordis plugin implementation
+test/                 tests
+scripts/              engineering and release checks
+.github/               CI and PR configuration
 ```
 
 `docs/` and `specs/` remain in the Git repository but are excluded from the published npm plugin package. Their exclusion from the runtime package does not make them disposable development artifacts.
