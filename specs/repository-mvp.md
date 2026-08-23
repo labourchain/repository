@@ -2,291 +2,309 @@
 
 - **Status:** Draft
 - **Target:** first usable Repository service
-- **Requirements:** [`../docs/requirements.md`](../docs/requirements.md)
-- **Features:** [`../docs/features.md`](../docs/features.md)
+- **Requirements source:** [`../docs/requirements.md`](../docs/requirements.md)
 
-This document is the strict engineering contract for the first usable Repository implementation. Product needs are described in `docs/`; this spec defines the boundaries, invariants, service behavior, provider behavior, errors, lifecycle rules, and acceptance tests needed to implement them without expanding the scope implicitly.
+This document is an engineering projection of `docs/requirements.md`.
+
+It may choose concrete service shapes, lifecycle rules, provider contracts, errors, and testable invariants needed to satisfy the requirements. It must not create product behavior that is absent from the requirements source. When this Spec conflicts with `docs/requirements.md`, the requirements document is authoritative and this Spec must be changed.
 
 ## Purpose
 
-Repository provides a workspace-oriented storage and validation capability for recognized LabourChain Records and Assets.
+The Repository plugin provides a Cordis capability for one Repository workspace, worker membership, validation and preservation of recognized LabourChain Records and Assets, and later retrieval of that stored material.
 
-The MVP supports this path:
+The MVP service path is:
 
 ```text
-worker relationship
+worker membership
   -> recognized Record / Asset
-  -> authorization
+  -> membership check
   -> Core validation
-  -> persistence
-  -> stable retrieval
+  -> storage provider
+  -> retrieval / enumeration
 ```
 
 ## Terminology
 
 ### Repository
 
-A workspace and fact-storage boundary that maintains worker relationships and provides acceptance, persistence orchestration, and retrieval of Records and Assets.
+The workspace represented by this plugin instance. It contains worker membership and accepted Records and Assets.
 
 ### Worker
 
-An identity that has an active or inactive relationship with a Repository workspace.
+A LabourChain identity that may belong to the Repository workspace.
 
-Identity format, signatures, and cryptographic semantics belong to LabourChain Core.
+Identity representation, signatures, and other identity protocol semantics come from LabourChain Core.
 
 ### Record
 
-A recognized LabourChain fact that already has a protocol-level representation before Repository acceptance.
+A recognized LabourChain Record with a protocol-level representation before Repository acceptance.
 
 ### Asset
 
-A storable or referenceable object explicitly captured as part of LabourChain activity.
+An Asset or Asset reference represented according to its applicable LabourChain protocol.
 
-### Persistence provider
+### Storage provider
 
-A replaceable backend capability used by Repository to preserve workspace state, worker relationships, Records, and Assets.
+A replaceable runtime capability used by Repository to preserve and retrieve workspace state. The provider is an implementation mechanism; it does not define Repository product semantics.
 
-## Boundaries
+## Engineering boundaries
+
+The MVP implementation is intentionally narrow.
 
 Repository owns:
 
-- one Repository workspace per plugin instance for the MVP;
-- worker-to-Repository relationships;
-- contribution authorization based on active worker relationship;
+- the active Repository workspace exposed by one plugin instance;
+- worker membership in that workspace;
+- membership checks for contributions;
 - acceptance orchestration for recognized Records and Assets;
 - delegation to LabourChain Core validation;
-- persistence and retrieval orchestration through a replaceable provider;
-- generic enumeration of workers, Records, and Assets.
+- storage/retrieval orchestration;
+- listing workers, Records, and Assets.
 
-Repository does not own:
+Repository must not absorb adjacent product responsibilities while implementing these requirements:
 
-- RawEntry recognition, LLM extraction, protocol detection, or Record drafting;
-- Project organization, grouping, planning, progress, retrospective, summary, or semantic analysis;
-- Board presentation or UI projections;
-- Core protocol schemas, canonical hashing/signing rules, block structure, or consensus;
-- database-specific domain semantics such as MongoDB collections, Redis keys, SQL rows, or filesystem paths;
-- automatic promotion of runtime state, caches, indexes, temporary API responses, or LLM context into Assets;
-- blockchain packing, peer synchronization, or chain settlement in the MVP.
+- RawEntry recognition, LLM extraction, protocol detection, or Record drafting remain in LabourFlow or another recognition workflow;
+- Project organization, planning, review, summary, and analysis remain outside Repository;
+- Board presentation and projections remain outside Repository;
+- Core protocol schemas, hashing, signatures, block semantics, and protocol validation rules remain in Core;
+- concrete database, filesystem, cache, external API, and similar runtime integrations remain provider concerns;
+- runtime data is not silently promoted into an Asset;
+- blockchain packing, peer synchronization, and settlement are not part of this MVP Repository implementation.
 
-These boundaries are implementation constraints. A capability outside them requires a requirements change before the spec is expanded.
+These boundaries exist to prevent implementation convenience from expanding the product scope.
 
 ## Invariants
 
 ### Membership precedes contribution
 
-A contributor must have an active worker relationship with the Repository before Repository accepts a persistent Record or Asset contribution.
+A contributor must belong to the Repository before a persistent Record or Asset contribution can be accepted.
 
-Authorization failure must occur before persistence.
+Membership failure occurs before validation or storage.
 
 ### Recognition precedes Repository acceptance
 
-Repository accepts recognized Records and Assets. It must not contain an alternate RawEntry-to-Record recognition path.
+Repository receives protocol-recognized Records and Assets. It does not implement a RawEntry-to-Record conversion path.
 
-### Validation precedes persistence
+### Validation precedes storage
 
-A Record or Asset must pass the configured LabourChain Core validation capability before it becomes accepted persistent Repository content.
+A Record or Asset must pass the applicable LabourChain Core validation before it becomes accepted Repository content.
 
-Validation failure must leave no partially accepted object.
+Validation failure must leave no accepted stored object.
 
-### Accepted facts are preserved
+### Accepted content is preserved
 
-Repository must not silently rewrite accepted Record or Asset semantics for storage, indexing, or UI convenience.
+Repository must preserve the accepted semantic content of a Record or Asset.
 
-Correction and versioning follow the owning protocol semantics.
+Storage encoding, indexing, caching, or presentation must not silently change that semantic content. Correction/versioning follows the object's owning protocol.
 
-### Project semantics stay external
+### Stored state survives when backed by persistent storage
 
-Repository retrieval and enumeration must remain usable without loading or understanding Project entities or Board projections.
+The Repository service must not rely on process memory as its canonical storage contract.
 
-### Backend details stay behind the provider contract
+A persistent provider must be able to preserve workspace state across normal application restart without requiring changes to Repository-facing behavior.
 
-The public Repository service must not expose backend-native identifiers or storage structures as canonical Repository behavior.
+An in-memory provider is permitted for tests and development only; it does not by itself satisfy the small-team persistence requirement.
 
-### Runtime state is not automatically an Asset
+### Project semantics remain external
 
-Runtime data becomes an Asset only through an explicit capture/archive workflow followed by normal Repository acceptance.
+Retrieval and enumeration must not require Project or Board semantics.
 
-### Cordis owns external resources
+### Storage details remain behind the provider boundary
 
-Importing the package must have no external side effects.
+The public Repository service must not expose provider-native concepts such as MongoDB collections, Redis keys, SQL rows, or filesystem paths as Repository semantics.
 
-Connections, watchers, timers, subscriptions, servers, or other external resources owned by Repository or its in-repository provider must be acquired and disposed through the Cordis lifecycle.
+### Cordis owns plugin resources
 
-Reload must not duplicate stateful registrations or leak owned resources.
+Importing the package must perform no external work.
 
-## Service capabilities
+Resources created by this plugin or an in-repository test provider must be acquired and disposed through Cordis lifecycle ownership. Reload or repeated activation must not duplicate owned resources.
 
-Exact TypeScript names may be refined while this spec is Draft, but public behavior must remain within the following contract.
+## Service contract
+
+Exact TypeScript names may still be refined while this Spec is Draft, but behavior should remain equivalent to the following minimal contract.
 
 ### Workspace
 
-The service must expose the active Repository workspace identity and basic metadata required by clients.
+The service exposes the workspace identity and basic metadata required for clients to recognize which Repository they are using.
 
-The MVP may initialize or load one configured workspace per plugin instance.
+For the MVP, one configured workspace per Repository plugin instance is sufficient.
 
-### Worker relationships
+### Worker membership
 
-The service must support operations semantically equivalent to:
+The service provides operations semantically equivalent to:
 
 ```text
-activateWorker(worker)
-deactivateWorker(worker)
-isWorkerActive(worker)
-listWorkers(cursor?)
+addWorker(worker)
+removeWorker(worker)
+hasWorker(worker)
+listWorkers()
 ```
 
-Activating an already-active worker and deactivating an already-inactive worker must have deterministic behavior documented by the implementation contract before this spec moves to Accepted.
+The first implementation should use simple deterministic set-like membership semantics:
+
+- adding an existing worker succeeds without duplicating membership;
+- removing a missing worker succeeds without creating other state.
+
+This keeps the MVP model to the membership relationship required by the requirements rather than introducing role or status machinery prematurely.
 
 ### Record acceptance
 
-The service must support an operation semantically equivalent to:
+The service provides an operation semantically equivalent to:
 
 ```text
-acceptRecord(contributor, recognizedRecord)
+acceptRecord(contributor, record)
 ```
 
 Required order:
 
-1. verify the contributor has an active worker relationship;
-2. validate the Record through the Core validation capability;
-3. reject authorization or validation failures without persistence;
-4. persist the accepted Record through the configured provider;
-5. return a stable Repository reference.
+1. confirm contributor membership;
+2. validate the Record through the Core validation boundary;
+3. store the accepted Record;
+4. return its stable identity/reference.
 
-Repository must not enrich, classify, summarize, or reinterpret the Record during acceptance.
+Failure before step 3 must leave no accepted Record.
+
+Repository does not enrich, classify, summarize, or reinterpret the Record during acceptance.
 
 ### Asset acceptance
 
-The service must support an operation semantically equivalent to:
+The service provides an operation semantically equivalent to:
 
 ```text
-acceptAsset(contributor, recognizedAsset)
+acceptAsset(contributor, asset)
 ```
 
-It follows the same authorization-before-validation-before-persistence ordering as Record acceptance.
+It follows the same membership -> validation -> storage ordering as Record acceptance and returns the accepted Asset identity/reference.
 
 ### Retrieval
 
-The MVP must support:
+The MVP supports:
 
-- retrieve an accepted Record by stable Repository reference;
-- retrieve an accepted Asset by stable Repository reference;
+- retrieving a Record by stable identity/reference;
+- retrieving an Asset by stable identity/reference;
 - explicit not-found behavior;
-- returned accepted content preserving the submitted semantic content.
+- returning accepted semantic content unchanged.
+
+Repository must not invent a second identity system when the accepted protocol object already provides the stable identity required for retrieval.
 
 ### Enumeration
 
-The MVP must support generic enumeration of:
+The MVP supports simple listing of:
 
 - workers;
 - Records;
 - Assets.
 
-Enumeration must use a backend-neutral cursor or pagination contract.
-
-Filters may use generic protocol or storage metadata only when they do not introduce Project or application semantics.
+No cursor, pagination, semantic search, indexing contract, or Project-specific filtering is required in the first implementation. Those capabilities should be specified only when an actual consumer or scale requirement appears.
 
 ## Core validation boundary
 
-Repository consumes Core validation rather than copying protocol rules.
+Repository consumes Core validation rather than reproducing protocol rules.
 
-Until `labourchain/core-protocols` exposes a stable runtime service API, Repository may define a narrow adapter interface used by tests and integration work.
+Until `labourchain/core-protocols` exposes its stable runtime validation API, the Repository implementation may use a narrow internal adapter.
 
-That adapter:
+The adapter must:
 
-- must be isolated from Repository public semantics;
-- must be replaceable without changing Flow/Board-facing behavior;
-- must not become a second protocol model;
-- must fail closed when validation capability required for acceptance is unavailable.
+- expose only the validation capability Repository needs;
+- remain isolated from the public Repository service contract;
+- be replaceable without changing Repository-facing behavior;
+- fail closed when required validation is unavailable;
+- not duplicate Core protocol schemas or validation logic.
 
-## Persistence provider contract
+## Storage provider contract
 
-The first implementation must include an in-memory provider for tests and local development.
+Repository uses a storage-provider interface so persistence implementation can live in the Runtime layer without changing Repository product behavior.
 
-The provider must support the operations required for:
+The provider needs only the capabilities required by this MVP:
 
-- loading workspace state;
-- preserving worker relationships;
-- storing accepted Records;
-- storing accepted Assets;
-- retrieving accepted objects;
-- enumerating workers, Records, and Assets.
+- load/save workspace metadata;
+- load/save/remove worker membership;
+- store/get/list accepted Records;
+- store/get/list accepted Assets.
 
-Provider behavior must preserve these properties:
+Provider implementations must preserve these properties:
 
-- no partial accepted state after authorization or validation failure;
-- stable retrieval references within the provider's persisted Repository state;
-- backend failures surfaced in a backend-neutral programmatic form;
-- accepted content returned without provider-specific semantic rewriting.
+- rejected contributions never appear as accepted content;
+- accepted object identity/reference remains stable for later retrieval;
+- returned Record/Asset semantic content is preserved;
+- provider failures are surfaced to Repository without being disguised as successful acceptance.
 
-Production MongoDB, Redis, SQL, filesystem, or remote providers belong to the runtime layer unless a later requirement explicitly changes the packaging decision.
+### In-memory provider
+
+This repository should include a minimal in-memory provider for contract tests and local engineering work.
+
+It is a test implementation of the provider contract, not the persistence solution for a real small-team deployment.
+
+### Persistent providers
+
+A usable deployment requires a persistent Runtime provider so accepted Repository state survives normal restart, as required by `docs/requirements.md`.
+
+MongoDB, SQL, filesystem, or other persistent provider choices belong to the Runtime layer and do not need to be implemented in this repository's first code slice.
 
 ## Cordis integration
 
-The public service name must use a LabourChain-specific namespace, such as `labourchainRepository`, rather than a generic flat name.
+Repository is exposed as a Cordis service using a LabourChain-specific service name such as `labourchainRepository`.
 
 The implementation must:
 
-- declare service/provider dependencies explicitly;
-- avoid process-global mutable state for Repository data;
-- register and dispose owned resources through Cordis lifecycle/effects;
-- support repeated activation/deactivation in tests without duplicated handles;
-- allow consumers to use Repository without knowing the concrete persistence provider.
+- declare dependencies explicitly;
+- avoid process-global mutable Repository state;
+- use Cordis lifecycle/effects for owned resources;
+- allow clean repeated activation/deactivation in tests;
+- allow consumers to use Repository without knowing the concrete storage provider.
 
 ## Error model
 
-The implementation must expose distinguishable programmatic failures for at least:
+The service should expose programmatically distinguishable failures for:
 
-- Repository unavailable or not initialized;
-- contributor is not an active worker;
+- Repository unavailable/not initialized;
+- contributor is not a member;
 - Core validation rejected the object;
-- Core validation capability unavailable;
-- object reference collision when replacement is not allowed by protocol semantics;
-- backend unavailable or failed;
+- required Core validation capability unavailable;
+- stored object already conflicts with an existing identity/reference when replacement is not allowed;
+- storage provider failure;
 - requested object not found.
 
-Errors must provide enough context for logs without embedding secrets or full Asset content by default.
+Errors should provide enough context for debugging without embedding full Asset content or other large/sensitive payloads by default.
 
 ## Acceptance tests
 
-Before this spec can move to **Implemented**, automated tests must demonstrate at minimum:
+Before the Repository service implementation is considered complete, tests should demonstrate the behavior that materially protects the requirements and Cordis lifecycle:
 
 - workspace can initialize/load;
-- worker can be activated, queried, enumerated, and deactivated;
-- active worker can contribute a valid recognized Record;
-- inactive/non-member contribution is rejected before persistence;
-- invalid Record is rejected before persistence;
-- accepted Record can be retrieved with preserved semantic content;
-- Asset acceptance follows the same authorization and validation ordering;
-- accepted Asset can be retrieved;
-- Records, Assets, and workers can be enumerated without Project semantics;
-- in-memory provider can be substituted behind the Repository service contract;
-- backend failure is surfaced programmatically;
-- plugin import causes no external side effects;
-- plugin activation/deactivation leaves no owned resource leak;
-- repeated activation/reload does not duplicate owned registrations.
+- worker can be added, checked, listed, and removed;
+- adding the same worker does not duplicate membership;
+- a member can contribute a valid recognized Record;
+- a non-member contribution is rejected before storage;
+- an invalid Record is rejected before storage;
+- an accepted Record can be retrieved unchanged;
+- Asset acceptance follows the same membership and validation ordering;
+- an accepted Asset can be retrieved unchanged;
+- workers, Records, and Assets can be listed without Project semantics;
+- the Repository service works against the in-memory provider contract;
+- a storage-provider failure is surfaced as failure rather than accepted state;
+- importing the plugin has no external side effects;
+- activation/deactivation does not leak or duplicate resources owned by the plugin.
 
-Coverage thresholds are quality gates, not a substitute for these contract and invariant tests.
+Do not add tests solely to increase coverage. Coverage is a secondary quality signal; contract and invariant value determines whether a test belongs here.
 
 ## Implementation completion
 
-The MVP implementation is complete when:
+The Repository package's first implementation is complete when:
 
-- the Cordis Repository service satisfies this spec;
-- the in-memory provider satisfies the provider contract;
-- Core validation is connected through the stable Core service or a clearly isolated temporary adapter;
-- all acceptance tests pass;
-- `pnpm run typecheck` passes;
-- `pnpm run test:coverage` passes;
-- `pnpm run build` passes;
-- `pnpm run package:check` passes on supported CI platforms;
-- the published tarball contains runtime artifacts and required package metadata only;
-- `README.md` accurately describes the usable repository at a human-facing level.
+- the Cordis service satisfies this Spec;
+- the in-memory provider satisfies the provider contract for tests;
+- Core validation is connected through the stable Core service or the isolated temporary adapter;
+- the acceptance tests pass;
+- type checking, tests, build, and package-content verification pass on the supported Node versions;
+- the npm tarball contains runtime artifacts and required package metadata without `docs/` or `specs/`.
 
-The package remains private until a separate release-readiness review confirms the first implementation is useful and maintainable.
+This package-level completion does not claim that a small-team deployment is durable until a persistent Runtime provider is connected.
 
 ## Spec changes
 
-While this spec is Draft, accepted requirements may refine it directly.
+During the MVP phase, `docs/requirements.md` remains the single product source of truth and this file remains a mutable projection of it.
 
-After the first stable implementation enters maintenance, versioning or numbered spec history may be introduced when preserving long-term change history becomes useful. Until then, this file remains the single MVP contract.
+If implementation reveals a missing or changed product need, update `docs/requirements.md` first and then revise this Spec.
+
+Numbered/immutable Spec history can be introduced later when maintenance makes historical traceability useful.
