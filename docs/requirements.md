@@ -12,17 +12,19 @@ A LabourChain Repository is a warehouse for Assets produced by workers. It keeps
 
 Record is not Repository content in the same sense as Asset. A Record is an on-chain labour fact produced by a worker. Repository contribution history is reconstructed from Records related to that Repo, although runtime services may keep local projections for routine use.
 
-The first usable product should support this loop:
+The first usable product should support this contribution loop:
 
 ```text
 worker establishes or joins a Repo
   -> worker performs labour
-  -> labour produces a Record and an Asset
+  -> labour produces a Record and forms or changes an Asset
   -> worker contributes the Asset to the Repo
   -> Repo validates the contribution and confirms the related labour
   -> Repo preserves the accepted Asset
   -> the Asset and Repo contribution history remain available later
 ```
+
+This loop covers labour that results in an Asset contribution. Other labour may still produce a Record without producing or contributing an Asset.
 
 The MVP is successful when this works predictably for a small team without treating Record as a second class of stored Repository content.
 
@@ -32,7 +34,7 @@ Any worker can establish a Repository. A Repo needs a stable identity so clients
 
 Each Repo has an operator responsible for managing its worker relationships. The requirements do not introduce a larger role hierarchy for the MVP.
 
-A worker can also have a default Personal Repo for Assets that have not been contributed to a shared or published Repo. Personal Repo follows the same basic Repository model but is private in the current product model. It stores Assets, not a separate personal `records` collection.
+Each worker has a default Personal Repo for Assets that have not been contributed to a shared or published Repo. Personal Repo follows the same basic Repository model but is private in the current product model. It stores Assets, not a separate personal `records` collection.
 
 ## Worker relationships
 
@@ -61,7 +63,7 @@ A failed contribution must not appear as an accepted Repository contribution.
 
 Repository identity, operator and worker relationships, and accepted Assets are durable Repository state. In a usable small-team deployment, a normal application restart must not make that state disappear.
 
-The canonical Record remains on chain. A Repository may keep a local Record projection or cache so normal analysis does not require rebuilding the full history on every request. That projection is derived data and may be rebuilt from the chain.
+The canonical Record remains on chain. Repository can keep a local Record projection so normal analysis does not require rebuilding the full contribution history for every request. That projection is derived data and may be rebuilt from the chain.
 
 Corrections or later versions of an Asset or Record follow the protocol that owns that object. Repository does not rewrite accepted facts in place for storage or presentation convenience.
 
@@ -75,7 +77,7 @@ For a small-team MVP, consumers also need to inspect the current workers and Ass
 
 Consumers need to inspect the labour history associated with a Repo. This view answers which worker contributions the Repo accepted and confirmed.
 
-Contribution history comes from the Records related to the Repo, not from a canonical `records[]` collection owned by Repository. Runtime caches and indexes may make this view fast, but they do not become the source of truth for Record.
+Contribution history comes from the Records related to the Repo, not from a canonical `records[]` collection owned by Repository. Routine access to this history should not require a full chain reconstruction for every query. Runtime caches and indexes may serve the view, but they do not become the source of truth for Record.
 
 ## Protocol validity
 
@@ -88,7 +90,7 @@ The concrete validation and confirmation APIs are engineering choices defined in
 The first Repository feature set consists of:
 
 - establishing and loading a Repo with a stable identity;
-- supporting a worker's default Personal Repo as the current private Repository form;
+- providing each worker with a default Personal Repo as the current private Repository form;
 - operator-managed worker membership;
 - Asset contribution by Repo members;
 - validation of the Asset and related Record before contribution acceptance;
