@@ -1,19 +1,8 @@
 # Project / 项目
 
-本文定义 Project 在 LabourChain 中的基本概念位置。
+Project 是对劳动者、活劳动和死劳动进行组织的一种形式。它关注的是哪些劳动者围绕什么目标协作、使用了哪些已有劳动成果、发生了哪些新的劳动，以及这些劳动形成或改变了什么成果。
 
-## 定义
-
-**Project = 项目 = 对劳动者、活劳动与死劳动的一种组织形式。**
-
-Project 关注的不是“资料存在哪里”，而是：
-
-- 哪些劳动者围绕什么目标协作；
-- 使用哪些既有劳动成果；
-- 发生了哪些新的活劳动；
-- 形成、修改或维护了哪些新的劳动成果。
-
-因此可以把 Project 的语义对象理解为：
+可以把它理解为对三类对象的组织关系：
 
 ```text
 Project
@@ -22,11 +11,11 @@ Project
 └── Assets
 ```
 
-这里表达的是组织关系，不要求 Project 实体内部维护三个规范数组。
+这里的结构只说明 Project 组织哪些对象，不要求 Project 实体内部维护三个规范数组。
 
-## 与 Repo 的区别
+## Project 与 Repo
 
-Repo 是仓库，以劳动成果的存放和 contribution 确证为中心；Project 是劳动组织形式，以目标和劳动过程的组织为中心。
+Repo 是仓库，主要处理劳动成果的存放、contribution 和相关劳动确证。Project 处理的是劳动组织本身。
 
 ```text
 Repo
@@ -36,19 +25,11 @@ Project
 → 人 + 活劳动 + 死劳动的组织
 ```
 
-一个 Project 可以使用：
+一个 Project 可以使用单个或多个 Repo 中的 Assets，也可以使用 Personal Repo 经授权提供的 Assets、链上已有的 Records，以及其他符合授权关系的数据来源。因此 Project 不是 Repo 的目录，也不应被限制在某一个 Repo 内。
 
-- 某个 Repo 中的 Assets；
-- 多个 Repo 中的 Assets；
-- Personal Repo 经授权提供的 Assets；
-- 链上已有的 Records；
-- 其他符合授权关系的数据来源。
+## Project 中的劳动
 
-因此 Project 不是 Repo 的目录，也不应被限制在一个 Repo 内。
-
-## 与 Record / Asset 的关系
-
-Project 可以围绕已有 Asset 组织新的劳动，并形成新的 Record 和 Asset：
+Project 可以围绕已有 Worker、Record 和 Asset 组织新的劳动：
 
 ```text
 existing Workers + Records + Assets
@@ -62,18 +43,10 @@ existing Workers + Records + Assets
        new / changed Assets
 ```
 
-Project 中的规划、分析、会议或回顾本身可以产生新的劳动记录，但这些记录仍然是普通 Record，不需要建立独立的 Summary 实体。
+规划、分析、会议和回顾本身也可以形成新的劳动记录。这些记录仍然是普通 Record，不需要另设 Summary 实体。
 
-## 授权关系
+## 授权与资料来源
 
-Project 可以被授权读取劳动者 Personal Repo 中的特定 Assets，也可以使用 Repo 已统一管理的公开或公共 Assets。
+Project 可以读取劳动者授权的 Personal Repo Assets，也可以使用 Repo 已统一管理的公开或公共 Assets。Project 对资料的组织不等于取得资料所有权，也不要求把所有内容复制进一个 Project 专属仓库。
 
-因此 Project 组织资料的能力不等于拥有资料，也不要求把资料复制进一个 Project 专属仓库。
-
-## 关键约束
-
-- Project 不等于 Repo；
-- Project 不承担 Asset 的规范存储；
-- Project 不拥有 Record 的规范历史容器；
-- Project 的意义在于组织劳动者、活劳动与死劳动之间的目标性关系；
-- Project 的具体规划、分析与展示能力属于上层产品实现，不改变这些基础概念。
+具体的规划、分析和展示功能属于上层产品实现，不改变 Project 对劳动者、Record 和 Asset 的基本组织关系。
