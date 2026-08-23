@@ -2,33 +2,33 @@
 
 ## Repository context
 
-This repository implements LabourChain Repository: a Cordis workspace capability for worker relationships, accepted Record/Asset storage, validation orchestration, and retrieval.
+This repository implements LabourChain Repository: a Cordis workspace capability for worker relationships, accepted Record/Asset validation, storage orchestration, and retrieval.
 
 The authoritative human-facing project description is the Chinese [`README.md`](./README.md). [`README_EN.md`](./README_EN.md) is a translation.
 
 Development follows three layers:
 
 ```text
-Requirements and Features (`docs/`)
+Requirements (`docs/requirements.md`)
             ↓
 Specification (`specs/`)
             ↓
 Implementation (`src/`, `test/`)
 ```
 
-Do not introduce numbering or traceability IDs during the current MVP phase. The documents are small and actively changing; numbered change history can be introduced later when maintenance requires it.
+Do not introduce numbering or traceability IDs during the current MVP phase. Numbered history can be added later when maintenance makes it useful.
 
-## How to use the three layers
+## Source of truth
 
-### Requirements and features
+`docs/requirements.md` is the single source of truth for Repository product requirements.
 
-Read `docs/requirements.md` and `docs/features.md` to understand what the Repository product currently needs to provide.
+The Spec is a projection of those requirements. It may define engineering decisions needed to implement them, but it must not create new product behavior or change requirement meaning.
 
-Requirements and feature documents should stay product-oriented. Do not turn them into exhaustive architecture boundary lists or implementation contracts.
+If requirements and Spec conflict, requirements win and the Spec must be corrected.
 
-When implementation exposes a missing product need, update the relevant document in `docs/` first.
+If implementation exposes a missing product need, update `docs/requirements.md` first.
 
-### Specification
+## Specification
 
 Read `specs/repository-mvp.md` before changing observable Repository behavior.
 
@@ -43,38 +43,42 @@ The Spec is where strict engineering boundaries belong. It defines:
 - acceptance tests;
 - explicit non-goals where they prevent scope creep or over-engineering.
 
-If a desired behavior is not supported by the requirements, do not add it only to the Spec.
+Do not push implementation convenience upward into requirements. Conversely, do not let the Spec invent a capability that requirements do not ask for.
 
-### Implementation
-
-Implementation should be the smallest maintainable change that satisfies the accepted Spec.
+## Implementation workflow
 
 For behavioral work:
 
-1. confirm the requirement/feature is present in `docs/`;
-2. refine `specs/repository-mvp.md` when the engineering contract must change;
-3. add or update contract/invariant tests;
-4. implement the behavior;
+1. confirm the product need exists in `docs/requirements.md`;
+2. refine `specs/repository-mvp.md` if the engineering projection must change;
+3. add or update tests that protect the relevant contract/invariant;
+4. implement the smallest maintainable behavior that satisfies the Spec;
 5. run validation;
 6. update README/CHANGELOG when the human-visible project state changes.
 
-Implementation-only refactors that preserve observable behavior do not require a docs/spec rewrite, but must remain covered by tests.
+Implementation-only refactors that preserve observable behavior do not require requirements/spec changes, but existing tests must remain valid.
 
 ## Current engineering invariants
 
 These come from the current MVP Spec and must be preserved unless the Spec changes first:
 
-- worker relationship is checked before persistent contribution;
-- Core validation happens before persistence;
+- membership is checked before persistent contribution;
+- Core validation happens before storage acceptance;
 - Repository accepts recognized Records/Assets rather than performing RawEntry recognition;
 - accepted Record/Asset semantics are not silently rewritten;
 - Project/Board semantics remain outside the Repository service;
-- backend-specific storage concepts stay behind the provider boundary;
+- storage-provider details stay behind the provider contract;
 - runtime state is not automatically promoted to an Asset;
 - import has no external side effects;
 - Cordis-owned resources are acquired/disposed through lifecycle effects;
-- reload must not leak or duplicate owned resources;
+- the MVP does not add pagination/search/index abstractions without a real requirement;
 - use a LabourChain-specific service namespace rather than a generic flat service name.
+
+## Testing discipline
+
+Tests exist to protect requirements, Spec contracts, and lifecycle behavior. Do not add tests solely to raise coverage numbers or to exercise trivial implementation details with no meaningful failure mode.
+
+Coverage is a secondary quality signal, not the reason a test exists.
 
 ## Source-only development artifacts
 
@@ -94,5 +98,7 @@ pnpm run test:coverage
 pnpm run build
 pnpm run package:check
 ```
+
+CI validates the supported Node.js versions. Do not add operating-system matrices unless a concrete platform-specific behavior makes them necessary.
 
 Do not claim a change is complete without the relevant test/build/package evidence.
