@@ -1,128 +1,120 @@
 # Repository Requirements
 
+This document is the single source of truth for Repository product requirements during the MVP phase.
+
+Specifications under `specs/` are engineering projections of these requirements. They may make implementation decisions needed to satisfy the requirements, but they must not introduce new product behavior or change the meaning of a requirement. If a Spec and this document conflict, this document wins and the Spec must be corrected.
+
 ## Product intent
 
-LabourChain needs a shared Repository workspace in which a small team can preserve recognized labour facts and related assets, keep worker relationships clear, and make those materials available to other LabourChain products.
+LabourChain needs a shared Repository workspace in which a small team can preserve recognized labour Records and related Assets, maintain the relationship between workers and the workspace, and make those materials available to other LabourChain products.
 
-Repository is the common storage and workspace capability used after a Record or Asset has already been recognized by an upstream workflow such as LabourFlow.
+Repository is the common workspace and storage capability used after a Record or Asset has been recognized. LabourFlow can turn raw labour input into a recognized Record; Board and Project can later organize and analyze Records and Assets stored in Repository.
 
-The first usable version should support a simple closed loop:
+The first usable product should support this closed loop:
 
 ```text
-Worker
-  -> LabourFlow produces a Record
-  -> Repository accepts and preserves it
-  -> another consumer retrieves it
-  -> Board / Project uses the stored facts for organization or analysis
+worker joins Repository
+  -> a recognized Record / Asset is contributed
+  -> Repository validates and preserves it
+  -> the stored material remains available later
+  -> other LabourChain products retrieve and use it
 ```
 
 The MVP is successful when this loop works predictably for a small team.
 
-## Workspace
+## Required capabilities
 
-A running Repository plugin should be able to initialize or load one workspace and expose enough information for clients to know which workspace they are using.
+### Repository workspace
 
-For the MVP, one configured Repository workspace per plugin instance is sufficient.
+The system needs a Repository workspace with a stable identity that clients can load and recognize.
 
-## Worker relationships
+The workspace is the shared place in which worker relationships, Records, and Assets are kept.
 
-Repository should maintain the relationship between the workspace and the workers who belong to it.
+### Worker relationships
 
-The system should support:
+Repository needs to maintain which workers belong to the workspace.
 
-- adding or activating a worker relationship;
-- removing or deactivating a worker relationship;
-- checking whether a worker currently belongs to the Repository;
-- listing current workers.
+Users need to be able to:
 
-A worker relationship is used when deciding whether a contribution may be accepted.
+- add a worker to the Repository;
+- remove a worker from the Repository;
+- check whether a worker belongs to the Repository;
+- list workers in the Repository.
 
-## Record contribution
+A worker must belong to the Repository before contributing persistent Repository content.
 
-LabourFlow and other recognition packages need a stable place to submit Records after recognition is complete.
+### Record contribution
 
-Repository should be able to:
+LabourFlow and other compatible workflows need to submit recognized Records to Repository.
 
-- receive a recognized Record from a worker;
-- check the worker relationship;
-- validate the Record through LabourChain Core;
-- preserve the accepted Record;
-- return a stable reference that other consumers can use later.
+For an accepted Record, Repository needs to:
 
-A rejected contribution should not leave partially accepted Repository state.
+- know who is contributing it;
+- verify that the contributor belongs to the Repository;
+- validate the Record according to LabourChain protocol rules;
+- preserve the accepted Record without silently changing its meaning;
+- make the accepted Record available for later retrieval.
 
-## Asset contribution
+Rejected Records must not become accepted Repository content.
 
-Workers and higher-level packages need to preserve Assets and Asset references associated with LabourChain activity.
+### Asset contribution
 
-Repository should support the same basic acceptance flow for an Asset:
+Repository needs to preserve Assets and Asset references associated with work in the workspace.
 
-- receive an explicitly captured or recognized Asset;
-- check the worker relationship;
-- validate it through the appropriate Core capability;
-- preserve the accepted Asset or reference;
-- return a stable reference.
+For an accepted Asset, Repository needs to:
 
-## Fact preservation
+- know who is contributing it;
+- verify that the contributor belongs to the Repository;
+- validate the Asset according to its applicable LabourChain protocol rules;
+- preserve the accepted Asset or reference without silently changing its meaning;
+- make it available for later retrieval.
 
-Consumers need an accepted Record or Asset to remain the same fact they submitted, subject to the correction or versioning semantics of the owning protocol.
+Rejected Assets must not become accepted Repository content.
 
-Repository storage should preserve accepted semantic content rather than rewriting it for storage convenience.
+### Preservation
 
-## Retrieval
+Accepted worker relationships, Records, and Assets are Repository state and must remain available for later use.
 
-Consumers such as LabourFlow, Board, Project, migration tools, and administrative tools need to retrieve accepted content without knowing the concrete persistence backend.
+In a usable small-team deployment, normal application restart must not cause accepted Repository state to disappear.
 
-Repository should provide stable retrieval for Records and Assets.
+Corrections or later versions of a Record or Asset follow the semantics of the protocol that owns that object; Repository does not rewrite an accepted fact in place merely for storage or presentation convenience.
 
-## Enumeration
+### Retrieval
 
-Consumers need to discover Repository content.
+Consumers need to retrieve accepted Records and Assets through stable identities or references without depending on the details of the storage implementation.
 
-Repository should support generic enumeration of:
+A consumer should be able to distinguish an existing object from one that is not present.
 
+### Enumeration
+
+Consumers need to inspect the contents of a Repository.
+
+Repository needs to list:
+
+- workers;
 - Records;
-- Assets;
-- worker relationships.
+- Assets.
 
-The MVP should use a pagination or cursor model that can continue to work when the persistence backend changes.
+The MVP only requires reliable enumeration for a small team. More advanced query, pagination, indexing, or search behavior should be added only when a real consumer requires it.
 
-## Core validation
+### Validation
 
-Repository should use LabourChain Core as the source of protocol validation semantics.
+Repository accepts only Records and Assets that satisfy the applicable LabourChain protocol validation rules.
 
-The Repository layer should be able to call a stable Core validation capability before an accepted object becomes persistent content.
+LabourChain Core remains the authority for protocol semantics; Repository uses those semantics when deciding whether an object can be accepted.
 
-Until the Core runtime API is finalized, the implementation may use a narrow adapter that can later be replaced without changing Repository-facing behavior.
+## Current feature set
 
-## Replaceable persistence
+The first Repository feature set therefore consists of:
 
-Repository should not require one specific database in order to satisfy its public behavior.
+- workspace load and identity;
+- worker membership management;
+- contribution checks based on membership;
+- recognized Record acceptance;
+- Asset / Asset-reference acceptance;
+- protocol validation before acceptance;
+- preservation of accepted Repository state;
+- stable Record and Asset retrieval;
+- listing workers, Records, and Assets.
 
-The MVP should include an in-memory provider suitable for tests and local development. Other persistence providers can be supplied by runtime plugins later.
-
-Changing the persistence provider should not change the meaning of Repository operations.
-
-## Cordis integration
-
-Repository should behave as a normal Cordis capability:
-
-- activation and deactivation are predictable;
-- dependencies are explicit;
-- resources are owned through the Cordis lifecycle;
-- reload does not duplicate owned resources;
-- importing the package performs no external work.
-
-## MVP completion
-
-The first usable Repository version should demonstrate the complete small-team path with an in-memory provider:
-
-```text
-load workspace
-  -> add worker
-  -> accept valid Record / Asset
-  -> preserve content
-  -> retrieve or enumerate content
-```
-
-The detailed engineering boundaries, invariants, errors, provider contract, and acceptance tests are defined in [`../specs/repository-mvp.md`](../specs/repository-mvp.md).
+These features describe the product behavior required for the MVP. The concrete Cordis service shape, persistence-provider contract, lifecycle rules, error types, test strategy, and other engineering choices are defined by [`../specs/repository-mvp.md`](../specs/repository-mvp.md).
