@@ -6,27 +6,31 @@ This repository implements LabourChain Repository as a Cordis plugin.
 
 The authoritative human-facing project description is the Chinese [`README.md`](./README.md). [`README_EN.md`](./README_EN.md) is a translation.
 
-The current domain baseline is documented under [`docs/concepts/`](./docs/concepts/). Start with [`docs/concepts/README.md`](./docs/concepts/README.md), which defines the concept index and standard terminology.
+The domain baseline is documented under [`docs/concepts/`](./docs/concepts/). Start with [`docs/concepts/README.md`](./docs/concepts/README.md) for terminology and navigation.
 
-Current core concepts include:
+The current model treats Worker / Member as the labour subject, Record as living labour, Asset as objectified labour output, Repo as an Asset warehouse that participates in contribution confirmation, and Project as an organizational form over workers, living labour and dead labour.
 
-- Worker / Member is the labour subject;
-- Record represents living labour;
-- Asset represents objectified labour output / dead labour;
-- Repo is a warehouse for Assets and participates in confirming labour associated with contributions;
-- Project is an organizational form over workers, living labour, and dead labour.
-
-Do not silently replace these concepts with conventional CRUD or database-container models.
+Do not replace this model with a conventional CRUD container model for convenience.
 
 ## Concepts and product truth
 
-Concept documents provide long-term domain baselines. They are not themselves executable product requirements.
+Concept documents define long-lived domain terms and relationships. They are not executable product requirements.
 
 `docs/requirements.md` is the single source of truth for Repository product requirements. Specifications under `specs/` are engineering projections of those requirements.
 
-If concepts, requirements, Spec, or implementation appear inconsistent, do not choose one implicitly. Surface the mismatch and correct the appropriate layer first.
+If concepts, requirements, Spec or implementation become inconsistent, review the mismatch at the appropriate layer before changing code. The Spec must not create product behavior that is absent from requirements.
 
-The current requirements/spec are being reviewed against the latest concepts before domain implementation proceeds.
+## Current Repository model
+
+Repository canonical state consists of Repo identity, operator and worker relationships, and accepted Assets.
+
+A worker contributes an Asset together with the related worker-produced Record. Repository validates the contribution and participates in Repo-side confirmation of that labour. Record remains an on-chain fact and is not canonical Repository storage.
+
+Repository may keep Record projections for contribution history and normal analysis. Treat those projections as rebuildable cache or index data. Do not introduce canonical `storeRecord`, `getRecord` or general `listRecords` Repository behavior.
+
+Membership controls whether a worker may contribute an Asset to a Repo. It does not control whether the worker may produce labour, Records or Assets elsewhere.
+
+Personal Repo uses the same Repository model as the worker's default private Asset repository. Do not add a separate personal Record store.
 
 ## Development flow
 
@@ -40,48 +44,39 @@ Specification (`specs/`)
 Implementation (`src/`, `test/`)
 ```
 
-Do not introduce numbering or traceability IDs during the current MVP phase. Numbered history can be added later when maintenance makes it useful.
+Do not introduce numbering or traceability IDs during the current MVP phase. Add historical numbering later only if maintenance makes it useful.
 
 For behavioral work:
 
 1. read the relevant concept document when the change touches the domain model;
 2. confirm the product need exists in `docs/requirements.md`;
 3. refine the relevant Spec if the engineering projection must change;
-4. add or update tests that protect the meaningful contract or invariant;
+4. add or update tests that protect a meaningful contract or invariant;
 5. implement the smallest maintainable behavior that satisfies the Spec;
 6. run validation;
-7. update README/CHANGELOG when the human-visible project state changes.
+7. update README or CHANGELOG when the human-visible project state changes.
 
-Implementation-only refactors that preserve observable behavior do not require requirements/spec changes, but existing tests must remain valid.
+Implementation-only refactors that preserve observable behavior do not require requirements or Spec changes, but existing tests must remain valid.
 
 ## Engineering discipline
 
-Strict engineering boundaries belong in the Spec, not in the human-facing README or product requirements unless they are themselves product needs.
+Strict engineering boundaries belong in the Spec unless they are themselves product needs.
 
-Avoid speculative abstractions. In particular:
+Avoid speculative abstractions. Do not add pagination, search or index APIs without a real requirement. Do not add role systems where operator plus membership is enough. Do not copy Core protocol semantics into Repository. Do not turn caches or projections into canonical facts. Do not model chain history as entity-owned arrays for database convenience. Add operating-system CI coverage only when a concrete platform-specific behavior needs it.
 
-- do not add pagination/search/index abstractions without a real requirement;
-- do not add role/status systems where simple membership satisfies the product need;
-- do not copy Core protocol semantics into Repository;
-- do not turn runtime caches or projections into canonical domain facts;
-- do not model chain history as entity-owned arrays merely because it is convenient for a database;
-- do not add operating-system CI matrices unless a concrete platform-specific behavior requires them.
-
-Cordis-owned external resources must be acquired and disposed through lifecycle ownership, and package import must not perform external work.
+Cordis-owned external resources must be acquired and disposed through lifecycle ownership. Package import must not perform external work.
 
 ## Testing discipline
 
-Tests exist to protect requirements, Spec contracts, and meaningful lifecycle behavior. Do not add tests solely to raise coverage numbers or exercise trivial implementation details with no independent failure value.
+Tests protect requirements, Spec contracts, lifecycle behavior and reproduced regressions. Do not add tests only to raise coverage numbers or exercise trivial implementation details with no independent failure value.
 
-Coverage is a secondary quality signal, not the reason a test exists.
+Coverage is a secondary quality signal.
 
 ## Project documentation and packaging
 
-`docs/` is long-term project documentation. `docs/concepts/` contains stable terminology and domain concepts; `docs/requirements.md` contains the current Repository product requirements.
+`docs/` is long-term project documentation. `docs/concepts/` contains stable terminology and domain concepts; `docs/requirements.md` contains current Repository product requirements. `specs/` contains engineering specifications.
 
-`specs/` contains engineering specifications.
-
-Neither `docs/` nor `specs/` belongs in the runtime npm plugin package. Tests, scripts, agent instructions, contribution documents, and source files are also excluded unless a later packaging decision explicitly changes that.
+These documents stay in the Git repository and do not belong in the runtime npm plugin package. Tests, scripts, agent instructions, contribution documents and source files are also excluded unless packaging requirements later change.
 
 `pnpm run package:check` verifies the actual npm tarball.
 
@@ -96,6 +91,4 @@ pnpm run build
 pnpm run package:check
 ```
 
-CI validates the supported Node.js versions.
-
-Do not claim a change is complete without the relevant test/build/package evidence.
+CI validates the supported Node.js versions. Do not claim a change is complete without the relevant test, build and package evidence.
