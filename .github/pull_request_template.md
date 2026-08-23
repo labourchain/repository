@@ -2,21 +2,22 @@
 
 <!-- What does this PR change, and why? -->
 
-## Requirements / Features
+## Requirements
 
-<!-- Link the relevant docs when product behavior changes. -->
+<!-- `docs/requirements.md` is the single product source of truth. -->
 
-- [ ] No product capability changed, or `docs/requirements.md` / `docs/features.md` is updated first.
+- [ ] No product requirement changed, or `docs/requirements.md` is updated first.
 
 ## Spec
 
-<!-- Link the governing spec when observable behavior or engineering boundaries change. -->
+<!-- Update the governing Spec when the engineering projection changes. -->
 
 - [ ] No observable contract changed, or the relevant file under `specs/` is updated.
+- [ ] The Spec does not introduce product behavior absent from the requirements source.
 
 ## Implementation
 
-- [ ] Tests cover the changed contract or invariant.
+- [ ] Tests protect the changed contract/invariant rather than coverage alone.
 - [ ] Code does not add behavior outside the governing Spec.
 
 ## Cordis lifecycle
