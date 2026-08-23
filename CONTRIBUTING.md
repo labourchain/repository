@@ -5,11 +5,11 @@ Contributions are welcome. This repository uses a three-layer development workfl
 ## Before coding
 
 1. Read the authoritative Chinese `README.md` and the English `AGENTS.md`.
-2. If the change touches the domain model, read the relevant theory documentation under `docs/theory/`.
+2. If the change touches the domain model, start from [`docs/concepts/README.md`](./docs/concepts/README.md) and read the relevant concept documents under `docs/concepts/`.
 3. Read `docs/requirements.md`; it is the single source of truth for Repository product requirements.
 4. Read the relevant file under `specs/` for the engineering projection of those requirements.
 
-Theory documents provide conceptual baselines rather than product behavior. If theory and requirements appear inconsistent, review the mismatch explicitly before changing the Spec or code.
+Concept documents provide long-lived domain baselines rather than product behavior. If concepts and requirements appear inconsistent, review the mismatch explicitly before changing the Spec or code.
 
 If implementation work reveals a missing product need, update `docs/requirements.md` first. If the product need is already clear but the engineering contract is incomplete, update the Spec before implementation.
 
@@ -23,7 +23,7 @@ Spec
 Tests / Implementation
 ```
 
-Theory documentation sits outside this three-layer development chain and provides a longer-lived baseline for reviewing the product model.
+Concept documentation sits outside this three-layer development chain and provides stable terminology and a longer-lived baseline for reviewing the product model.
 
 The Spec may choose engineering mechanisms, but it must not add product behavior absent from the requirements source.
 
@@ -37,7 +37,7 @@ A behavior-changing PR should include:
 
 - a requirements update when the product need changes;
 - a Spec update when the engineering contract changes;
-- a theory-document update only when the conceptual model itself changes;
+- a concept-document update only when the domain model itself changes;
 - tests for meaningful changed contracts or invariants;
 - implementation;
 - README/CHANGELOG updates when the human-visible project state changes;
@@ -45,7 +45,7 @@ A behavior-changing PR should include:
 
 ## Project documentation and packaging
 
-`docs/` is long-term project documentation for theory, requirements, and other project material. It may later be published through GitHub Pages or another documentation site.
+`docs/` is long-term project documentation for concepts, requirements, and other project material. It may later be published through GitHub Pages or another documentation site.
 
 `specs/` contains engineering specifications.
 
