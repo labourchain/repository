@@ -6,7 +6,9 @@ This repository implements LabourChain Repository as a Cordis plugin.
 
 The authoritative human-facing project description is the Chinese [`README.md`](./README.md). [`README_EN.md`](./README_EN.md) is a translation.
 
-The current domain baseline is documented in [`docs/theory/labour-model.md`](./docs/theory/labour-model.md):
+The current domain baseline is documented under [`docs/concepts/`](./docs/concepts/). Start with [`docs/concepts/README.md`](./docs/concepts/README.md), which defines the concept index and standard terminology.
+
+Current core concepts include:
 
 - Worker / Member is the labour subject;
 - Record represents living labour;
@@ -16,15 +18,15 @@ The current domain baseline is documented in [`docs/theory/labour-model.md`](./d
 
 Do not silently replace these concepts with conventional CRUD or database-container models.
 
-## Theory and product truth
+## Concepts and product truth
 
-Theory documents provide long-term conceptual baselines. They are not themselves executable product requirements.
+Concept documents provide long-term domain baselines. They are not themselves executable product requirements.
 
 `docs/requirements.md` is the single source of truth for Repository product requirements. Specifications under `specs/` are engineering projections of those requirements.
 
-If theory, requirements, Spec, or implementation appear inconsistent, do not choose one implicitly. Surface the mismatch and correct the appropriate layer first.
+If concepts, requirements, Spec, or implementation appear inconsistent, do not choose one implicitly. Surface the mismatch and correct the appropriate layer first.
 
-The current requirements/spec are being reviewed against the theory baseline before domain implementation proceeds.
+The current requirements/spec are being reviewed against the latest concepts before domain implementation proceeds.
 
 ## Development flow
 
@@ -42,7 +44,7 @@ Do not introduce numbering or traceability IDs during the current MVP phase. Num
 
 For behavioral work:
 
-1. read the relevant theory document when the change touches the domain model;
+1. read the relevant concept document when the change touches the domain model;
 2. confirm the product need exists in `docs/requirements.md`;
 3. refine the relevant Spec if the engineering projection must change;
 4. add or update tests that protect the meaningful contract or invariant;
@@ -75,7 +77,7 @@ Coverage is a secondary quality signal, not the reason a test exists.
 
 ## Project documentation and packaging
 
-`docs/` is long-term project documentation. It may contain theory, requirements, design reasoning, and material that can later be published through GitHub Pages or another documentation site.
+`docs/` is long-term project documentation. `docs/concepts/` contains stable terminology and domain concepts; `docs/requirements.md` contains the current Repository product requirements.
 
 `specs/` contains engineering specifications.
 
