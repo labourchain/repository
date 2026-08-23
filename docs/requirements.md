@@ -4,6 +4,8 @@ This document is the single source of truth for Repository product requirements 
 
 The conceptual baseline for the current domain model is documented in [`theory/labour-model.md`](./theory/labour-model.md). Theory documents do not replace product requirements; they provide a long-term reference for reviewing whether requirements still represent the intended LabourChain model. A mismatch should be discussed and corrected explicitly rather than silently resolved in the Spec or implementation.
 
+> **Review note:** the current requirements below predate the latest theory baseline and are being reviewed against it. In particular, Record/Asset/Repo relationships may still contain assumptions that need correction before domain implementation begins.
+
 Specifications under `specs/` are engineering projections of these requirements. They may make implementation decisions needed to satisfy the requirements, but they must not introduce new product behavior or change the meaning of a requirement. If a Spec and this document conflict, this document wins and the Spec must be corrected.
 
 ## Product intent
