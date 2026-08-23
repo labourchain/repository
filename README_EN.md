@@ -4,30 +4,23 @@
 
 > This English README is a translation. The Chinese [`README.md`](./README.md) is the authoritative version.
 
-`@labourchain/repository` is the LabourChain Repository plugin for maintaining a shared workspace for a small team.
+`@labourchain/repository` is the LabourChain repository plugin.
 
-Repository maintains worker-to-workspace relationships, accepts recognized Records and Assets, and provides validation, storage, and retrieval capabilities. LabourFlow can submit recognized labour Records to Repository, while Board / Project can later read the stored material for organization and analysis.
+In the LabourChain model, the worker is the subject of labour, a Record represents living labour, and an Asset represents objectified labour output. Repository acts as the warehouse for Assets and participates in confirming the labour Records associated with contributed Assets. A Repository contribution history can be reconstructed from on-chain Records, while runtime services may cache those projections for everyday use.
 
 The repository is currently in the MVP development stage and is implemented as a Cordis plugin.
 
-## Current feature goal
+## Documentation
 
-The first version should let a small team reliably:
+`docs/` is not limited to development requirements. It is the long-term project documentation space for theoretical and product material formed around Repository, and may later be published through GitHub Pages or another documentation site.
 
-- create and identify a Repository workspace;
-- add, remove, and inspect workers in the workspace;
-- accept and validate recognized Records;
-- accept and validate Assets / Asset references;
-- preserve accepted content and retrieve it later;
-- enumerate workers, Records, and Assets in the workspace.
+Current documents:
 
-The single source of truth for product requirements is:
+- [`docs/theory/labour-model.md`](./docs/theory/labour-model.md): the political-economy theory baseline for workers, living labour, dead labour, repositories, and projects;
+- [`docs/requirements.md`](./docs/requirements.md): the single source of truth for Repository product requirements;
+- [`specs/repository-mvp.md`](./specs/repository-mvp.md): the engineering contract, boundaries, invariants, and acceptance criteria projected from the requirements.
 
-- [`docs/requirements.md`](./docs/requirements.md)
-
-Detailed engineering contracts, boundaries, invariants, and acceptance criteria are projected from those requirements into:
-
-- [`specs/repository-mvp.md`](./specs/repository-mvp.md)
+Theory documents provide a long-term conceptual baseline, but they do not replace the requirements layer. If requirements, Spec, or implementation conflict with the theory baseline, the conflict should be reviewed explicitly rather than silently resolved in code.
 
 ## Development model
 
@@ -44,6 +37,8 @@ Implementation
   src/ + test/
 ```
 
+Theory documents sit outside this development chain and provide longer-lived conceptual context and comparison baselines.
+
 Requirements state what the product needs. The Spec turns those needs into a verifiable engineering contract. Implementation and tests satisfy the Spec.
 
 If implementation work exposes a missing product need, update the requirements first, then revise the Spec and code.
@@ -54,7 +49,7 @@ If implementation work exposes a missing product need, update the requirements f
 README.md            Chinese project README (authoritative)
 README_EN.md         English translation
 AGENTS.md            Agent development instructions (English)
-docs/                requirements
+docs/                theory, requirements, and other project documentation
 specs/               engineering specifications
 src/                 Cordis plugin implementation
 test/                tests
@@ -62,7 +57,7 @@ scripts/             engineering and release checks
 .github/              CI and PR configuration
 ```
 
-`docs/` and `specs/` are development documents maintained in Git and are excluded from the published npm plugin package.
+`docs/` and `specs/` remain in the Git repository but are excluded from the published npm plugin package. Their exclusion from the runtime package does not make them disposable development artifacts.
 
 ## Development
 
