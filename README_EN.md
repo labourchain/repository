@@ -6,39 +6,36 @@
 
 `@labourchain/repository` is the LabourChain Repository plugin for maintaining a shared workspace for a small team.
 
-Repository maintains worker-to-workspace relationships, accepts recognized Records and Assets, and provides storage, validation, and retrieval capabilities. It serves as the shared fact-storage foundation used by higher-level products such as LabourFlow, Board, and Project, while keeping a stable path for later integration with LabourChain Core signing, packing, and archival capabilities.
+Repository maintains worker-to-workspace relationships, accepts recognized Records and Assets, and provides validation, storage, and retrieval capabilities. LabourFlow can submit recognized labour Records to Repository, while Board / Project can later read the stored material for organization and analysis.
 
-The repository is currently in the MVP bootstrap stage and is implemented as a Cordis plugin.
+The repository is currently in the MVP development stage and is implemented as a Cordis plugin.
 
-## Current goal
+## Current feature goal
 
-The first version aims to support the following basic operations reliably for a small team:
+The first version should let a small team reliably:
 
-- initialize and load one Repository workspace;
-- maintain worker relationships in the workspace;
-- accept and store Records;
-- accept and store Assets;
-- validate accepted objects through LabourChain Core capabilities;
-- retrieve Records and Assets through stable references;
-- enumerate members and stored content;
-- use replaceable persistence providers.
+- create and identify a Repository workspace;
+- add, remove, and inspect workers in the workspace;
+- accept and validate recognized Records;
+- accept and validate Assets / Asset references;
+- preserve accepted content and retrieve it later;
+- enumerate workers, Records, and Assets in the workspace.
 
-Detailed requirements are maintained in:
+The single source of truth for product requirements is:
 
 - [`docs/requirements.md`](./docs/requirements.md)
-- [`docs/features.md`](./docs/features.md)
 
-Strict behavioral contracts, boundaries, invariants, and acceptance criteria are maintained in:
+Detailed engineering contracts, boundaries, invariants, and acceptance criteria are projected from those requirements into:
 
 - [`specs/repository-mvp.md`](./specs/repository-mvp.md)
 
 ## Development model
 
-This repository uses a three-layer development process:
+This repository uses a three-layer development flow:
 
 ```text
-Requirements and Features
-  docs/
+Requirements
+  docs/requirements.md
     ↓
 Spec
   specs/
@@ -47,9 +44,9 @@ Implementation
   src/ + test/
 ```
 
-`docs/` describes what is needed. `specs/` turns those needs into verifiable engineering contracts. Implementation and tests satisfy the accepted Spec.
+Requirements state what the product needs. The Spec turns those needs into a verifiable engineering contract. Implementation and tests satisfy the Spec.
 
-If implementation work exposes a missing requirement, return to the requirements layer first, then revise the Spec and code.
+If implementation work exposes a missing product need, update the requirements first, then revise the Spec and code.
 
 ## Repository structure
 
@@ -57,7 +54,7 @@ If implementation work exposes a missing requirement, return to the requirements
 README.md            Chinese project README (authoritative)
 README_EN.md         English translation
 AGENTS.md            Agent development instructions (English)
-docs/                requirements and feature documents
+docs/                requirements
 specs/               engineering specifications
 src/                 Cordis plugin implementation
 test/                tests
@@ -71,7 +68,7 @@ scripts/             engineering and release checks
 
 Requirements:
 
-- Node.js 22.20+
+- Node.js 22.20+ / 24+
 - pnpm 11.7+
 
 ```bash
@@ -79,8 +76,6 @@ pnpm install
 pnpm run check
 pnpm run package:check
 ```
-
-`pnpm run check` runs type checking, coverage-gated tests, and the production build. `pnpm run package:check` verifies the final npm tarball so development documents, source files, and tests do not enter the runtime package.
 
 ## Status
 
