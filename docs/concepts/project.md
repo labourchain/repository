@@ -1,8 +1,10 @@
-# Project / 项目
+# Project
 
-Project 是对劳动者、活劳动和死劳动进行组织的一种形式。它关注的是哪些劳动者围绕什么目标协作、使用了哪些已有劳动成果、发生了哪些新的劳动，以及这些劳动形成或改变了什么成果。
+Project 是 LabourChain 中对劳动者、活劳动和死劳动进行组织的一种形式。它围绕某个目标组织 Workers、Records 和 Assets，但不取代这些对象原有的身份、归属和存储关系。
 
-可以把它理解为对三类对象的组织关系：
+## 定义
+
+Project 关注劳动如何被组织，而不是资料存放在哪里。一个 Project 可以关联参与劳动的 Workers、已经发生的 Records 和被使用或形成的 Assets。
 
 ```text
 Project
@@ -11,42 +13,53 @@ Project
 └── Assets
 ```
 
-这里的结构只说明 Project 组织哪些对象，不要求 Project 实体内部维护三个规范数组。
+这里表示的是组织关系，不要求 Project 实体内部维护三个规范数组。
 
-## Project 与 Repo
+## 与 Repo 的区别
 
-Repo 是仓库，主要处理劳动成果的存放、contribution 和相关劳动确证。Project 处理的是劳动组织本身。
+Repo 是仓库，以 Asset 存放、contribution 和相关劳动确证为中心。Project 以劳动目标和劳动过程的组织为中心。
 
-```text
-Repo
-→ 资料存放、contribution、确证
+| | Repo | Project |
+| --- | --- | --- |
+| 主要对象 | Asset | Worker、Record、Asset |
+| 主要作用 | 存放劳动成果，接收 contribution | 组织劳动过程 |
+| Record 关系 | contribution history 的来源 | 项目劳动的组成部分 |
+| Asset 来源 | Repo 自身保存 | 可以来自多个 Repo 或授权来源 |
 
-Project
-→ 人 + 活劳动 + 死劳动的组织
-```
+Project 不是 Repo 的目录，也不要求限制在一个 Repo 内。
 
-一个 Project 可以使用单个或多个 Repo 中的 Assets，也可以使用 Personal Repo 经授权提供的 Assets、链上已有的 Records，以及其他符合授权关系的数据来源。因此 Project 不是 Repo 的目录，也不应被限制在某一个 Repo 内。
+## 资料来源
+
+Project 可以使用单个或多个 Repo 中的 Assets，也可以读取劳动者授权的 Personal Repo Assets，以及链上已有的 Records。
+
+Project 对资料的组织不表示取得资料所有权，也不要求把所有内容复制进 Project 专属仓库。
 
 ## Project 中的劳动
 
-Project 可以围绕已有 Worker、Record 和 Asset 组织新的劳动：
+Project 可以围绕已有 Workers、Records 和 Assets 组织新的劳动：
 
 ```text
 existing Workers + Records + Assets
               ↓
             Project
               ↓
-      new labour / coordination
+       new labour activity
               ↓
             Records
               ↓
        new / changed Assets
 ```
 
-规划、分析、会议和回顾本身也可以形成新的劳动记录。这些记录仍然是普通 Record，不需要另设 Summary 实体。
+规划、分析、会议和回顾本身也可以形成 Record。它们不需要另设 Summary 实体。
 
-## 授权与资料来源
+## 产品投影
 
-Project 可以读取劳动者授权的 Personal Repo Assets，也可以使用 Repo 已统一管理的公开或公共 Assets。Project 对资料的组织不等于取得资料所有权，也不要求把所有内容复制进一个 Project 专属仓库。
+Board 可以在 Project 基础上提供规划、分析、回顾和展示能力。这些功能属于产品投影，不改变 Project 对 Worker、Record 和 Asset 的基本组织关系。
 
-具体的规划、分析和展示功能属于上层产品实现，不改变 Project 对劳动者、Record 和 Asset 的基本组织关系。
+## 相关条目
+
+- [Worker / Member](./worker.md)
+- [Record](./record.md)
+- [Asset](./asset.md)
+- [Repo](./repository.md)
+- [访问、授权与使用](./access-and-use.md)
