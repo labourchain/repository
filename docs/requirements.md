@@ -1,102 +1,77 @@
-# Repository Requirements
+# Repository requirements
 
-This document is the single source of truth for Repository product requirements during the MVP phase.
+Repository 是 LabourChain 中用于保存 Asset 的仓库能力。本页定义 Repository MVP 的产品要求，是当前 Repository 产品行为的事实来源。
 
-The domain concepts used here are maintained under [`concepts/`](./concepts/), with [`concepts/README.md`](./concepts/README.md) as the terminology index. Concept documents define the shared model; this file states the Repository behavior required by the product. Specifications under `specs/` are engineering projections of these requirements.
+相关领域概念见 [`concepts/`](./concepts/)。其中 [Repo](./concepts/repository.md)、[Worker / Member](./concepts/worker.md)、[Record](./concepts/record.md) 和 [Asset](./concepts/asset.md) 定义本页使用的术语。
 
-If concepts and requirements no longer describe the same product model, review that mismatch before changing the Spec or implementation. If a Spec conflicts with this document, the requirements are authoritative for product behavior.
+## 范围
 
-## Product intent
+Repository MVP 覆盖 Repo 的建立和加载、成员关系、Asset contribution、仓库侧劳动确证、Asset 持久保存和读取，以及 Repo contribution history。
 
-A LabourChain Repository is a warehouse for Assets produced by workers. It keeps a stable Repository identity, maintains the workers allowed to contribute, preserves accepted Assets, and participates in confirming the labour Records associated with those contributions.
+Record 是链上的劳动事实，不作为 Repo 中与 Asset 并列的规范存储内容。Repository 可以维护与自身 contribution 有关的 Record 投影，用于日常查询和分析。
 
-Record is not Repository content in the same sense as Asset. A Record is an on-chain labour fact produced by a worker. Repository contribution history is reconstructed from Records related to that Repo, although runtime services may keep local projections for routine use.
+## Repo 建立与身份
 
-The first usable product should support this contribution loop:
+任何 Worker 都可以建立 Repo。每个 Repo 具有稳定身份，客户端能够在之后重新加载同一个 Repo，并与其他 Repo 区分。
 
-```text
-worker establishes or joins a Repo
-  -> worker performs labour
-  -> labour produces a Record and forms or changes an Asset
-  -> worker contributes the Asset to the Repo
-  -> Repo validates the contribution and confirms the related labour
-  -> Repo preserves the accepted Asset
-  -> the Asset and Repo contribution history remain available later
-```
+每个 Repo 有一个 operator。operator 负责维护能够向该 Repo contribution 的 Workers。MVP 不要求更复杂的角色体系。
 
-This loop covers labour that results in an Asset contribution. Other labour may still produce a Record without producing or contributing an Asset.
+## Personal Repo
 
-The MVP is successful when this works predictably for a small team without treating Record as a second class of stored Repository content.
+每个 Worker 默认具有一个 Personal Repo，用于保存尚未进入其他 Repo 的私人 Assets。
 
-## Repository establishment
+Personal Repo 使用与其他 Repo 相同的基本仓库模型，但当前默认保持私人状态。它保存 Assets，不维护独立的个人 Record 仓库。Worker 的 labour history 仍由链上的 Records 构成。
 
-Any worker can establish a Repository. A Repo needs a stable identity so clients can load it again and distinguish it from other repositories.
+## 成员关系
 
-Each Repo has an operator responsible for managing its worker relationships. The requirements do not introduce a larger role hierarchy for the MVP.
+Repo 维护允许向其 contribution 的 Workers。operator 能够添加和移除成员、检查某个 Worker 是否为成员，并查看当前成员。
 
-Each worker has a default Personal Repo for Assets that have not been contributed to a shared or published Repo. Personal Repo follows the same basic Repository model but is private in the current product model. It stores Assets, not a separate personal `records` collection.
+成员关系只决定某个 Worker 是否可以向该 Repo contribution。它不限制 Worker 在 Repo 之外产生 Record 或 Asset。
 
-## Worker relationships
+## Asset contribution
 
-Repository maintains which workers may contribute Assets to it. The operator needs to be able to add and remove workers, check membership, and list the current workers.
+Worker 向 Repo contribution 的对象是 Asset。一次 contribution 同时关联描述相关劳动的 Record。
 
-Membership controls contribution to that Repo. It does not determine whether a worker can perform labour, produce a Record, or produce an Asset outside the Repo.
+贡献者必须已经是该 Repo 的成员。成功的 contribution 需要满足以下产品行为：
 
-## Asset contribution and Repository confirmation
+- 能够识别贡献者及其 Repo 成员关系；
+- Asset、相关 Record 和 contribution 关系符合对应的 LabourChain 协议；
+- Repo 接受并保存 Asset，且不改变其协议含义；
+- Repo 对相关劳动形成仓库侧确证；
+- 该 contribution 能够在之后从 Repo contribution history 中看到。
 
-Workers contribute Assets to a Repository. A contributor must be a member of that Repo before the contribution can be accepted.
+失败的 contribution 不得表现为已经被 Repo 接受。
 
-A contribution is accompanied by the worker-produced Record that describes the labour related to the Asset. The Record remains an on-chain labour fact associated with its worker. Repository does not take ownership of it or turn it into an internal Record object.
+Repo contribution 只描述包含 Asset 提交的劳动。没有形成或提交 Asset 的劳动仍然可以产生 Record。
 
-For a successful contribution, Repository needs to:
+## 持久保存
 
-- identify the contributing worker;
-- confirm that the worker may contribute to the Repo;
-- validate the Asset and the related Record according to their LabourChain protocol rules;
-- accept and preserve the Asset without silently changing its meaning;
-- participate in the Repo-side confirmation of the related labour;
-- make the contribution visible later from the Repo contribution-history view.
+Repo 身份、operator、成员关系和已接受的 Assets 属于需要长期保留的 Repository 状态。普通应用重启不得导致这些状态消失。
 
-A failed contribution must not appear as an accepted Repository contribution.
+Record 的规范事实保留在链上。Repository 可以保存本地 Record projection，以免日常查询每次都重新构建完整 contribution history。该 projection 属于可重建数据，不成为 Record 的事实来源。
 
-## Preservation
+Asset 或 Record 的修订和版本关系由对应协议定义。Repository 不为存储或展示方便而静默改写已经接受的事实。
 
-Repository identity, operator and worker relationships, and accepted Assets are durable Repository state. In a usable small-team deployment, a normal application restart must not make that state disappear.
+## Asset 读取与浏览
 
-The canonical Record remains on chain. Repository can keep a local Record projection so normal analysis does not require rebuilding the full contribution history for every request. That projection is derived data and may be rebuilt from the chain.
+消费者能够通过稳定的 LabourChain 身份或引用读取 Repo 中已经接受的 Asset，并能够区分 Asset 存在与不存在的情况。
 
-Corrections or later versions of an Asset or Record follow the protocol that owns that object. Repository does not rewrite accepted facts in place for storage or presentation convenience.
-
-## Asset retrieval and browsing
-
-Consumers need to retrieve accepted Assets through their stable LabourChain identity or reference and distinguish an existing Asset from one that is not present.
-
-For a small-team MVP, consumers also need to inspect the current workers and Assets in a Repo. Advanced search, pagination, and indexing are not product requirements until a real consumer or scale problem requires them.
+MVP 需要能够查看 Repo 当前的成员和 Assets。高级搜索、分页和索引不是当前产品要求，直到出现实际消费者或规模需求。
 
 ## Contribution history
 
-Consumers need to inspect the labour history associated with a Repo. This view answers which worker contributions the Repo accepted and confirmed.
+消费者能够查看与 Repo 有关的劳动历史，包括 Repo 接受和确证过的 contribution。
 
-Contribution history comes from the Records related to the Repo, not from a canonical `records[]` collection owned by Repository. Routine access to this history should not require a full chain reconstruction for every query. Runtime caches and indexes may serve the view, but they do not become the source of truth for Record.
+Contribution history 来自与 Repo contribution 相关的链上 Records，而不是 Repo 自有的 `records[]` 集合。日常读取不应要求每次重新扫描完整链数据，运行时可以使用缓存或索引提供该视图。
 
-## Protocol validity
+## 协议有效性
 
-Repository only accepts a contribution when its Asset, related Record, and required contribution relationships satisfy the applicable LabourChain protocol rules.
+Repository 只接受符合 LabourChain 协议的 contribution。Asset、相关 Record 以及 contribution 所需关系均受对应协议约束。
 
-The concrete validation and confirmation APIs are engineering choices defined in the Spec. Repository requirements do not define a second set of protocol semantics.
+Repository 不定义另一套 Asset、Record、身份或确证语义。
 
-## Current feature set
+## MVP 之外
 
-The first Repository feature set consists of:
+当前 Repository MVP 不要求实现公开或公共 Asset 的使用核算、收益分配、通用 Private Repo、零知识证明，也不承担 Project 或 Board 的规划、分析和展示能力。
 
-- establishing and loading a Repo with a stable identity;
-- providing each worker with a default Personal Repo as the current private Repository form;
-- operator-managed worker membership;
-- Asset contribution by Repo members;
-- validation of the Asset and related Record before contribution acceptance;
-- Repo-side confirmation of the related labour;
-- durable preservation and retrieval of accepted Assets;
-- listing Repo workers and Assets;
-- exposing Repo contribution history from related Records without treating those Records as canonical Repository storage.
-
-The concrete Cordis service shape, persistence-provider contract, lifecycle rules, error types, Record projection strategy, tests, and other engineering choices are defined by [`../specs/repository-mvp.md`](../specs/repository-mvp.md).
+这些概念可以继续保留在 [`concepts/`](./concepts/) 中，在进入具体产品范围时再加入相应 requirements。
