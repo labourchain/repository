@@ -1,12 +1,10 @@
-# 仓库与劳动确证
+# Repo
 
-本文说明 Repo、Asset contribution、仓库视角的劳动历史、Personal Repo 和运行时投影之间的关系。
+Repo 是 LabourChain 中的仓库。它以 Asset 为存放对象，并在接收劳动者 contribution 时参与相关劳动的确证。
 
-## Repo：仓库
+## 定义
 
-Repo 是仓库，主要存放 Asset，也就是劳动成果。劳动者向 Repo 提交劳动成果时，Repo 同时参与相关劳动记录的确证。
-
-Repo 与 Record 的关系由链上事实建立，而不是通过一个 `records[]` 字段保存：
+Repo 用于保存劳动成果，并维护与仓库有关的劳动者关系。Repo 不把 Record 作为另一类仓库内容保存；与 Repo 有关的劳动历史由链上的 Records 重新构建。
 
 ```text
 Worker
@@ -18,59 +16,65 @@ Asset
 Repo
 ```
 
-Repo 接受 Asset contribution 后，可以从自身视角确认这次 contribution 所对应的劳动关系。这个确认不会改变 Record 的劳动主体，也不会把 Record 从劳动者转移给 Repo。
+## 成员与 operator
 
-Repo 的 contribution history 由链上与该 Repo 相关的 Record 重建。同一条 Record 也可以从劳动者视角形成个人 labour history。
+任何 Worker 都可以建立 Repo。每个 Repo 有一个 operator，用于维护哪些 Workers 可以向该 Repo contribution。
 
-## Asset contribution 与 Record
+Worker 与 Repo 建立成员关系后，可从 Repo 视角称为 Member。成员关系决定 contribution 资格，不决定 Worker 是否能够产生 Record 或 Asset。
 
-在 Repo contribution 场景中，劳动者实际提交的是 Asset。与这次劳动有关的 Record 同时描述劳动过程，Repo 接受 Asset 时对这段劳动形成仓库侧确认。
+## Asset contribution
 
-```text
-劳动者进行劳动
-    ↓
-形成 / 修改劳动成果 Asset
-    ↓
-产生劳动记录 Record
-    ↓
-向 Repo 提交 Asset
-    ↓
-Repo 接受 Asset，并确证相关劳动
-```
-
-这只是 Repo contribution 的流程。Record 可以在没有新 Asset 的情况下存在，也不依赖某个 Repo 才能成立。劳动者同样不需要先加入公共 Repo 才能产生劳动记录。
-
-## 两种历史视角
-
-Worker view 回答某个劳动者进行了哪些劳动；Repo view 回答某个仓库接受并确证了哪些 contribution。两种视图都来自链上 Record 的关系，不需要在实体内部保存一份规范历史数组。
-
-Git / GitHub 可以作为一个近似参照：
+Repo contribution 的对象是 Asset。一次 contribution 通常同时关联描述相关劳动的 Record。
 
 ```text
-Git / GitHub                     LabourChain
-------------------------------------------------------
-仓库中的内容                     Asset / 劳动成果
-commit 中的劳动描述              Record / 劳动记录
-repository history              Repo contribution history
-personal commits/contributions  Worker labour history
+Worker performs labour
+        ↓
+Record + Asset
+        ↓
+Asset contribution
+        ↓
+Repo accepts Asset
+and confirms related labour
 ```
 
-LabourChain 与 Git 的区别在于，劳动者、劳动记录、劳动成果和仓库确证关系都被单独建模为链上事实。
+Repo 接受 contribution 后保存 Asset，并对相关劳动形成仓库侧确证。该确证不会改变 Record 的劳动主体，也不会把 Record 转移到 Repo 名下。
+
+没有形成或提交 Asset 的劳动仍然可以产生 Record，只是不构成 Repo contribution。
+
+## Contribution history
+
+Repo 的 contribution history 是与该 Repo 相关的 Records 的投影。它回答哪些劳动者向仓库贡献过什么劳动成果，以及 Repo 确证了哪些 contribution。
+
+```text
+Repo contribution history
+= Records related to accepted Repo contributions
+```
+
+运行时可以缓存或索引这些 Records，避免日常分析反复从链构建完整视图。缓存是可重建数据，不是 Repo 的规范 `records[]`。
 
 ## Personal Repo
 
-Personal Repo 是劳动者默认拥有的私人 Asset 仓库，用于保存还没有进入公开 Repo 的劳动成果和个人数据，例如健康资料、使用偏好、未公开材料，以及个人生产的数据或文件。
+每个 Worker 默认拥有一个 Personal Repo，用于保存尚未进入其他 Repo 的私人 Assets，例如个人数据、健康资料、使用偏好和未公开材料。
 
-它不是 Record 仓库。劳动者产生的 Record 仍然作为链上劳动事实存在。当前阶段可以把 Personal Repo 视为默认的私人仓库形式，更一般的 Private Repo 和隐私证明机制留待后续扩展。
+Personal Repo 使用与普通 Repo 相同的基本仓库模型，但当前作为私人仓库使用。它不承担个人 Record 存储；Worker 的 labour history 仍来自链上 Records。
 
-## Runtime projection / cache
+## 与 Git 仓库的类比
 
-Repository、Board、Flow 等服务在实际运行中可以缓存或索引链上的 Record，避免每次分析都从链重新构建完整视图。例如：
+Git / GitHub 可以作为近似参照：
 
-```text
-Repository record cache
-Board analysis index
-Flow labour history projection
-```
+| Git / GitHub | LabourChain |
+| --- | --- |
+| 仓库中的内容 | Asset / 劳动成果 |
+| commit 中的劳动描述 | Record / 劳动记录 |
+| repository history | Repo contribution history |
+| personal commits / contributions | Worker labour history |
 
-这些数据可以删除后重新构建。它们不改变 Record 的链上事实地位，也不会成为 Repo 或 Worker 的规范 `records[]` 字段。
+这个类比只用于解释视角。LabourChain 将 Worker、Record、Asset 和 Repo 确证关系分别建模为链上对象或关系。
+
+## 相关条目
+
+- [Worker / Member](./worker.md)
+- [Record](./record.md)
+- [Asset](./asset.md)
+- [Project](./project.md)
+- [访问、授权与使用](./access-and-use.md)
