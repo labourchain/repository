@@ -18,8 +18,6 @@ Repository MVP 包括：
 
 Record 是 Worker 的链上劳动事实，不作为 Repository 的另一类规范仓库内容保存。Repository 可以为日常查询和分析保留与 contribution 相关的 Record 投影。
 
-Repository 的产品能力可以由多个 Cordis plugins 共同提供。本页描述外部必须成立的行为，不要求存在一个统一的 Repository mega-service。
-
 ## Repo 建立与身份
 
 任何 Worker 都可以建立 Repo。每个 Repo 都有稳定身份，使使用方能够再次加载同一个 Repo，并与其他 Repo 区分。
@@ -53,39 +51,21 @@ Worker 在 Repository 之外产生 Record。Repository 不负责把 RawEntry 转
 
 失败、未完成或仍处于运行时处理中的 contribution 不得表现为已经被 Repo 接受。
 
+Block packing 发生在 contribution commit 之后，不是 Repository 接受 contribution 的必要条件。
+
 Repo contribution 描述的是包含 Asset 提交的劳动。没有形成或提交 Asset 的劳动仍然可以产生 Record，只是不构成 Repo contribution。
 
-## Contribution 状态与完成条件
+## 持久性与恢复
 
-Repository 可以在运行时使用 staging 组织尚未完成的 contribution。staging 是非规范运行状态，不因为被持久化而成为链上事实。
+已经接受的 Asset 必须能够持久保存，并在正常应用重启后再次读取。
 
-当前产品语义区分：
+Repo identity、operator、成员关系以及已接受 contribution 所需的 Repository 状态，在正常应用重启后必须能够恢复。
 
-```text
-STAGED
-  ↓ required confirmations satisfied
-CONFIRMED
-  ↓ accept / commit succeeds
-COMMITTED
-  ↓ later block packing
-PACKED
-```
-
-只有 `COMMITTED` 才表示 Repository 已接受此次 contribution。
-
-`CONFIRMED` 只表示适用协议要求的确认条件已经满足，不等于已经提交。`PACKED` 属于后续 Core block packing，不是 Repository contribution 完成的必要条件。
-
-应用重启或运行时故障不得把未 commit 的 contribution 错误地暴露为已接受状态。实现可以通过 durable staging、重试或 reconcile 达到这一要求，具体机制由 Architecture 和 Spec 决定。
-
-## 保存
-
-已经接受的 Asset 必须能够持久保存并在正常应用重启后再次读取。
+应用重启或运行时故障不得把尚未成功 commit 的 contribution 错误地暴露为已接受状态。
 
 Asset 的规范身份和语义由适用的 LabourChain Protocol 定义。Repository 不应为了存储、索引或展示方便而静默改写已经接受的 Asset、Record、confirmation 或 contribution relation。
 
-Repository 可以使用 Runtime providers 保存 Asset payload、staging、索引、cache 和 projection。运行时持久化本身不会把这些数据变成新的链上规范事实。
-
-Record 的规范事实仍在链上。Repository 可以保存本地 Record projection，使日常访问不需要为每次请求重新构建完整 contribution history。该 projection 必须可以与 canonical facts 区分。
+Record 的规范事实仍在链上。Repository 可以保存本地 Record projection，使日常访问不需要为每次请求重新构建完整 contribution history。该 projection 必须可以与 canonical facts 区分，并且不能成为新的 Record 事实来源。
 
 ## Asset 读取与浏览
 
@@ -93,21 +73,21 @@ Record 的规范事实仍在链上。Repository 可以保存本地 Record projec
 
 MVP 还需要支持查看 Repo 当前的成员和 Assets。
 
-高级搜索、分页、全文索引和复杂查询在出现实际规模需求之前，不属于当前产品要求。Runtime 可以为了当前查询性能建立内部索引，但这些索引不是新的产品事实。
+高级搜索、分页、全文索引和复杂查询在出现实际规模需求之前，不属于当前产品要求。
 
 ## Contribution history
 
 使用方可以查看与 Repo 相关的劳动历史，包括该 Repo 已接受并确证的 contributions。
 
-Contribution history 来自链上与 Repo contribution 相关的 Records、Assets、confirmations 和 relation 的投影，而不是 Repository 自己维护的规范 `records[]` 集合。
+Contribution history 来自链上与 Repo contribution 相关的 Records、Assets、confirmations 和 relations 的投影，而不是 Repository 自己维护的规范 `records[]` 集合。
 
-日常访问不应要求每次都完整扫描整条链。Runtime cache、index 或 projection 可以为该视图提供支持，但这些数据必须保持可重建和非规范性质。
+日常访问不应要求每次都完整扫描整条链。可以使用可重建的 cache、index 或 projection 支持该视图，但这些数据不是 canonical facts。
 
 ## 协议有效性与版本
 
 Repository 只接受符合适用 LabourChain Protocol 的事实和关系。
 
-历史事实必须按照它实际引用的 Protocol identity 和 version 解释或验证。节点同时具有多个协议版本时，不得把历史事实隐式交给 `latest` 或其他未引用版本处理。
+历史事实必须按照它实际引用的 Protocol identity 和 version 解释或验证。存在多个协议版本时，不得把历史事实隐式交给 `latest` 或其他未引用版本处理。
 
 如果处理某个事实所需的协议版本在当前运行环境中不可用，Repository 必须明确失败，而不是使用不同版本猜测其语义。
 
@@ -117,7 +97,7 @@ Repository 不重新定义 Asset、Record、identity、signature、confirmation�
 
 Personal Repo 属于 LabourFlow 的产品模块，不属于 `labourchain/repository` MVP 的特殊 Repo 模式。
 
-LabourFlow 可以复用通用的 Asset、Asset-Record relation 等 LabourChain Protocol 能力来实现 Personal Repo，而不要求加载完整 Repository 产品运行环境。
+LabourFlow 可以复用通用的 Asset、Asset-Record relation 等 LabourChain Protocol 能力实现 Personal Repo，但 Personal Repo 的建立、生命周期和产品行为由 LabourFlow 负责。
 
 RawEntry 识别、自然语言输入和 Record drafting 同样属于 LabourFlow 或其他上层产品，不属于 Repository。
 
