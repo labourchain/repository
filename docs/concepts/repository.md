@@ -54,9 +54,9 @@ Repo contribution history
 
 ## Personal Repo
 
-每个 Worker 默认拥有一个 Personal Repo，用于保存尚未进入其他 Repo 的私人 Assets，例如个人数据、健康资料、使用偏好和未公开材料。
+Personal Repo 是 LabourFlow 中围绕 Worker 使用的私人 Asset 仓库模块，用于保存尚未进入其他 Repo 的私人 Assets。
 
-Personal Repo 使用与普通 Repo 相同的基本仓库模型，但当前作为私人仓库使用。它不承担个人 Record 存储；Worker 的 labour history 仍来自链上 Records。
+它可以复用 LabourChain 的通用 Asset、Asset-Record relation 等协议能力，但不属于 `labourchain/repository` 产品的特殊 Repo 模式，也不承担个人 Record 存储。Worker 的 labour history 仍来自链上 Records。
 
 ## 与 Git 仓库的类比
 
