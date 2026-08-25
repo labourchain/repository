@@ -124,9 +124,9 @@ flowchart LR
     Board --> Cordis
     Client --> Cordis
 
+    RepoPlugins --> Providers
     RepoPlugins --> Facts
     RepoPlugins --> Commit
-    Providers --> RepoPlugins
     Views --> Facts
     Commit --> Facts
     Facts --> Block
