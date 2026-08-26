@@ -8,7 +8,7 @@
 
 Repository 采用 Cordis 的插件运行模型。仓库能力由多个 Cordis plugins 共同形成；其中定义链上稳定语义的插件同时声明为版本化 LabourChain Protocol。Repository 不建立独立于 Cordis 的 Runner、Hoster 或 mega-service 体系。
 
-当前仓库处于 Design / Architecture 收敛阶段，Spec 与实现暂不作为最新架构事实来源。
+当前 Requirements、Architecture 与 MVP Spec 已完成一轮重新投影，下一阶段从稳定能力 Spec 形成 Stories 与开发 Tasks。
 
 ## 文档
 
@@ -19,9 +19,10 @@ Repository 采用 Cordis 的插件运行模型。仓库能力由多个 Cordis pl
 - [`docs/concepts/`](./docs/concepts/)：长期概念基线与标准术语；
 - [`docs/requirements.md`](./docs/requirements.md)：Repository 产品需求的唯一事实来源；
 - [`docs/architecture.md`](./docs/architecture.md)：Repository 的 Design / Architecture，定义插件边界、运行结构和数据流；
-- [`specs/repository-mvp.md`](./specs/repository-mvp.md)：由 Requirement 与 Architecture 投影出的工程契约。当前文件仍待按最新 Design 重审。
+- [`specs/repository-mvp.md`](./specs/repository-mvp.md)：MVP umbrella spec，维护能力组合、共享不变量与完成边界；
+- [`specs/`](./specs/)：按稳定功能边界拆分的能力 Specs。
 
-`docs/concepts/` 按主题拆分概念文档，并由 [`docs/concepts/README.md`](./docs/concepts/README.md) 维护统一概念表和导航。概念基线用于长期对照，但不会替代需求层。
+当前能力 Specs 包括 bootstrap、Repo、membership、Protocol resolution、contribution、Asset storage 和 contribution history。
 
 如果 Concepts、Requirements、Architecture、Spec 或实现出现冲突，应先在对应上游层显式讨论和修订，而不是让实现静默选择一种解释。
 
@@ -37,14 +38,16 @@ Requirements (`docs/requirements.md`)
         ↓
 Design / Architecture (`docs/architecture.md`)
         ↓
-Spec (`specs/`)
+Specs (`specs/`)
         ↓
-Task / Implementation (`src/`, `test/`)
+Stories
+        ↓
+Tasks / Implementation (`src/`, `test/`)
 ```
 
-Requirements 说明产品必须成立的行为；Architecture 说明系统结构、插件边界、依赖方向和数据流；Spec 再把两者共同投影为可执行工程契约；Task 与实现只负责完成已经确定的契约。
+Requirements 说明产品必须成立的行为；Architecture 说明系统结构、插件边界、依赖方向和数据流；Spec 将两者投影成稳定能力契约；Story 是可交付的开发增量；Task 是完成 Story 的具体工程动作。
 
-当前阶段先完成 Requirements 与 Architecture 的审查。`specs/repository-mvp.md` 暂不跟随局部讨论即时修改，待上游设计稳定后统一重新投影。
+Spec 不按 Task 一一拆分。一个稳定能力可以支撑多个 Stories，一个 Story 也可以同时受多个 Specs 约束。
 
 ## 架构概览
 
@@ -68,7 +71,7 @@ Protocol plugin 不形成第二套插件系统。它只是具有长期链上语�
 
 ## 工程结构
 
-当前仓库仍处于架构收敛阶段，package boundary 尚未最终锁定。现有目录主要用于保存文档、Spec 和最小 Cordis scaffold：
+当前仓库的文档与 Spec 已按 SDD 层级组织，具体 package boundary 仍由后续 Stories / Tasks 根据已接受的协议与生命周期边界形成：
 
 ```text
 README.md               中文项目说明（权威版本）
@@ -77,14 +80,14 @@ AGENTS.md               Agent 开发说明（英文）
 docs/concepts/          概念基线与术语文档
 docs/requirements.md    产品需求唯一事实来源
 docs/architecture.md    Design / Architecture
-specs/                  工程 Spec，待重新投影
+specs/                  MVP umbrella + 稳定能力 Specs
 src/                    当前最小 Cordis scaffold
 test/                   测试
 scripts/                工程与发布检查脚本
 .github/                 CI 与 PR 配置
 ```
 
-具体 npm packages、monorepo 目录以及各 Protocol plugin 的拆分方式将在 Architecture 接受后进入 Spec / Task，不在当前阶段提前固定。
+具体 npm packages、monorepo 目录以及 Protocol plugin 的最终拆分不由 Spec 文件数量机械决定。
 
 ## 开发
 
@@ -99,10 +102,10 @@ pnpm run check
 pnpm run package:check
 ```
 
-现有检查命令反映当前 scaffold，不代表最新 Repository Architecture 已完成实现。
+现有检查命令仍主要反映当前 scaffold，不代表 Repository MVP 已完成实现。
 
 ## 状态
 
 当前 package 保持 `private: true`。
 
-Requirements 与 Architecture 正在收敛；旧 `specs/repository-mvp.md` 和 `src/` scaffold 仍保留用于后续重新投影与实现，不应被解释为已经确认的 Repository Service 架构。
+Requirements、Architecture 与 capability Specs 已完成当前轮次的重新投影；`src/` 仍是最小 Cordis scaffold。后续实现应从 Specs 形成 Stories / Tasks，而不是恢复旧的单一 Repository Service 架构。
