@@ -6,7 +6,7 @@ This repository develops LabourChain Repository using Cordis as its runtime plug
 
 The authoritative human-facing project description is the Chinese [`README.md`](./README.md). [`README_EN.md`](./README_EN.md) is a translation.
 
-The long-lived domain baseline is documented under [`docs/concepts/`](./docs/concepts/). Product behavior is defined by [`docs/requirements.md`](./docs/requirements.md). System structure and plugin boundaries are defined by [`docs/architecture.md`](./docs/architecture.md).
+The long-lived domain baseline is documented under [`docs/concepts/`](./docs/concepts/). Product behavior is defined by [`docs/requirements.md`](./docs/requirements.md). System structure and plugin boundaries are defined by [`docs/architecture.md`](./docs/architecture.md). Engineering contracts are defined under [`specs/`](./specs/).
 
 The current model treats Worker / Member as the labour subject, Record as living labour, Asset as objectified labour output, Repo as an Asset warehouse that participates in contribution confirmation, and Project as an organizational form over workers, Records and Assets.
 
@@ -24,14 +24,18 @@ Requirements (`docs/requirements.md`)
         ↓
 Design / Architecture (`docs/architecture.md`)
         ↓
-Specification (`specs/`)
+Specifications (`specs/`)
         ↓
-Task / Implementation (`src/`, `test/`)
+Stories
+        ↓
+Tasks / Implementation (`src/`, `test/`)
 ```
 
-Concepts do not directly replace Requirements. Requirements define product truth. Architecture constrains how those requirements are structured and executed. Specs are projections of both Requirements and Architecture.
+Concepts do not directly replace Requirements. Requirements define product truth. Architecture constrains how those requirements are structured and executed. Specs are engineering projections of both Requirements and Architecture.
 
-The current `specs/repository-mvp.md` predates the latest Architecture and must not be treated as the authoritative runtime design until it is explicitly re-projected. Do not update the Spec or start domain implementation merely to make it match an intermediate discussion.
+Specs are organized by stable capability boundary, not by Task. [`specs/repository-mvp.md`](./specs/repository-mvp.md) is the umbrella Spec for MVP composition and shared invariants. Capability Specs define bootstrap, Repo, membership, Protocol resolution, contribution, Asset storage and contribution history.
+
+A Story is a deliverable development increment and may depend on several Specs. Tasks are concrete implementation work for a Story. Do not create one Spec per Task.
 
 If Concepts, Requirements, Architecture, Spec or implementation become inconsistent, correct the mismatch at the appropriate upstream layer before continuing downstream.
 
@@ -55,13 +59,15 @@ Its stable executable version is declared using the Protocol format, so a runnin
 
 Do not invent a Root Protocol, protocol-of-protocols runtime layer, self-registering Runner registry or other recursive bootstrap model unless a real requirement later proves one necessary.
 
+See [`specs/bootstrap.md`](./specs/bootstrap.md) for the executable runtime contract.
+
 ## Repository model
 
 Repository does not need one mega-service that owns all behavior.
 
 Repository capability can emerge from multiple Cordis plugins implementing Repo, membership, Asset, relation, confirmation, contribution, storage, projection or adapter responsibilities according to their real protocol and lifecycle boundaries.
 
-Do not split plugins mechanically by CRUD method or Requirement. Prefer boundaries that share protocol semantics, versioning and lifecycle. Closely coupled protocols may live together when they have no useful independent lifecycle.
+Do not split plugins mechanically by CRUD method, Requirement, Story, Task or Spec file. Prefer boundaries that share protocol semantics, versioning and lifecycle. Closely coupled protocols may live together when they have no useful independent lifecycle.
 
 Generic Asset and Asset-Record relation capabilities should remain reusable outside Repository. LabourFlow Personal Repo may reuse such protocols without loading the complete Repository product runtime.
 
@@ -83,9 +89,13 @@ COMMITTED
 PACKED
 ```
 
-Only COMMITTED means the Repo has accepted the contribution. PACKED is a later Core concern.
+Only COMMITTED is the canonical commit boundary required for Repository acceptance. Repository must also be able to durably retrieve the accepted Asset before reporting acceptance. PACKED is a later Core concern.
 
-STAGED is runtime state, not a canonical chain fact. Runtime providers may persist staging for recovery, but persistence does not make it canonical.
+STAGED is runtime state, not a canonical chain fact. A usable deployment requires durable staging sufficient for crash recovery, but persistence does not make staging canonical.
+
+Recovery must converge toward canonical commit state: uncommitted work must not appear accepted, and a commit that already succeeded must not be erased by stale local runtime state.
+
+See [`specs/contribution.md`](./specs/contribution.md) and [`specs/asset-storage.md`](./specs/asset-storage.md).
 
 Repository does not own canonical Record storage. Contribution history is a projection of chain facts and relations. Do not introduce canonical `storeRecord`, `getRecord`, `repo.records[]` or equivalent Repository-owned history models.
 
@@ -95,7 +105,9 @@ Storage, cache, index, staging, projection and external adapters are normal Cord
 
 Runtime persistence must not silently redefine Asset, Record, confirmation, identity or contribution semantics. Cache and projection data must remain distinguishable from canonical facts.
 
-Concrete database, filesystem and index choices are not fixed by the current Architecture.
+Concrete database, filesystem and index choices are not fixed by the current Specs.
+
+Do not create a standalone provider Spec merely because multiple capabilities need persistence. Each capability Spec defines the persistence behavior it requires; provider package boundaries should follow actual implementation and lifecycle needs.
 
 ## Engineering discipline
 
@@ -113,19 +125,21 @@ Do not prematurely lock:
 - node synchronization;
 - private-proof or settlement mechanisms.
 
-Do not add abstractions merely to make diagrams look complete. Reuse Cordis capabilities unless LabourChain has a real semantic requirement that Cordis does not cover.
+Do not add abstractions merely to make diagrams or Spec trees look complete. Reuse Cordis capabilities unless LabourChain has a real semantic requirement that Cordis does not cover.
 
 ## Testing discipline
 
-Tests protect Requirements, Spec contracts, meaningful protocol behavior, Cordis lifecycle behavior and reproduced regressions. Test count, CI job count and coverage percentage are not quality goals by themselves.
+Tests protect Requirements, Spec contracts, meaningful protocol behavior, recovery behavior, Cordis lifecycle behavior and reproduced regressions. Test count, CI job count and coverage percentage are not quality goals by themselves.
 
-Do not design implementation tests from the stale MVP Spec until the Spec has been re-projected from the accepted Requirements and Architecture.
+Derive acceptance tests from the capability Specs relevant to the Story being implemented. Do not mechanically execute every test idea in every Spec for every Task.
 
 ## Current implementation status
 
 `src/` currently contains only a minimal Cordis scaffold. It is not evidence that the final Architecture should be a single Repository service.
 
-The current package remains private. Do not begin broad implementation until Requirements and Architecture are accepted and `specs/repository-mvp.md` has been rewritten from them.
+Requirements, Architecture and capability Specs have completed the current re-projection round. The next development step is to derive Stories and Tasks from the accepted Specs before broad implementation.
+
+The current package remains private.
 
 ## Validation
 
