@@ -10,7 +10,7 @@ In the LabourChain model, the Worker is the subject of labour, a Record represen
 
 Repository uses Cordis as its runtime plugin model. Repository capability emerges from multiple Cordis plugins. A plugin that defines stable on-chain semantics is additionally declared as a versioned LabourChain Protocol. Repository does not build a separate Runner, Hoster, or mega-service framework around Cordis.
 
-The project is currently in the Design / Architecture convergence stage. The existing Spec and implementation scaffold are not the latest architecture source of truth.
+Requirements, Architecture, and the MVP Specs have now completed one round of re-projection. The next development stage derives Stories and engineering Tasks from the stable capability Specs.
 
 ## Documentation
 
@@ -21,7 +21,10 @@ Main entry points:
 - [`docs/concepts/`](./docs/concepts/): long-lived domain baseline and standard terminology;
 - [`docs/requirements.md`](./docs/requirements.md): the single source of truth for Repository product requirements;
 - [`docs/architecture.md`](./docs/architecture.md): Design / Architecture for plugin boundaries, runtime structure, and data flow;
-- [`specs/repository-mvp.md`](./specs/repository-mvp.md): engineering projection of Requirements and Architecture. It currently predates the latest Design and will be reviewed later.
+- [`specs/repository-mvp.md`](./specs/repository-mvp.md): MVP umbrella Spec for capability composition, shared invariants, and completion criteria;
+- [`specs/`](./specs/): capability Specs split by stable functional boundary.
+
+The current capability Specs cover bootstrap, Repo, membership, Protocol resolution, contribution, Asset storage, and contribution history.
 
 If Concepts, Requirements, Architecture, Spec, or implementation diverge, correct the mismatch at the appropriate upstream layer instead of silently choosing an interpretation in code.
 
@@ -35,14 +38,16 @@ Requirements (`docs/requirements.md`)
         ↓
 Design / Architecture (`docs/architecture.md`)
         ↓
-Spec (`specs/`)
+Specs (`specs/`)
         ↓
-Task / Implementation (`src/`, `test/`)
+Stories
+        ↓
+Tasks / Implementation (`src/`, `test/`)
 ```
 
-Requirements define product behavior. Architecture defines system structure, plugin boundaries, dependency direction, and data flow. The Spec projects both into an executable engineering contract. Tasks and implementation satisfy that contract.
+Requirements define product behavior. Architecture defines system structure, plugin boundaries, dependency direction, and data flow. Specs project those into stable capability contracts. Stories are deliverable development increments. Tasks are the concrete engineering work needed to complete Stories.
 
-The current phase is focused on reviewing Requirements and Architecture. `specs/repository-mvp.md` should not be incrementally patched to follow intermediate design discussion; it will be re-projected after the upstream layers are accepted.
+Specs are not split one-for-one by Task. One stable capability may support multiple Stories, and one Story may be constrained by several Specs.
 
 ## Architecture overview
 
@@ -66,7 +71,7 @@ See [`docs/architecture.md`](./docs/architecture.md).
 
 ## Repository structure
 
-The final package boundaries are not fixed yet. The current repository mainly contains documentation, a draft Spec, and a minimal Cordis scaffold:
+Documentation and Specs now follow the SDD hierarchy. Final package boundaries are still derived later from accepted protocol and lifecycle boundaries rather than from Spec file count.
 
 ```text
 README.md               Chinese project README (authoritative)
@@ -75,14 +80,12 @@ AGENTS.md               Agent development instructions
 docs/concepts/          domain baseline and terminology
 docs/requirements.md    product requirements source of truth
 docs/architecture.md    Design / Architecture
-specs/                  engineering Spec, pending re-projection
+specs/                  MVP umbrella + stable capability Specs
 src/                    current minimal Cordis scaffold
 test/                   tests
 scripts/                engineering and release checks
 .github/                 CI and PR configuration
 ```
-
-Final npm package names, monorepo layout, and Protocol plugin boundaries will be decided after Architecture acceptance and then projected into Spec / Task.
 
 ## Development
 
@@ -97,10 +100,10 @@ pnpm run check
 pnpm run package:check
 ```
 
-The existing checks validate the current scaffold. They do not imply that the latest Repository Architecture is already implemented.
+The existing checks still mainly validate the current scaffold. They do not imply that the Repository MVP implementation is complete.
 
 ## Status
 
 The current package remains `private: true`.
 
-Requirements and Architecture are being converged. The old `specs/repository-mvp.md` and `src/` scaffold remain for later re-projection and implementation, and must not be interpreted as an accepted single Repository Service architecture.
+Requirements, Architecture, and capability Specs have completed the current re-projection round. `src/` is still a minimal Cordis scaffold. Implementation should now proceed from Specs into Stories and Tasks rather than restoring the previous single Repository Service model.
