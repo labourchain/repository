@@ -56,15 +56,9 @@ export async function createRepositoryNode(
       await context.plugin(plugin)
     }
   } catch (cause) {
-    try {
-      await context.fiber.dispose()
-    } catch (disposeCause) {
-      throw new BootstrapStartupError(
-        'Repository node startup failed and Cordis cleanup also failed.',
-        { cause: new AggregateError([cause, disposeCause]) },
-      )
-    }
-
+    // Cordis owns child cleanup. Normal disposer errors are logged by Cordis
+    // during unload rather than being rethrown from fiber.dispose().
+    await context.fiber.dispose()
     throw new BootstrapStartupError('Repository node startup failed.', { cause })
   }
 
