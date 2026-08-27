@@ -27,6 +27,9 @@
   },
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
+  "bin": {
+    "labourchain-repository": "./lib/bin.js"
+  },
   "exports": {
     ".": {
       "types": "./lib/index.d.ts",
