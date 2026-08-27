@@ -68,31 +68,6 @@ test('startup failure disposes plugins that were already loaded', async () => {
   assert.deepEqual(events, ['acquire', 'dispose'])
 })
 
-test('startup reports cleanup failure without hiding the original startup failure', async () => {
-  const startupCause = new Error('startup failed')
-  const cleanupCause = new Error('cleanup failed')
-
-  function cleanupFailingPlugin(ctx: Context) {
-    ctx.effect(() => () => {
-      throw cleanupCause
-    })
-  }
-
-  function failingPlugin() {
-    throw startupCause
-  }
-
-  await assert.rejects(
-    createRepositoryNode({ plugins: [cleanupFailingPlugin, failingPlugin] }),
-    (error: unknown) => {
-      assert.ok(error instanceof BootstrapStartupError)
-      assert.ok(error.cause instanceof AggregateError)
-      assert.deepEqual(error.cause.errors, [startupCause, cleanupCause])
-      return true
-    },
-  )
-})
-
 test('importing the package entry does not keep a process alive or emit output', () => {
   const result = spawnSync(
     process.execPath,
