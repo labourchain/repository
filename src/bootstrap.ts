@@ -1,4 +1,3 @@
-import { readFile } from 'node:fs/promises'
 import { Context } from '@deepseek-ai/cordis'
 import type { Fiber, FiberState, Plugin } from '@deepseek-ai/cordis'
 
@@ -8,14 +7,7 @@ export const BOOTSTRAP_PLUGIN = Object.freeze({
   version: '0.1.0',
 } as const)
 
-export const BOOTSTRAP_RUNTIME_ABI = 1 as const
-
-export type BootstrapSourceIdentity = typeof BOOTSTRAP_PLUGIN
-
-export interface BootstrapArtifactIdentity extends BootstrapSourceIdentity {
-  /** Core PluginHash of the exact built Bootstrap artifact. */
-  readonly pluginHash: string
-}
+export type BootstrapPluginIdentity = typeof BOOTSTRAP_PLUGIN
 
 export interface RepositoryPluginEntry {
   /** Cordis plugin to mount into the Repository root Context. */
@@ -27,15 +19,13 @@ export interface RepositoryPluginEntry {
 export interface CreateRepositoryNodeOptions {
   /** Complete Cordis composition required for this node instance. */
   readonly plugins?: readonly RepositoryPluginEntry[]
-  /** Exact artifact identity when the node is started from a built Bootstrap. */
-  readonly bootstrap?: BootstrapSourceIdentity | BootstrapArtifactIdentity
 }
 
 export interface RepositoryNode {
   /** Root Cordis context owned by this node instance. */
   readonly context: Context
-  /** Source identity, plus PluginHash when started from a built artifact. */
-  readonly bootstrap: BootstrapSourceIdentity | BootstrapArtifactIdentity
+  /** Stable source identity of the executable Bootstrap Plugin. */
+  readonly bootstrap: BootstrapPluginIdentity
   /** Whether root disposal has been requested. */
   readonly disposed: boolean
   /** Dispose the root Cordis fiber and every child plugin it owns. */
@@ -94,41 +84,16 @@ async function settleComposition(fibers: readonly MountedFiber[]): Promise<void>
 }
 
 /**
- * Read the exact PluginHash sidecar generated for the built Bootstrap.
- *
- * Core validates and hashes the full artifact during build. Runtime only reads
- * the resulting identity and checks that it belongs to this source version;
- * it does not duplicate Core canonicalization or hashing rules.
- */
-export async function loadBootstrapArtifactIdentity(
-  url: URL = new URL('./bootstrap.plugin.json', import.meta.url),
-): Promise<BootstrapArtifactIdentity> {
-  const parsed = JSON.parse(await readFile(url, 'utf8')) as {
-    plugin?: { name?: unknown; version?: unknown }
-    pluginHash?: unknown
-  }
-
-  if (
-    parsed.plugin?.name !== BOOTSTRAP_PLUGIN.name
-    || parsed.plugin.version !== BOOTSTRAP_PLUGIN.version
-    || typeof parsed.pluginHash !== 'string'
-  ) {
-    throw new BootstrapStartupError('Built Bootstrap Plugin identity is invalid.')
-  }
-
-  return Object.freeze({
-    ...BOOTSTRAP_PLUGIN,
-    pluginHash: parsed.pluginHash,
-  })
-}
-
-/**
  * Start one Repository node runtime.
  *
  * Bootstrap creates one root Cordis Context, mounts the entire supplied
  * composition through Cordis, waits for it to settle, and fails closed if any
  * required entry remains inactive. It does not own a second plugin registry,
  * dependency graph, or lifecycle system.
+ *
+ * Chain-level Plugin artifact identity is intentionally not constructed here.
+ * Repository assumes the eventual Core implementation supplies that release
+ * boundary; Bootstrap only owns process/runtime composition in this Story.
  */
 export async function createRepositoryNode(
   options: CreateRepositoryNodeOptions = {},
@@ -147,7 +112,7 @@ export async function createRepositoryNode(
 
   return {
     context,
-    bootstrap: options.bootstrap ?? BOOTSTRAP_PLUGIN,
+    bootstrap: BOOTSTRAP_PLUGIN,
     get disposed() {
       return disposal !== undefined
     },
