@@ -45,7 +45,7 @@ const FIBER_ACTIVE = 2 as FiberState.ACTIVE
 type MountedFiber = Fiber & PromiseLike<Fiber>
 
 function mountPlugin(context: Context, entry: RepositoryPluginEntry): MountedFiber {
-  return Reflect.apply(context.plugin, context, [entry.plugin, entry.config]) as MountedFiber
+  return context.plugin(entry.plugin, entry.config)
 }
 
 function pendingDiagnostic(fiber: Fiber): string {
