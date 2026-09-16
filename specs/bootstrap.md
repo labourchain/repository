@@ -31,9 +31,9 @@ Bootstrap must not introduce a Repository-specific Runner, Hoster, Plugin Manage
 
 ## Cordis runtime compatibility
 
-Bootstrap depends on a compatible Cordis 4.0.x runtime rather than embedding a private Cordis copy into the executable.
+Bootstrap depends on a compatible Cordis 4.x runtime rather than embedding a private Cordis copy into the executable.
 
-The executable and all loaded plugins must share the host's resolved Cordis module instance. The current package range begins at the latest stable release available when this Story is implemented (`^4.0.2`). A later compatible patch may be selected by normal package resolution without changing Bootstrap Protocol semantics by itself.
+The executable and all loaded plugins must share the host's resolved Cordis module instance. The current package range starts at the latest stable release available when this Story is implemented (`^4.0.2`). A later compatible 4.x release may be selected by normal package resolution without changing Bootstrap Protocol semantics by itself.
 
 If a future Cordis change is incompatible with the accepted Bootstrap contract, compatibility must be narrowed or the Bootstrap Protocol must be revised explicitly rather than hidden behind a second bundled runtime.
 
@@ -66,7 +66,7 @@ The Bootstrap Protocol version identifies the stable executable runtime contract
 
 Changing bootstrap behavior in a way that changes that declared stable runtime contract requires a new Bootstrap Protocol version rather than silently changing the meaning of an existing version.
 
-The exact resolved Cordis patch version is deployment/runtime metadata, not a second Bootstrap identity.
+The exact resolved Cordis release is deployment/runtime metadata, not a second Bootstrap identity.
 
 This Story does not implement Core's final Protocol/Plugin artifact packaging while Core remains under development. Repository assumes the completed Core will expose the required release boundary and will integrate with it rather than duplicate Core canonicalization or hashing logic locally.
 
