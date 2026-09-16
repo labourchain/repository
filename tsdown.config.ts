@@ -10,9 +10,8 @@ export default defineConfig({
   dts: true,
   clean: true,
   deps: {
-    // Bootstrap owns the Cordis runtime used by this executable version.
-    // Keep that runtime in the built artifact instead of resolving an arbitrary
-    // compatible Cordis installation at process startup.
-    alwaysBundle: ['@deepseek-ai/cordis'],
+    // Cordis is the shared host runtime for the whole plugin composition.
+    // Keep it external so Bootstrap and loaded plugins resolve the same module instance.
+    neverBundle: ['@deepseek-ai/cordis'],
   },
 })
