@@ -45,17 +45,17 @@ Repository follows Cordis's plugin-first model. Do not create a second plugin fr
 
 Plugin discovery, dependency handling, Context, Service, Effect and lifecycle ownership belong to Cordis. Avoid introducing Repository-specific Runner, Hoster, Plugin Manager, Service Container or lifecycle abstractions that duplicate Cordis.
 
-A LabourChain Protocol plugin is a Cordis plugin whose behavior carries stable on-chain protocol semantics and an explicit protocol version. It is not a parallel plugin type system.
+LabourChain chain Plugins are immutable executable artifacts with stable historical semantics. Cordis is the runtime mechanism used to execute the corresponding implementations; this does not create a second plugin type system.
 
-Protocol versions are stable historical semantics. When a new protocol version changes those semantics, implement the new version separately rather than changing the meaning of the old version in place. A node may need multiple protocol versions simultaneously to interpret historical facts.
-
-Historical facts must be handled by the exact protocol identity and version they reference. Do not silently route them to `latest`.
+Historical facts must be handled by the exact chain Plugin identity they reference. Do not silently route them to `latest` or another version.
 
 ## Bootstrap
 
 The executable bootstrap is special only because it has a process entry point and starts a Cordis application.
 
-Its stable executable version is declared using the Protocol format, so a running node is an instance of a particular Bootstrap Protocol version. After Cordis starts, normal capabilities are loaded and managed through Cordis plugins.
+A Bootstrap implementation keeps a stable Plugin name/version and fixes the Cordis runtime used by that executable version. After Cordis starts, normal capabilities are loaded and managed through Cordis plugins.
+
+During current Repository development, Core is assumed to provide the eventual chain-facing Plugin artifact / PluginHash boundary. Do not duplicate Core canonicalization or hashing code inside Bootstrap merely to make that release identity locally. The current Bootstrap Story focuses on executable runtime composition; Core artifact integration can be wired once the repositories are integrated.
 
 Do not invent a Root Protocol, protocol-of-protocols runtime layer, self-registering Runner registry or other recursive bootstrap model unless a real requirement later proves one necessary.
 
@@ -101,7 +101,7 @@ Repository does not own canonical Record storage. Contribution history is a proj
 
 ## Runtime providers
 
-Storage, cache, index, staging, projection and external adapters are normal Cordis plugin/provider concerns unless they themselves define stable chain protocol semantics.
+Storage, cache, index, staging, projection and external adapters are normal Cordis plugin/provider concerns unless they themselves define stable chain semantics.
 
 Runtime persistence must not silently redefine Asset, Record, confirmation, identity or contribution semantics. Cache and projection data must remain distinguishable from canonical facts.
 
@@ -114,7 +114,7 @@ Do not create a standalone provider Spec merely because multiple capabilities ne
 Do not prematurely lock:
 
 - final npm package names or monorepo layout;
-- Protocol metadata field names;
+- chain Plugin metadata beyond accepted Core contracts;
 - database schemas;
 - REST / HTTP routes;
 - UI;
@@ -135,12 +135,10 @@ Derive acceptance tests from the capability Specs relevant to the Story being im
 
 ## Current implementation status
 
-`src/` currently contains only a minimal Cordis scaffold. It is not evidence that the final Architecture should be a single Repository service.
-
-Requirements, Architecture and capability Specs have completed the current re-projection round. The next development step is to derive Stories and Tasks from the accepted Specs before broad implementation.
+Bootstrap implementation is in progress on its dedicated Story branch. Domain Repository capabilities are implemented only after their accepted Specs and Stories are ready.
 
 The current package remains private.
 
 ## Validation
 
-When implementation work resumes, use the relevant project checks and report actual evidence. Do not claim completion without validation.
+Use the relevant project checks when the corresponding integration is available and report actual evidence. Do not claim validation that was intentionally skipped or cannot yet run against an unfinished upstream repository.
