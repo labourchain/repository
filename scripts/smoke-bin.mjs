@@ -4,7 +4,7 @@ import { resolve } from 'node:path'
 
 const child = spawn(process.execPath, [resolve('lib/bin.js')], {
   cwd: process.cwd(),
-  stdio: ['ignore', 'pipe', 'pipe'],
+  stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
 })
 
 let stdout = ''
@@ -18,18 +18,11 @@ const timeout = setTimeout(() => {
   child.kill('SIGKILL')
 }, 3_000)
 
-await new Promise((resolveReady, rejectReady) => {
-  const earlyExit = (code, signal) => {
-    rejectReady(new Error(
-      `Repository bin exited before smoke shutdown (code=${String(code)}, signal=${String(signal)}).\n${stderr}`,
-    ))
-  }
-  child.once('exit', earlyExit)
-  setTimeout(() => {
-    child.off('exit', earlyExit)
-    resolveReady()
-  }, 100)
-})
+const [message] = await once(child, 'message')
+if (message !== 'ready') {
+  child.kill('SIGKILL')
+  throw new Error(`Repository bin emitted unexpected readiness message: ${String(message)}`)
+}
 
 child.kill('SIGTERM')
 const [code, signal] = await once(child, 'exit')
