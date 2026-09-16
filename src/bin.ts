@@ -7,10 +7,7 @@ const signals = ['SIGINT', 'SIGTERM'] as const
 async function main(): Promise<void> {
   const node = await createRepositoryNode()
 
-  // Test runners may attach an IPC channel to observe deterministic readiness.
-  process.send?.('ready')
-
-  await new Promise<void>((resolve) => {
+  const shutdownComplete = new Promise<void>((resolve) => {
     let shuttingDown = false
 
     const shutdown = async () => {
@@ -35,6 +32,10 @@ async function main(): Promise<void> {
       process.once(signal, shutdown)
     }
   })
+
+  // Test runners may attach an IPC channel to observe deterministic readiness.
+  process.send?.('ready')
+  await shutdownComplete
 }
 
 main().catch((error) => {
