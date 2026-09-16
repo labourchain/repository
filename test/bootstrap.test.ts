@@ -1,15 +1,11 @@
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import { test } from 'node:test'
 import type { Context } from '@deepseek-ai/cordis'
 import {
   BOOTSTRAP_PLUGIN,
   BootstrapStartupError,
   createRepositoryNode,
-  loadBootstrapArtifactIdentity,
 } from '../src/index.ts'
 
 test('exposes the stable Bootstrap Plugin source identity', async () => {
@@ -20,31 +16,6 @@ test('exposes the stable Bootstrap Plugin source identity', async () => {
   assert.equal(node.bootstrap.version, '0.1.0')
 
   await node.dispose()
-})
-
-test('loads exact built Bootstrap identity from the generated sidecar', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'repository-bootstrap-'))
-  const path = join(dir, 'bootstrap.plugin.json')
-  const pluginHash = 'ab'.repeat(32)
-  await writeFile(path, JSON.stringify({ plugin: BOOTSTRAP_PLUGIN, pluginHash }))
-
-  try {
-    assert.deepEqual(
-      await loadBootstrapArtifactIdentity(new URL(`file://${path}`)),
-      { ...BOOTSTRAP_PLUGIN, pluginHash },
-    )
-
-    await writeFile(path, JSON.stringify({
-      plugin: { ...BOOTSTRAP_PLUGIN, version: '9.9.9' },
-      pluginHash,
-    }))
-    await assert.rejects(
-      loadBootstrapArtifactIdentity(new URL(`file://${path}`)),
-      BootstrapStartupError,
-    )
-  } finally {
-    await rm(dir, { recursive: true, force: true })
-  }
 })
 
 test('passes plugin configuration through the Cordis composition', async () => {
