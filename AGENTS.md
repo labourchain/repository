@@ -57,7 +57,7 @@ The executable bootstrap is special only because it has a process entry point an
 
 Its stable executable version is declared using the Protocol format, so a running node is an instance of a particular Bootstrap Protocol version. After Cordis starts, normal capabilities are loaded and managed through Cordis plugins.
 
-Bootstrap uses a compatible Cordis 4.0.x range and shares the host Cordis module instance with loaded plugins. Do not bundle a private second Cordis runtime into the executable.
+Bootstrap uses the compatible Cordis 4.x range beginning at `^4.0.2` and shares the host Cordis module instance with loaded plugins. Do not bundle a private second Cordis runtime into the executable.
 
 Do not invent a Root Protocol, protocol-of-protocols runtime layer, self-registering Runner registry or other recursive bootstrap model unless a real requirement later proves one necessary.
 
