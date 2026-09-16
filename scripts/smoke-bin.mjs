@@ -18,14 +18,27 @@ const timeout = setTimeout(() => {
   child.kill('SIGKILL')
 }, 3_000)
 
-const [message] = await once(child, 'message')
-if (message !== 'ready') {
+const exit = once(child, 'exit')
+const readiness = await Promise.race([
+  once(child, 'message').then(([message]) => ({ kind: 'ready', message })),
+  exit.then(([code, signal]) => ({ kind: 'exit', code, signal })),
+])
+
+if (readiness.kind === 'exit') {
+  clearTimeout(timeout)
+  throw new Error(
+    `Repository bin exited before readiness (code=${String(readiness.code)}, signal=${String(readiness.signal)}).\n${stderr}`,
+  )
+}
+if (readiness.message !== 'ready') {
   child.kill('SIGKILL')
-  throw new Error(`Repository bin emitted unexpected readiness message: ${String(message)}`)
+  await exit
+  clearTimeout(timeout)
+  throw new Error(`Repository bin emitted unexpected readiness message: ${String(readiness.message)}`)
 }
 
 child.kill('SIGTERM')
-const [code, signal] = await once(child, 'exit')
+const [code, signal] = await exit
 clearTimeout(timeout)
 
 if (code !== 0 || signal !== null) {
