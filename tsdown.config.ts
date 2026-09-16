@@ -10,6 +10,9 @@ export default defineConfig({
   dts: true,
   clean: true,
   deps: {
-    neverBundle: ['@deepseek-ai/cordis'],
+    // Bootstrap PluginHash must commit to the Cordis runtime actually used by
+    // the node. Keep the exact peer for type/plugin ecosystem compatibility,
+    // but vendor its executable code into this artifact.
+    alwaysBundle: ['@deepseek-ai/cordis'],
   },
 })
