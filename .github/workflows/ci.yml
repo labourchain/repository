@@ -15,8 +15,6 @@ jobs:
       fail-fast: false
       matrix:
         node: [22.20.0, 24.x]
-    env:
-      LABOURCHAIN_CORE_PLUGINS_MODULE: ${{ github.workspace }}/.core/core-plugins/lib/index.js
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -29,18 +27,6 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm run typecheck
       - run: pnpm run test:coverage
-
-      - name: checkout Core Plugin tooling
-        uses: actions/checkout@v4
-        with:
-          repository: labourchain/core-plugins
-          ref: 7d4529a7fd293301ba21c94e82ad0d91844bab73
-          path: .core/core-plugins
-      - name: build Core Plugin tooling
-        run: |
-          pnpm --dir .core/core-plugins install --no-frozen-lockfile
-          pnpm --dir .core/core-plugins run build
-
       - run: pnpm run build
       - run: pnpm run test:bin
       - name: verify publish tarball
