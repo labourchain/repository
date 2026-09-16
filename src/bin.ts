@@ -1,15 +1,14 @@
 #!/usr/bin/env node
 
-import {
-  createRepositoryNode,
-  loadBootstrapArtifactIdentity,
-} from './bootstrap.ts'
+import { createRepositoryNode } from './bootstrap.ts'
 
 const signals = ['SIGINT', 'SIGTERM'] as const
 
 async function main(): Promise<void> {
-  const bootstrap = await loadBootstrapArtifactIdentity()
-  const node = await createRepositoryNode({ bootstrap })
+  const node = await createRepositoryNode()
+
+  // Test runners may attach an IPC channel to observe deterministic readiness.
+  process.send?.('ready')
 
   await new Promise<void>((resolve) => {
     let shuttingDown = false
