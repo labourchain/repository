@@ -1,11 +1,15 @@
 #!/usr/bin/env node
 
-import { createRepositoryNode } from './bootstrap.ts'
+import {
+  createRepositoryNode,
+  loadBootstrapArtifactIdentity,
+} from './bootstrap.ts'
 
 const signals = ['SIGINT', 'SIGTERM'] as const
 
 async function main(): Promise<void> {
-  const node = await createRepositoryNode()
+  const bootstrap = await loadBootstrapArtifactIdentity()
+  const node = await createRepositoryNode({ bootstrap })
 
   await new Promise<void>((resolve) => {
     let shuttingDown = false
