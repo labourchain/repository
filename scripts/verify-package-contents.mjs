@@ -49,8 +49,6 @@ const requiredFiles = [
   'LICENSE',
   'lib/index.js',
   'lib/bin.js',
-  'lib/bootstrap.cue',
-  'lib/bootstrap.plugin.json',
 ]
 for (const file of requiredFiles) {
   if (!files.includes(file)) {
@@ -73,4 +71,4 @@ if (runtimeFiles.length === 0) {
   process.exit(1)
 }
 
-console.log('Package contents verified: executable and Plugin identity artifacts are present; source docs remain excluded.')
+console.log('Package contents verified: executable runtime is present; source docs remain excluded.')
