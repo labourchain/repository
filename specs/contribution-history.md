@@ -37,7 +37,7 @@ Record remains a Worker-produced on-chain fact.
 Runtime plugins may persist indexes, caches or projections that make contribution history efficient to query. These data must:
 
 - remain distinguishable from canonical facts;
-- be repairable or rebuildable from canonical sources when the required chain-query capability is available;
+- be repairable or rebuildable from canonical sources when the configured canonical fact/query capability is available;
 - not silently alter the meaning of Records, Assets, confirmations or relations;
 - not become the source of truth merely because they are persisted.
 
@@ -47,7 +47,7 @@ The MVP must support viewing the Records and related contribution information ne
 
 This Spec does not require advanced search, full-text indexing, analytics, pagination or Project/Board presentation.
 
-The exact shape of the returned view is not fixed until the available Core query contracts are stable, but it must preserve enough identity/reference information for consumers to relate the history entry back to its canonical facts.
+The exact shape of the returned view is not fixed until the canonical fact/query contract is stable, but it must preserve enough identity/reference information for consumers to relate the history entry back to its canonical facts.
 
 ## Recovery
 
@@ -56,7 +56,7 @@ A crash after canonical contribution commit but before projection update must no
 The projection path must therefore be repairable through one or both of:
 
 - replay/reconciliation from durable contribution correlation state;
-- rebuilding from canonical chain facts when the required query capability is available.
+- rebuilding from canonical chain facts when the configured query capability is available.
 
 Projection update failure must not roll back or reinterpret an already canonical commit.
 
