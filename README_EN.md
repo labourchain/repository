@@ -8,7 +8,7 @@
 
 In the LabourChain model, the Worker is the subject of labour, a Record represents living labour, and an Asset represents objectified labour output. A Repo preserves Assets and participates in Repo-side confirmation of the labour related to contributed Assets. Repo contribution history is projected from on-chain labour facts and relations, while runtime components may cache those views for normal use.
 
-Repository uses Cordis as its runtime plugin model. Repository capability emerges from multiple Cordis plugins. A plugin that defines stable on-chain semantics is additionally declared as a versioned LabourChain Protocol. Repository does not build a separate Runner, Hoster, or mega-service framework around Cordis.
+Repository uses Cordis as its runtime plugin model. Repository capability emerges from multiple Cordis plugins. Stable semantics that must remain historically addressable on chain are declared as versioned LabourChain Protocols and implemented by Cordis plugins. Repository does not build a separate Runner, Hoster, or mega-service framework around Cordis.
 
 Requirements, Architecture, and the MVP Specs have completed the current re-projection round. The Bootstrap Story is now being implemented, while later Repository domain capabilities continue through the accepted Specs and Issues.
 
@@ -58,7 +58,7 @@ Repository Node
 =
 Bootstrap Protocol instance
 + Cordis
-+ loaded Protocol plugins
++ loaded Protocol implementations (Cordis plugins)
 + Runtime / provider plugins
 + configuration
 ```
@@ -67,7 +67,7 @@ Bootstrap is stable executable code with a process entry point. It creates a Cor
 
 The current Bootstrap provides the executable shell and a programmatic composition API. The concrete Repository product composition is not yet fixed in the executable, and this Story does not introduce an additional configuration loader.
 
-A Protocol plugin is not a second plugin framework. It is a Cordis plugin whose behavior carries long-lived on-chain semantics and version constraints. Discovery, dependencies, Context, Service, Effect, and lifecycle remain Cordis concerns.
+Protocol does not form a second plugin framework. Each Protocol's executable implementation remains a Cordis plugin. Discovery, dependencies, Context, Service, Effect, and lifecycle remain Cordis concerns.
 
 See [`docs/architecture.md`](./docs/architecture.md).
 
