@@ -30,7 +30,7 @@ Core `Entity.introducedBy` is not the Repo operator relation. It must not be int
 
 ## Establishment Record
 
-Repo establishment is represented by one Record under the applicable Repo establishment Protocol/Plugin semantics.
+Repo establishment is represented by one Record under the applicable Repo establishment Protocol semantics.
 
 The minimum establishment payload is equivalent to:
 
@@ -53,7 +53,7 @@ Record.data.repo
 
 The operator is therefore not duplicated inside `Record.data`. The establishment Record is the domain source for both the Repo identity and its initial operator relationship.
 
-The exact Protocol/Plugin package name and historical-resolution mechanism are not fixed here; they must follow the repository-wide Protocol-resolution decision rather than creating a one-off naming model in this Spec.
+The exact Protocol package name and historical-resolution mechanism are not fixed here; they must follow the repository-wide Protocol-resolution decision rather than creating a one-off naming model in this Spec.
 
 ## Establishment
 

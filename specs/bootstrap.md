@@ -70,7 +70,7 @@ Changing bootstrap behavior in a way that changes that declared stable runtime c
 
 The exact resolved Cordis release is deployment/runtime metadata, not a second Bootstrap identity.
 
-This Story does not implement Core's final Protocol/Plugin artifact packaging while Core remains under development. Repository assumes the completed Core will expose the required release boundary and will integrate with it rather than duplicate Core canonicalization or hashing logic locally.
+This Story does not implement Core's final Protocol artifact packaging while Core remains under development. Repository assumes the completed Core will expose the required release boundary and will integrate with it rather than duplicate Core canonicalization or hashing logic locally.
 
 ## Failure model
 

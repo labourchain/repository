@@ -52,7 +52,7 @@ A usable composition requires a durable Record ingress/journal for pre-pack acce
 
 Repository does not create a second Runner, Hoster, Plugin Manager, Service Container, dependency system or lifecycle system around Cordis.
 
-Protocol plugins, Runtime providers, projections and adapters are all composed through Cordis. A Protocol plugin is a Cordis plugin whose behavior additionally carries stable LabourChain Protocol identity/version semantics.
+Protocol implementations, Runtime providers, projections and adapters are all composed through Cordis. A Protocol implementation is a Cordis plugin that implements one stable LabourChain Protocol identity/version.
 
 ### Historical Protocol semantics are exact
 
@@ -158,7 +158,7 @@ A capability may be implemented by one or more Cordis plugins. These Spec files 
 
 Implementation must:
 
-- reuse Core Plugin, Entity, Record, signature and Block semantics rather than duplicating them;
+- reuse Core Protocol, Entity, Record, signature and Block semantics rather than duplicating them;
 - persist exact accepted Records through an explicit Runtime/composition dependency rather than a Repository-domain `records[]` model;
 - distinguish durable pending-chain acceptance from actual Block confirmation;
 - fail closed when required durable ingress, Core primitive or exact Protocol implementation is unavailable;

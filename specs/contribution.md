@@ -113,7 +113,7 @@ This Spec does not require a particular database transaction model, staging sche
 
 ## Core and chain-state boundary
 
-Core supplies deterministic Plugin, Entity, Record and Block semantics. It does not by itself imply a Repository-owned database, Record queue or network node.
+Core supplies deterministic Protocol, Entity, Record and Block semantics. It does not by itself imply a Repository-owned database, Record queue or network node.
 
 Protocol-defined validity and confirmation semantics come from loaded LabourChain Protocol implementations plus Core primitives.
 

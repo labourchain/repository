@@ -45,7 +45,7 @@ Repository follows Cordis's plugin-first model. Do not create a second plugin fr
 
 Plugin discovery, dependency handling, Context, Service, Effect and lifecycle ownership belong to Cordis. Avoid introducing Repository-specific Runner, Hoster, Plugin Manager, Service Container or lifecycle abstractions that duplicate Cordis.
 
-A LabourChain Protocol plugin is a Cordis plugin whose behavior carries stable on-chain protocol semantics and an explicit protocol version. It is not a parallel plugin type system.
+A LabourChain Protocol is versioned stable on-chain semantics. Its executable implementation is a Cordis plugin; Protocol is not a parallel runtime plugin type system.
 
 Protocol versions are stable historical semantics. When a new protocol version changes those semantics, implement the new version separately rather than changing the meaning of the old version in place. A node may need multiple protocol versions simultaneously to interpret historical facts.
 
@@ -67,7 +67,7 @@ See [`specs/bootstrap.md`](./specs/bootstrap.md) for the executable runtime cont
 
 Repository does not need one mega-service that owns all behavior.
 
-Repository capability can emerge from multiple Cordis plugins implementing Repo, membership, Asset, relation, confirmation, contribution, storage, projection or adapter responsibilities according to their real protocol and lifecycle boundaries.
+Repository capability can emerge from multiple Cordis plugins implementing Repo, membership, Asset, relation, confirmation, contribution, storage, projection or adapter responsibilities according to their real protocol and lifecycle boundaries. When a capability defines stable chain semantics, that behavior is a LabourChain Protocol implemented by the corresponding Cordis plugin.
 
 Do not split plugins mechanically by CRUD method, Requirement, Story, Task or Spec file. Prefer boundaries that share protocol semantics, versioning and lifecycle. Closely coupled protocols may live together when they have no useful independent lifecycle.
 
@@ -77,7 +77,7 @@ Personal Repo itself belongs to LabourFlow, not to this Repository package as a 
 
 ## Record durability and chain-confirmation boundary
 
-Core defines deterministic Plugin, Entity, Record and Block primitives. It does not by itself imply a Record database, queue, node or Repository-specific commit service.
+Core defines deterministic Protocol, Entity, Record and Block primitives. It does not by itself imply a Record database, queue, node or Repository-specific commit service.
 
 Repository must distinguish:
 
@@ -184,4 +184,4 @@ The current package remains private.
 
 Use the relevant project checks when the corresponding integration is available and report actual evidence.
 
-Core deterministic primitives are available in `labourchain/core-plugins`, but full Repository integration cannot be claimed until the durable Runtime provider path exists and persistent restart behavior is demonstrated.
+Core deterministic primitives are exposed as `@labourchain/core-protocols`; full Repository integration cannot be claimed until the durable Runtime provider path exists and persistent restart behavior is demonstrated.
