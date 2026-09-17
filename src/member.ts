@@ -42,7 +42,6 @@ export interface MemberProtocolMountConfig {
 
 export interface MemberView {
   readonly identity: string
-  readonly establishmentRecordId: string
 }
 
 export class MemberError extends Error {
@@ -59,10 +58,10 @@ export class MemberProtocolConfigError extends MemberError {
   }
 }
 
-export class MemberEstablishmentError extends MemberError {
+export class MemberDeclarationError extends MemberError {
   constructor(message: string, options?: ErrorOptions) {
     super(message, options)
-    this.name = 'MemberEstablishmentError'
+    this.name = 'MemberDeclarationError'
   }
 }
 
@@ -73,20 +72,6 @@ export class MemberNotFoundError extends MemberError {
     super(`Entity is not an established Member: ${identity}`)
     this.name = 'MemberNotFoundError'
     this.identity = identity
-  }
-}
-
-export class MemberConflictError extends MemberError {
-  readonly identity: string
-  readonly existingRecordId: string
-  readonly conflictingRecordId: string
-
-  constructor(identity: string, existingRecordId: string, conflictingRecordId: string) {
-    super(`Member identity ${identity} already has establishment Record ${existingRecordId}; conflicting Record ${conflictingRecordId} cannot replace it.`)
-    this.name = 'MemberConflictError'
-    this.identity = identity
-    this.existingRecordId = existingRecordId
-    this.conflictingRecordId = conflictingRecordId
   }
 }
 
@@ -107,35 +92,33 @@ function requireProtocolHash(config: MemberProtocolMountConfig): string {
 
 function requireEmptyPayload(value: unknown): void {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    throw new MemberEstablishmentError('member.identity establishment data must be an empty plain object.')
+    throw new MemberDeclarationError('member.identity declaration data must be an empty plain object.')
   }
 
   const prototype = Object.getPrototypeOf(value)
   if (prototype !== Object.prototype && prototype !== null) {
-    throw new MemberEstablishmentError('member.identity establishment data must be an empty plain object.')
+    throw new MemberDeclarationError('member.identity declaration data must be an empty plain object.')
   }
 
   if (Reflect.ownKeys(value).length !== 0) {
-    throw new MemberEstablishmentError('member.identity establishment data must not duplicate identity or profile fields.')
+    throw new MemberDeclarationError('member.identity declaration data must not duplicate identity or profile fields.')
   }
 }
 
-function memberView(identity: string, establishmentRecordId: string): MemberView {
-  return Object.freeze({ identity, establishmentRecordId })
+function memberView(identity: string): MemberView {
+  return Object.freeze({ identity })
 }
 
 /**
  * Journal-backed current Member projection for member.identity.
  *
- * The durable Record journal remains the fact source. This in-memory map is a
- * replaceable projection and is rebuilt whenever absence would authorize a new
- * Member establishment.
+ * The durable Record journal remains the fact source. The in-memory Set is a
+ * replaceable projection of whether at least one valid declaration exists.
  */
 export class MemberIdentityService {
   private readonly ctx: Context
   readonly protocolHash: string
-  private readonly members = new Map<string, string>()
-  private serialTail: Promise<void> = Promise.resolve()
+  private readonly members = new Set<string>()
 
   constructor(ctx: Context, protocolHash: string) {
     this.ctx = ctx
@@ -143,41 +126,25 @@ export class MemberIdentityService {
   }
 
   async rebuild(): Promise<void> {
-    const rebuilt = new Map<string, string>()
+    const rebuilt = new Set<string>()
 
     for await (const journalRecord of this.ctx.recordJournal.iterateAccepted()) {
       if (!this.isCandidate(journalRecord)) continue
-      const record = this.validateEstablishment(journalRecord)
-      const existing = rebuilt.get(record.createdBy)
-      if (existing !== undefined && existing !== record.id) {
-        throw new MemberConflictError(record.createdBy, existing, record.id)
-      }
-      rebuilt.set(record.createdBy, record.id)
+      const record = this.validateDeclaration(journalRecord)
+      rebuilt.add(record.createdBy)
     }
 
     this.members.clear()
-    for (const [identity, recordId] of rebuilt) {
-      this.members.set(identity, recordId)
+    for (const identity of rebuilt) {
+      this.members.add(identity)
     }
   }
 
-  establishMember(record: unknown): Promise<MemberView> {
-    return this.serial(async () => {
-      const validated = this.validateEstablishment(record)
-
-      // Durable facts may have changed outside this projection. Refresh before
-      // absence is used to authorize a new establishment.
-      await this.rebuild()
-
-      const existing = this.members.get(validated.createdBy)
-      if (existing !== undefined && existing !== validated.id) {
-        throw new MemberConflictError(validated.createdBy, existing, validated.id)
-      }
-
-      await this.ctx.recordJournal.accept(validated)
-      this.members.set(validated.createdBy, validated.id)
-      return memberView(validated.createdBy, validated.id)
-    })
+  async declareMember(record: unknown): Promise<MemberView> {
+    const validated = this.validateDeclaration(record)
+    await this.ctx.recordJournal.accept(validated)
+    this.members.add(validated.createdBy)
+    return memberView(validated.createdBy)
   }
 
   async requireMember(identity: unknown): Promise<MemberView> {
@@ -185,20 +152,18 @@ export class MemberIdentityService {
     try {
       validatedIdentity = this.ctx[CORE_ENTITY_PROTOCOL_SERVICE].validateEntityPublicKey(identity)
     } catch (cause) {
-      throw new MemberEstablishmentError('Member identity is not a valid Core EntityPublicKey.', { cause })
+      throw new MemberDeclarationError('Member identity is not a valid Core EntityPublicKey.', { cause })
     }
 
-    let recordId = this.members.get(validatedIdentity)
-    if (recordId === undefined) {
+    if (!this.members.has(validatedIdentity)) {
       await this.rebuild()
-      recordId = this.members.get(validatedIdentity)
     }
 
-    if (recordId === undefined) {
+    if (!this.members.has(validatedIdentity)) {
       throw new MemberNotFoundError(validatedIdentity)
     }
 
-    return memberView(validatedIdentity, recordId)
+    return memberView(validatedIdentity)
   }
 
   private isCandidate(value: JournalRecord): boolean {
@@ -207,45 +172,39 @@ export class MemberIdentityService {
     return record.protocol === MEMBER_PROTOCOL_REFERENCE && record.protocolHash === this.protocolHash
   }
 
-  private validateEstablishment(value: unknown): CoreRecordValue {
+  private validateDeclaration(value: unknown): CoreRecordValue {
     let record: CoreRecordValue
     try {
       record = this.ctx[CORE_RECORD_PROTOCOL_SERVICE].validateRecord(value)
     } catch (cause) {
-      throw new MemberEstablishmentError('Invalid Core Record for member.identity establishment.', { cause })
+      throw new MemberDeclarationError('Invalid Core Record for member.identity declaration.', { cause })
     }
 
     if (record.protocol !== MEMBER_PROTOCOL_REFERENCE) {
-      throw new MemberEstablishmentError(`Member establishment Record must reference ${MEMBER_PROTOCOL_REFERENCE}.`)
+      throw new MemberDeclarationError(`Member declaration Record must reference ${MEMBER_PROTOCOL_REFERENCE}.`)
     }
     if (record.protocolHash !== this.protocolHash) {
-      throw new MemberEstablishmentError('Member establishment Record references a different ProtocolHash.')
+      throw new MemberDeclarationError('Member declaration Record references a different ProtocolHash.')
     }
 
     try {
       this.ctx[CORE_ENTITY_PROTOCOL_SERVICE].validateEntityPublicKey(record.createdBy)
     } catch (cause) {
-      throw new MemberEstablishmentError('Member establishment author is not a valid Core EntityPublicKey.', { cause })
+      throw new MemberDeclarationError('Member declaration author is not a valid Core EntityPublicKey.', { cause })
     }
 
     let signatureValid: boolean
     try {
       signatureValid = this.ctx[CORE_RECORD_PROTOCOL_SERVICE].verifySignature(record)
     } catch (cause) {
-      throw new MemberEstablishmentError('Unable to verify Member establishment signature.', { cause })
+      throw new MemberDeclarationError('Unable to verify Member declaration signature.', { cause })
     }
     if (!signatureValid) {
-      throw new MemberEstablishmentError('Member establishment Record signature is invalid.')
+      throw new MemberDeclarationError('Member declaration Record signature is invalid.')
     }
 
     requireEmptyPayload(record.data)
     return record
-  }
-
-  private serial<T>(operation: () => Promise<T>): Promise<T> {
-    const run = this.serialTail.then(operation, operation)
-    this.serialTail = run.then(() => undefined, () => undefined)
-    return run
   }
 }
 
