@@ -15,7 +15,16 @@ import {
   type JournalRecord,
 } from '../src/index.ts'
 
-function record(id: string, overrides: Partial<JournalRecord> = {}): JournalRecord {
+interface TestRecord extends JournalRecord {
+  readonly plugin: string
+  readonly pluginHash: string
+  readonly createdBy: string
+  readonly createdAt: string
+  readonly signature: string
+  readonly data: unknown
+}
+
+function record(id: string, overrides: Partial<TestRecord> = {}): TestRecord {
   return {
     id,
     plugin: 'repo.test@0.1.0',
@@ -51,6 +60,8 @@ test('durably accepts and reads an exact Record', async (t) => {
   const node = await createJournalNode(directory)
   const expected = record('a'.repeat(64))
 
+  // Explicit-field interfaces like Core Record are accepted without requiring
+  // an artificial string index signature.
   await node.context.recordJournal.accept(expected)
   assert.deepEqual(await node.context.recordJournal.get(expected.id), expected)
 
