@@ -8,6 +8,7 @@ Repository 是 LabourChain 中用于保存劳动成果（Asset）并对相关劳
 
 Repository MVP 包括：
 
+- 最小 Member 协议能力，用于识别人类参与者；
 - Repo 的建立、身份和重新加载；
 - Repo operator 与成员关系；
 - Asset contribution；
@@ -16,35 +17,45 @@ Repository MVP 包括：
 - Repo contribution history；
 - 对历史事实所引用协议版本的正确解释与验证。
 
-Record 是 Worker 产生的 LabourChain 事实。Record 本身具有稳定身份和主体签名；被 Block 收录后，获得这条链上的收录与确证顺序。Repository 不把 Record 作为另一类规范仓库内容保存，可以为日常查询和分析保留与 contribution 相关的 Record 投影。
+Member 是人类参与者在协议与实现层的称呼，以 Core Entity identity 为身份锚点。`Worker` 保留为概念层的劳动主体描述，不作为程序中的人类实体类型。Record 由承担劳动的 Member 以其 Entity identity 产生或签署；被 Block 收录后获得这条链上的收录与确证顺序。Repository 不把 Record 作为另一类规范仓库内容保存，可以为日常查询和分析保留与 contribution 相关的 Record 投影。
+
+## Member 与身份组合
+
+Member 不建立第二套 identity。一个 Member 以 Core `EntityPublicKey` 为唯一身份锚点，通过 `member`、`member.profile` 及未来其他协议组合形成完整的人类参与者能力。
+
+`member.profile` 用于姓名、avatar 等可读信息，不是 identity 本身，也不应成为其他协议引用 Member 的替代标识。
+
+同一个 Member Entity identity / keypair 可以同时组合 Repo 协议能力，用于暂时承载尚未进入集体 Repo 的 Record / Asset 关系与劳动成果。这种 Member-scoped Repo 不自动产生私人财产、排他权、转让权或收益权语义。
 
 ## Repo 建立与身份
 
-任何 Worker 都可以建立 Repo。每个 Repo 都有稳定身份，使使用方能够再次加载同一个 Repo，并与其他 Repo 区分。
+一个有效 Member 可以建立 Repo。Repo 本身同样以 Core Entity identity 为身份锚点，并通过 Repo 及其他协议组合形成完整仓库能力。
 
-每个 Repo 有一个 operator，负责维护允许向该 Repo contribution 的 Workers。MVP 不引入 owner、admin、maintainer、editor、viewer 等复杂角色层级。
+集体 Repo 可以使用与 establishing Member 不同的 Entity identity。establishment 必须能够明确关联 establishing Member 与 Repo identity，并建立初始 operator 关系。
+
+每个 Repo 有一个 operator，负责维护允许向该 Repo contribution 的 Members。MVP 不引入 owner、admin、maintainer、editor、viewer 等复杂角色层级。
 
 Repo identity、operator 和成员关系在正常应用重启后必须能够恢复，不得只存在于进程内存中。
 
 ## 成员关系
 
-Repo 维护允许向其 contribution 的 Workers。operator 可以添加和移除成员、检查某个 Worker 是否属于该 Repo，并查看当前成员关系。
+Repo 维护允许向其 contribution 的 Members。operator 可以添加和移除成员、检查某个 Member 是否属于该 Repo，并查看当前成员关系。
 
-成员关系只控制 Worker 是否可以向该 Repo contribution，不限制 Worker 在 Repo 之外产生 Record 或 Asset。
+Repo membership 是 Member 与 Repo 之间的关系，不创建新的 Member identity。成员关系只控制该 Member 是否可以向该 Repo contribution，不限制其在 Repo 之外产生 Record 或 Asset。
 
 非成员的 contribution 不得进入已接受状态。
 
 ## Asset contribution
 
-Worker 向 Repo contribution 一个 Asset。此次 contribution 同时关联描述相关劳动的、由 Worker 产生的 Record，以及适用协议要求的关系和确认。
+Member 向 Repo contribution 一个 Asset。此次 contribution 同时关联描述相关劳动的、由该 Member 产生的 Record，以及适用协议要求的关系和确认。
 
-Worker 在 Repository 之外产生 Record。Repository 不负责把 RawEntry 转换为 Record，也不因为一次 contribution 而成为 Record 的生产者。
+Record 在 Repository 之外产生。Repository 不负责把 RawEntry 转换为 Record，也不因为一次 contribution 而成为 Record 的生产者。
 
 一次 contribution 被 Repo 接受前必须满足：
 
 - contributor 是该 Repo 的成员；
 - Asset、相关 Record 和 contribution relation 符合它们各自引用的 LabourChain Protocol；
-- 适用协议要求的 Worker confirmation 已满足；
+- 适用协议要求的 Member / Worker confirmation 已满足；
 - Repo 侧 confirmation 已满足；
 - contribution 及其待上链事实已经进入可跨重启恢复的 Repository accepted / committed 状态；
 - Repo 能够保存并再次读取被接受的 Asset。
@@ -83,7 +94,7 @@ Repository committed 是产品接受边界；Block confirmed 是链确证边界�
 
 已经接受的 Asset 必须能够持久保存，并在正常应用重启后再次读取。
 
-Repo identity、operator、成员关系以及已接受 contribution 所需的 Repository 状态，在正常应用重启后必须能够恢复。
+Member / Repo identity、operator、成员关系以及已接受 contribution 所需的 Repository 状态，在正常应用重启后必须能够恢复。
 
 应用重启或运行时故障不得把尚未成功进入 Repository committed state 的 contribution 错误地暴露为已接受状态，也不得丢失已经 Repository committed、正在等待链收录的事实。
 
@@ -120,19 +131,19 @@ Repository 只接受符合适用 LabourChain Protocol 的事实和关系。
 
 如果处理某个事实所需的协议版本在当前运行环境中不可用，Repository 必须明确失败，而不是使用不同版本猜测其语义。
 
-Repository 不重新定义 Asset、Record、identity、signature、confirmation 或 block 的协议语义。Repository 自己定义的是仓库领域的 establishment、membership、contribution acceptance 等业务语义。
+Repository 不重新定义 Member、Asset、Record、identity、signature、confirmation 或 block 的协议语义。Repository 自己定义的是仓库领域的 establishment、membership、contribution acceptance 等业务语义。
 
 ## 与 LabourFlow 的关系
 
-Personal Repo 属于 LabourFlow 的产品模块，不属于 `labourchain/repository` MVP 的特殊 Repo 模式。
+同 identity 的 Member + Repo 协议组合属于通用协议能力。LabourFlow 可以在其上提供面向个人的 Repo 产品体验，用于组织尚未进入集体 Repo 的内容，但不需要创造第二个 Personal Repo identity 或 keypair。
 
-LabourFlow 可以复用通用的 Asset、Asset-Record relation 等 LabourChain Protocol 能力实现 Personal Repo，但 Personal Repo 的建立、生命周期和产品行为由 LabourFlow 负责。
+该产品空间不应仅因“个人使用”被解释为私人财产空间。访问、使用、收益和其他权利关系应由相应协议另行表达。
 
-RawEntry 识别、自然语言输入和 Record drafting 同样属于 LabourFlow 或其他上层产品，不属于 Repository。
+RawEntry 识别、自然语言输入和 Record drafting 属于 LabourFlow 或其他上层产品，不属于 Repository。
 
 ## 与 Project / Board 的关系
 
-Project 是对 Worker、Record 和 Asset 的上层组织形式，不由 Repository 负责 canonical storage。
+Project 是对 Member、Record 和 Asset 的上层组织形式，不由 Repository 负责 canonical storage。
 
 Project 的规划、分析、回顾和展示属于 LabourBoard 或其他上层产品。Repository 的 Asset retrieval、membership 和 contribution history 不应依赖 Project / Board 概念才能成立。
 
@@ -140,7 +151,8 @@ Project 的规划、分析、回顾和展示属于 LabourBoard 或其他上层�
 
 当前 Repository MVP 不要求实现：
 
-- Personal Repo 产品模块；
+- 完整的个人 Repo 产品 UX；
+- `member.profile` 的完整字段与隐私模型；
 - Project / Board 的规划、分析和展示；
 - 公开或公共使用的记账与收益分配；
 - 通用 Private Repo 权限体系；
