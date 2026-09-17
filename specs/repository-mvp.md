@@ -35,12 +35,14 @@ start Repository node
   -> receive Asset + Worker-produced Record + relations
   -> validate required Protocol semantics
   -> satisfy Worker and Repo confirmations
-  -> commit canonical contribution
+  -> commit canonical contribution facts through the configured chain/fact capability
   -> durably retrieve accepted Asset
   -> expose contribution history as a derived view
 ```
 
 Repository capability may be provided by multiple Cordis plugins. No Spec requires a single Repository mega-service or one plugin per capability document.
+
+The configured node also requires access to canonical chain facts. Core primitives define Plugin, Entity, Record and Block semantics; a separate Runtime/composition capability owns canonical fact commit/query. Repository consumes that capability and does not replace it with a Repository-owned Record store.
 
 ## Shared invariants
 
@@ -58,12 +60,20 @@ Historical facts must be interpreted by the exact Protocol identity/version they
 
 Record is a Worker-produced canonical labour fact. Repository does not create a canonical Record store, `repo.records[]`, general `storeRecord` capability or equivalent ownership model.
 
+### Canonical fact access is external to Repo domain state
+
+Core deterministic primitives do not by themselves imply a canonical database or Repository-specific commit service.
+
+A usable Repository composition must provide the canonical fact/chain-state capability required to commit and query the Records used by Repo establishment, membership, contribution and recovery.
+
+Runtime Repo indexes may point to canonical Record references, but they remain replaceable and cannot authorize or erase canonical facts.
+
 ### Repository acceptance requires canonical commit and durable Asset retrieval
 
 A contribution is accepted only when:
 
 - the applicable contribution requirements and confirmations are satisfied;
-- Core commit has succeeded; and
+- the configured canonical fact capability reports successful canonical commit; and
 - the accepted Asset can be durably retrieved.
 
 `COMMITTED` is the Repository contribution acceptance boundary. Later block packing is not part of Repository completion.
@@ -76,7 +86,7 @@ Staging, cache, index and projection data may be persisted for recovery and perf
 
 Runtime restart or crash must not expose uncommitted work as accepted or permanently lose a committed accepted contribution.
 
-When runtime state and canonical facts disagree, recovery must reconcile toward canonical commit state rather than inventing or erasing canonical facts.
+When Runtime state and canonical facts disagree, recovery must reconcile toward canonical chain state rather than inventing or erasing canonical facts.
 
 ### Product boundaries remain external
 
@@ -90,8 +100,13 @@ The capability Specs depend on each other through contracts rather than ownershi
 bootstrap
   -> provides Cordis runtime
 
+canonical fact capability
+  -> external Runtime/composition dependency
+  -> commits and queries canonical chain facts
+
 repo
-  -> provides stable Repo + operator
+  -> uses Core EntityPublicKey + canonical establishment Record
+  -> provides stable Repo + derived initial operator
 
 membership
   -> uses Repo/operator to define contribution eligibility
@@ -100,8 +115,8 @@ protocol-resolution
   -> resolves exact historical Protocol implementations
 
 contribution
-  -> uses membership + protocol resolution + Core
-  -> commits canonical contribution
+  -> uses membership + protocol resolution + canonical fact capability
+  -> commits canonical contribution facts
   -> requires durable Asset retrieval
 
 asset-storage
@@ -117,8 +132,9 @@ A capability may be implemented by one or more Cordis plugins. These Spec files 
 
 Implementation must:
 
-- reuse Core identity and Protocol semantics rather than duplicating them;
-- fail closed when required Core capability or exact Protocol implementation is unavailable;
+- reuse Core identity, Record, signature, Block and Protocol semantics rather than duplicating them;
+- consume canonical fact access from an explicit Runtime/composition dependency rather than making Repository a second chain database;
+- fail closed when required canonical fact capability, Core primitive or exact Protocol implementation is unavailable;
 - keep concrete database, filesystem and transport choices behind Runtime/plugin boundaries;
 - avoid process-global mutable Repository state;
 - acquire and dispose plugin-owned resources through Cordis lifecycle ownership;
@@ -131,10 +147,10 @@ Exact TypeScript names, package names, metadata field names, database schemas, H
 In addition to the acceptance tests defined by each capability Spec, the MVP integration path must demonstrate that:
 
 1. a Repository node can start with its configured Cordis plugins;
-2. a Worker can establish a Repo and reload it after restart;
+2. a Worker can establish a Repo as a canonical fact and reload it after restart;
 3. the operator can establish persistent membership;
 4. a member contribution resolves the exact required Protocol versions;
-5. valid confirmations and Core commit produce a committed accepted contribution;
+5. valid confirmations and canonical fact commit produce a committed accepted contribution;
 6. its Asset remains retrievable after restart;
 7. an interrupted contribution recovers without false acceptance or duplicate canonical commit;
 8. the committed contribution appears in contribution history;
@@ -156,12 +172,13 @@ The Spec set does not require:
 - advanced search, full-text indexing or large-scale query infrastructure;
 - block-packing internals;
 - node synchronization or consensus;
+- a Repository-owned canonical Record store or chain database;
 - a specific database, filesystem, HTTP API or UI;
 - a fixed monorepo package layout.
 
 ## Implementation completion
 
-Repository MVP implementation is complete when the configured bootstrap and Cordis plugin set satisfy this umbrella Spec and each applicable capability Spec, the persistent runtime path demonstrates restart and recovery behavior, exact Protocol-version resolution is verified, meaningful tests pass, and build/package checks succeed on supported Node versions.
+Repository MVP implementation is complete when the configured bootstrap and Cordis plugin set satisfy this umbrella Spec and each applicable capability Spec, the canonical fact dependency is available, the persistent runtime path demonstrates restart and recovery behavior, exact Protocol-version resolution is verified, meaningful tests pass, and build/package checks succeed on supported Node versions.
 
 ## Spec evolution
 
