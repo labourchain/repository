@@ -75,47 +75,72 @@ Generic Asset and Asset-Record relation capabilities should remain reusable outs
 
 Personal Repo itself belongs to LabourFlow, not to this Repository package as a special Repository mode.
 
-## Canonical fact boundary
+## Record durability and chain-confirmation boundary
 
-Core defines deterministic Plugin, Entity, Record and Block primitives. It does not by itself imply a canonical Record database or Repository-specific commit/query service.
+Core defines deterministic Plugin, Entity, Record and Block primitives. It does not by itself imply a Record database, queue, node or Repository-specific commit service.
 
-Repository domain plugins consume canonical fact access from an explicit Runtime/composition capability. Do not fill that dependency by making Repository own a canonical `repo.records[]`, generic `storeRecord()` API or second chain database.
+Repository must distinguish:
 
-Repo identity uses Core `EntityPublicKey` semantics. The canonical Repo establishment Record carries the Repo identity in its payload and uses `Record.createdBy` as the initial MVP operator. `Entity.introducedBy` is not ownership, membership or operator state.
+```text
+Durable Record ingress / journal
+    -> exact accepted Records survive restart before Block packing
+    -> supports Repository COMMITTED / accepted state
+    -> does not imply chain confirmation
 
-Runtime Repo indexes may persist `Repo identity -> canonical establishment Record reference` for efficient load/restart behavior, but the index remains replaceable and non-canonical.
+Chain-state / Block-confirmation access
+    -> tells whether RecordIds were included in accepted Blocks
+    -> supplies chain confirmation/order
+```
+
+These can later share one node-runtime implementation, but their semantics must remain distinct.
+
+Do not fill either dependency by making the Repo domain own a canonical `repo.records[]`, generic Repository Record database, second blockchain or duplicated Cordis lifecycle system.
+
+Repo identity uses Core `EntityPublicKey` semantics. The Repo establishment Record carries the Repo identity in its payload and uses `Record.createdBy` as the initial MVP operator. `Entity.introducedBy` is not ownership, membership or operator state.
+
+Runtime Repo indexes may persist `Repo identity -> establishment RecordId` for efficient load/restart behavior, but the index remains replaceable and does not override the exact establishment Record.
 
 ## Contribution model
 
 A Worker produces Record and may produce or modify Asset outside Repository. Repository receives an Asset contribution and participates in Repo-side confirmation of the related labour.
 
-The current contribution progression is:
+The current Repository progression is:
 
 ```text
 STAGED
-  ↓ required confirmations satisfied
+  ↓ required domain confirmations satisfied
 CONFIRMED
-  ↓ canonical fact commit succeeds
+  ↓ exact Records durable + accepted Asset durable
 COMMITTED
-  ↓ later block packing
+  ↓ later valid Block inclusion
 PACKED
 ```
 
-Only COMMITTED is the canonical commit boundary required for Repository acceptance. Repository must also be able to durably retrieve the accepted Asset before reporting acceptance. PACKED is a later chain concern.
+`COMMITTED` is the Repository product acceptance boundary. It can be pending-chain.
 
-STAGED is runtime state, not a canonical chain fact. A usable deployment requires durable staging sufficient for crash recovery, but persistence does not make staging canonical.
+`PACKED` is Block-confirmed chain status. It is not required before Repository returns accepted.
 
-Recovery must converge toward canonical commit state: uncommitted work must not appear accepted, and a commit that already succeeded must not be erased by stale local runtime state.
+Never describe a merely durable pending Record as already block-confirmed/canonical-chain state.
+
+STAGED is temporary Runtime state. A usable deployment requires durable recovery information, but persistence alone does not make staging accepted.
+
+Recovery must converge toward the durable Repository state: pre-commit work must not appear accepted; already durably accepted Records/Assets must not be lost or duplicated. Block-confirmation status is reconciled separately from chain state.
 
 See [`specs/contribution.md`](./specs/contribution.md) and [`specs/asset-storage.md`](./specs/asset-storage.md).
 
-Repository does not own canonical Record storage. Contribution history is a projection of chain facts and relations. Do not introduce canonical `storeRecord`, `getRecord`, `repo.records[]` or equivalent Repository-owned history models.
+Repository does not own all chain Records. Contribution history is a projection over Repository-accepted records/relations plus optional Block-confirmation evidence. Do not introduce canonical `repo.records[]` or equivalent Repository-owned chain-history models.
 
 ## Runtime providers
 
-Storage, cache, index, staging, projection and external adapters are normal Cordis plugin/provider concerns unless they themselves define stable chain protocol semantics.
+Storage, durable Record ingress, staging, cache, index, projection and external adapters are normal Cordis plugin/provider concerns unless they themselves define stable chain protocol semantics.
 
-Runtime persistence must not silently redefine Asset, Record, confirmation, identity or contribution semantics. Cache and projection data must remain distinguishable from canonical facts.
+Runtime persistence must not silently redefine Asset, Record, confirmation, identity or contribution semantics.
+
+Not every Runtime datum is equally disposable:
+
+- accepted pending Record journal is durable operational state until safe chain handoff/inclusion;
+- staging is recoverable in-flight state;
+- indexes/caches/projections are derived and should be repairable/rebuildable.
 
 Concrete database, filesystem and index choices are not fixed by the current Specs.
 
@@ -149,9 +174,9 @@ Derive acceptance tests from the capability Specs relevant to the Story being im
 
 Bootstrap Story #4 is complete and merged on `main`.
 
-Story #5 is active on `feat/5-repo`. Its Repo identity/operator/canonical-vs-Runtime design alignment is complete; domain implementation has not yet been added.
+Story #5 is active on `feat/5-repo`. Its Repo identity/operator and Repository-commit-vs-chain-confirmation design alignment is being completed before domain implementation is added.
 
-Issue #15 tracks the cross-cutting ownership of canonical fact commit/query Runtime capability required for end-to-end Repo establishment/load and later contribution/recovery work. Do not invent that service inside Repository merely to unblock tests.
+Issue #15 tracks ownership of the reusable durable Record ingress/journal and chain-state adapter boundaries exposed by #5. Do not invent a pre-pack canonical database merely to unblock tests.
 
 The current package remains private.
 
@@ -159,4 +184,4 @@ The current package remains private.
 
 Use the relevant project checks when the corresponding integration is available and report actual evidence.
 
-Core deterministic primitives are available in `labourchain/core-plugins`, but full Repository canonical-fact integration is not claimable until the Runtime boundary tracked by #15 is resolved and implemented.
+Core deterministic primitives are available in `labourchain/core-plugins`, but full Repository integration cannot be claimed until the required Runtime provider boundaries are available and persistent restart behavior is demonstrated.
