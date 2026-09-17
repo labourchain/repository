@@ -75,6 +75,16 @@ Generic Asset and Asset-Record relation capabilities should remain reusable outs
 
 Personal Repo itself belongs to LabourFlow, not to this Repository package as a special Repository mode.
 
+## Canonical fact boundary
+
+Core defines deterministic Plugin, Entity, Record and Block primitives. It does not by itself imply a canonical Record database or Repository-specific commit/query service.
+
+Repository domain plugins consume canonical fact access from an explicit Runtime/composition capability. Do not fill that dependency by making Repository own a canonical `repo.records[]`, generic `storeRecord()` API or second chain database.
+
+Repo identity uses Core `EntityPublicKey` semantics. The canonical Repo establishment Record carries the Repo identity in its payload and uses `Record.createdBy` as the initial MVP operator. `Entity.introducedBy` is not ownership, membership or operator state.
+
+Runtime Repo indexes may persist `Repo identity -> canonical establishment Record reference` for efficient load/restart behavior, but the index remains replaceable and non-canonical.
+
 ## Contribution model
 
 A Worker produces Record and may produce or modify Asset outside Repository. Repository receives an Asset contribution and participates in Repo-side confirmation of the related labour.
@@ -85,13 +95,13 @@ The current contribution progression is:
 STAGED
   ↓ required confirmations satisfied
 CONFIRMED
-  ↓ accept / commit succeeds
+  ↓ canonical fact commit succeeds
 COMMITTED
-  ↓ later Core block packing
+  ↓ later block packing
 PACKED
 ```
 
-Only COMMITTED is the canonical commit boundary required for Repository acceptance. Repository must also be able to durably retrieve the accepted Asset before reporting acceptance. PACKED is a later Core concern.
+Only COMMITTED is the canonical commit boundary required for Repository acceptance. Repository must also be able to durably retrieve the accepted Asset before reporting acceptance. PACKED is a later chain concern.
 
 STAGED is runtime state, not a canonical chain fact. A usable deployment requires durable staging sufficient for crash recovery, but persistence does not make staging canonical.
 
@@ -137,10 +147,16 @@ Derive acceptance tests from the capability Specs relevant to the Story being im
 
 ## Current implementation status
 
-Bootstrap implementation is in progress on Story #4. Domain Repository capabilities remain outside this branch.
+Bootstrap Story #4 is complete and merged on `main`.
+
+Story #5 is active on `feat/5-repo`. Its Repo identity/operator/canonical-vs-Runtime design alignment is complete; domain implementation has not yet been added.
+
+Issue #15 tracks the cross-cutting ownership of canonical fact commit/query Runtime capability required for end-to-end Repo establishment/load and later contribution/recovery work. Do not invent that service inside Repository merely to unblock tests.
 
 The current package remains private.
 
 ## Validation
 
-Use the relevant project checks when the corresponding integration is available and report actual evidence. Core-linked integration validation is intentionally deferred while Core remains under development.
+Use the relevant project checks when the corresponding integration is available and report actual evidence.
+
+Core deterministic primitives are available in `labourchain/core-plugins`, but full Repository canonical-fact integration is not claimable until the Runtime boundary tracked by #15 is resolved and implemented.
