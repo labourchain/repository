@@ -17,7 +17,7 @@ The Specs are engineering projections of the current Requirements and Architectu
 | [`repo.md`](./repo.md) | Repo establishment, stable identity, operator and loading |
 | [`membership.md`](./membership.md) | operator-controlled Repo contribution membership |
 | [`protocol-resolution.md`](./protocol-resolution.md) | exact Protocol identity/version resolution |
-| [`contribution.md`](./contribution.md) | Asset contribution, confirmation, commit, staging and recovery |
+| [`contribution.md`](./contribution.md) | Asset contribution, confirmation, Repository commit, staging and recovery |
 | [`asset-storage.md`](./asset-storage.md) | durable preservation and retrieval of accepted Assets |
 | [`contribution-history.md`](./contribution-history.md) | contribution-history view and derived projection |
 
@@ -35,14 +35,16 @@ start Repository node
   -> receive Asset + Worker-produced Record + relations
   -> validate required Protocol semantics
   -> satisfy Worker and Repo confirmations
-  -> commit canonical contribution facts through the configured chain/fact capability
+  -> durably accept exact resulting Records
   -> durably retrieve accepted Asset
-  -> expose contribution history as a derived view
+  -> report Repository COMMITTED / accepted
+  -> later observe Block-confirmation status when available
+  -> expose contribution history with pending-chain vs block-confirmed state
 ```
 
 Repository capability may be provided by multiple Cordis plugins. No Spec requires a single Repository mega-service or one plugin per capability document.
 
-The configured node also requires access to canonical chain facts. Core primitives define Plugin, Entity, Record and Block semantics; a separate Runtime/composition capability owns canonical fact commit/query. Repository consumes that capability and does not replace it with a Repository-owned Record store.
+A usable composition requires a durable Record ingress/journal for pre-pack accepted Records. Chain-state/Block-confirmation access is a distinct runtime capability used to identify actual chain inclusion. These may share an implementation later, but Repository does not conflate their semantics.
 
 ## Shared invariants
 
@@ -58,35 +60,52 @@ Historical facts must be interpreted by the exact Protocol identity/version they
 
 ### Record remains a Worker fact
 
-Record is a Worker-produced canonical labour fact. Repository does not create a canonical Record store, `repo.records[]`, general `storeRecord` capability or equivalent ownership model.
+Record is a Worker-produced LabourChain fact with stable identity/signature semantics supplied by Core. Repository does not turn Record into a Repository-owned domain object or maintain a canonical `repo.records[]` collection.
 
-### Canonical fact access is external to Repo domain state
+### Durable Record ingress is not Block confirmation
 
-Core deterministic primitives do not by themselves imply a canonical database or Repository-specific commit service.
+A configured Repository node must be able to durably retain exact signed Records that belong to Repository-accepted work before those Records are packed into a Block.
 
-A usable Repository composition must provide the canonical fact/chain-state capability required to commit and query the Records used by Repo establishment, membership, contribution and recovery.
+Successful durable ingress means the Record can survive restart and continue toward chain inclusion. It does not mean the Record has already been confirmed by the chain.
 
-Runtime Repo indexes may point to canonical Record references, but they remain replaceable and cannot authorize or erase canonical facts.
+### Repository acceptance is distinct from chain confirmation
 
-### Repository acceptance requires canonical commit and durable Asset retrieval
-
-A contribution is accepted only when:
+A contribution reaches Repository `COMMITTED` only when:
 
 - the applicable contribution requirements and confirmations are satisfied;
-- the configured canonical fact capability reports successful canonical commit; and
+- every required exact Record is durably accepted by the Record journal; and
 - the accepted Asset can be durably retrieved.
 
-`COMMITTED` is the Repository contribution acceptance boundary. Later block packing is not part of Repository completion.
+`COMMITTED` is the Repository product acceptance boundary.
 
-### Runtime state does not become canonical by persistence
+`PACKED` means the relevant Records were included in a valid Block and therefore have chain-confirmation status. Later Block packing is not required before Repository returns accepted.
 
-Staging, cache, index and projection data may be persisted for recovery and performance. Persistence does not turn them into canonical LabourChain facts.
+### Runtime state types remain distinct
 
-### Recovery converges to canonical state
+Repository Runtime may persist several kinds of state with different roles:
 
-Runtime restart or crash must not expose uncommitted work as accepted or permanently lose a committed accepted contribution.
+```text
+accepted Record journal
+    -> durable and required until safe chain handoff/inclusion
+    -> not itself Block confirmation
 
-When Runtime state and canonical facts disagree, recovery must reconcile toward canonical chain state rather than inventing or erasing canonical facts.
+staging
+    -> in-flight processing/recovery before Repository commit
+
+index/cache/projection
+    -> derived query acceleration
+    -> rebuildable/reconcilable from durable sources
+```
+
+Persistence alone does not turn staging/index/cache/projection into chain-confirmed facts.
+
+### Recovery converges to durable Repository state
+
+Runtime restart or crash must not expose pre-commit work as accepted or lose already Repository-committed work.
+
+Recovery must reconcile exact Record-journal state, Asset durability and staging so repeated recovery does not create duplicate Record acceptance, singular confirmations or Asset finalization.
+
+Block-confirmation status is reconciled separately from chain state when that capability is available.
 
 ### Product boundaries remain external
 
@@ -100,30 +119,37 @@ The capability Specs depend on each other through contracts rather than ownershi
 bootstrap
   -> provides Cordis runtime
 
-canonical fact capability
-  -> external Runtime/composition dependency
-  -> commits and queries canonical chain facts
+durable Record ingress / journal
+  -> Runtime/composition dependency
+  -> retains exact accepted Records across restart
+
+chain-state / Block-confirmation access
+  -> Runtime/composition dependency
+  -> tells whether RecordIds are included in accepted Blocks
 
 repo
-  -> uses Core EntityPublicKey + canonical establishment Record
-  -> provides stable Repo + derived initial operator
+  -> uses Core EntityPublicKey + establishment Record
+  -> persists accepted establishment Record through durable ingress
+  -> derives initial operator from Record.createdBy
 
 membership
   -> uses Repo/operator to define contribution eligibility
+  -> membership facts follow the same accepted-vs-packed distinction
 
 protocol-resolution
   -> resolves exact historical Protocol implementations
 
 contribution
-  -> uses membership + protocol resolution + canonical fact capability
-  -> commits canonical contribution facts
+  -> uses membership + protocol resolution + durable Record ingress
+  -> reaches Repository COMMITTED before Block packing
   -> requires durable Asset retrieval
 
 asset-storage
   -> preserves accepted Asset content
 
 contribution-history
-  -> projects committed canonical contribution facts
+  -> projects Repository-committed contributions
+  -> augments them with Block-confirmation status when available
 ```
 
 A capability may be implemented by one or more Cordis plugins. These Spec files do not prescribe package boundaries unless an actual protocol/version/lifecycle boundary requires one.
@@ -132,9 +158,10 @@ A capability may be implemented by one or more Cordis plugins. These Spec files 
 
 Implementation must:
 
-- reuse Core identity, Record, signature, Block and Protocol semantics rather than duplicating them;
-- consume canonical fact access from an explicit Runtime/composition dependency rather than making Repository a second chain database;
-- fail closed when required canonical fact capability, Core primitive or exact Protocol implementation is unavailable;
+- reuse Core Plugin, Entity, Record, signature and Block semantics rather than duplicating them;
+- persist exact accepted Records through an explicit Runtime/composition dependency rather than a Repository-domain `records[]` model;
+- distinguish durable pending-chain acceptance from actual Block confirmation;
+- fail closed when required durable ingress, Core primitive or exact Protocol implementation is unavailable;
 - keep concrete database, filesystem and transport choices behind Runtime/plugin boundaries;
 - avoid process-global mutable Repository state;
 - acquire and dispose plugin-owned resources through Cordis lifecycle ownership;
@@ -147,17 +174,20 @@ Exact TypeScript names, package names, metadata field names, database schemas, H
 In addition to the acceptance tests defined by each capability Spec, the MVP integration path must demonstrate that:
 
 1. a Repository node can start with its configured Cordis plugins;
-2. a Worker can establish a Repo as a canonical fact and reload it after restart;
+2. a Worker can establish a Repo from an exact establishment Record and reload it after restart;
 3. the operator can establish persistent membership;
 4. a member contribution resolves the exact required Protocol versions;
-5. valid confirmations and canonical fact commit produce a committed accepted contribution;
-6. its Asset remains retrievable after restart;
-7. an interrupted contribution recovers without false acceptance or duplicate canonical commit;
-8. the committed contribution appears in contribution history;
-9. the same flow does not require Personal Repo, Project or Board concepts;
-10. plugin activation/disposal does not leak or duplicate owned resources.
+5. valid confirmations, durable Record ingress and durable Asset retrieval produce Repository `COMMITTED` / accepted state;
+6. the accepted Asset remains retrievable after restart;
+7. an interrupted contribution recovers without false acceptance or duplicate durable Record acceptance;
+8. a Repository-committed contribution appears in contribution history as pending-chain before Block inclusion;
+9. when chain-state access reports Block inclusion, the same history entry can be represented as block-confirmed without changing its Repository acceptance identity;
+10. the same flow does not require Personal Repo, Project or Board concepts;
+11. plugin activation/disposal does not leak or duplicate owned resources.
 
 An in-memory-only path may be used for isolated unit or contract tests but does not by itself satisfy the usable Repository MVP because restart and recovery behavior are part of the product requirements.
+
+Block packing itself is outside this Repository MVP. Integration tests may use a narrow fake/fixture chain-state adapter to test status transitions without implementing a packer or consensus system.
 
 ## MVP exclusions
 
@@ -172,13 +202,13 @@ The Spec set does not require:
 - advanced search, full-text indexing or large-scale query infrastructure;
 - block-packing internals;
 - node synchronization or consensus;
-- a Repository-owned canonical Record store or chain database;
+- a Repository-domain canonical Record store or second blockchain;
 - a specific database, filesystem, HTTP API or UI;
 - a fixed monorepo package layout.
 
 ## Implementation completion
 
-Repository MVP implementation is complete when the configured bootstrap and Cordis plugin set satisfy this umbrella Spec and each applicable capability Spec, the canonical fact dependency is available, the persistent runtime path demonstrates restart and recovery behavior, exact Protocol-version resolution is verified, meaningful tests pass, and build/package checks succeed on supported Node versions.
+Repository MVP implementation is complete when the configured bootstrap and Cordis plugin set satisfy this umbrella Spec and each applicable capability Spec, the durable Record ingress path demonstrates restart/recovery behavior, pending-chain and Block-confirmed status are not conflated, exact Protocol-version resolution is verified, meaningful tests pass, and build/package checks succeed on supported Node versions.
 
 ## Spec evolution
 
