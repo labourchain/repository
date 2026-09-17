@@ -41,9 +41,9 @@ If a future Cordis change is incompatible with the accepted Bootstrap contract, 
 
 Bootstrap receives a programmatic composition of Cordis plugins and their optional configuration.
 
-All supplied entries are mounted before readiness is audited because one plugin may depend on a service provided by an entry later in the composition. Bootstrap must then allow Cordis lifecycle work to settle and reject startup if any required supplied entry remains inactive.
+All supplied entries are mounted before readiness is audited because one plugin may depend on a service provided by an entry later in the composition. Bootstrap waits for Cordis lifecycle work to settle and rejects startup if any required supplied entry remains inactive.
 
-Bootstrap does not need to invent a config-file loader. Programmatic composition is sufficient until an accepted Requirement introduces concrete configuration-file product behavior; a Cordis loader plugin may be adopted later when needed.
+This Story defines the executable bootstrap shell and the programmatic composition boundary. The executable does not choose a concrete Repository product composition yet; that composition belongs to the capability integration that follows. Bootstrap does not need to invent a config-file loader for it.
 
 ## Cordis lifecycle
 
@@ -59,6 +59,8 @@ Package import alone must not:
 - mutate process-global Repository state.
 
 Normal Cordis disposer failures follow Cordis lifecycle semantics. Repository Bootstrap does not invent a second disposer-error model around them.
+
+The executable must catch normal termination signals before node startup completes. A first termination request is handled as graceful shutdown; a later signal may fall back to normal operating-system termination rather than requiring a second shutdown framework.
 
 ## Version behavior
 
