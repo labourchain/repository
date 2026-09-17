@@ -91,6 +91,25 @@ Protocol plugin 的具体 metadata 字段、发现形式和包命名在 Spec 阶
 
 Contribution history 属于链上事实的 view / projection。它可以由插件提供查询、索引或缓存能力，但不需要为了概念完整性固定建立一个 History Protocol。
 
+## Core 与 canonical fact access 边界
+
+当前 LabourChain Core 提供 `core.plugin`、`core.record`、`core.entity`、`core.block` 等确定性协议原语。它们定义数据结构、身份表示、Record/Block 校验和密码学边界，但不因此成为一个固定的数据库、Record store、网络节点或 Repository 专用 commit service。
+
+Repository 对 Core 的依赖分成两层：
+
+```text
+Core protocol primitives
+    -> identity / Record / signature / Block 等稳定语义
+
+canonical fact capability
+    -> 由运行时 composition 提供
+    -> 提交、查询、恢复 canonical chain facts
+```
+
+后者是 Repository node 的外部运行依赖，不属于 Repo 领域自己的状态。它可以由未来独立的 chain/node runtime、可复用 Cordis provider 或其他明确的链状态组件提供，但 Repository 不在本包中通过 `repo.records[]`、generic `storeRecord()` 或第二套 chain database 将其据为己有。
+
+在 canonical fact capability 尚未可用时，需要 canonical 链状态的 Repository 行为必须 fail closed；本地 index/cache 不能代替 canonical truth。
+
 ## Repository 与其他 LabourChain 组件
 
 ```mermaid
@@ -109,11 +128,14 @@ flowchart LR
         Views["Projection / adapter plugins"]
     end
 
-    subgraph Core["LabourChain Core"]
-        Facts["Canonical facts"]
-        Commit["Commit"]
-        Block["Block packing"]
+    subgraph Core["LabourChain Core primitives"]
+        Entity["Entity identity"]
+        Record["Record validation / identity"]
+        Block["Block validation / identity"]
+        Plugin["Plugin identity / verification"]
     end
+
+    Chain["Canonical fact / chain-state capability"]
 
     Bootstrap --> Cordis
     Cordis --> RepoPlugins
@@ -124,17 +146,60 @@ flowchart LR
     Board --> Cordis
     Client --> Cordis
 
-    RepoPlugins --> Providers
-    RepoPlugins --> Facts
-    RepoPlugins --> Commit
-    Views --> Facts
-    Commit --> Facts
-    Facts --> Block
+    RepoPlugins --> Entity
+    RepoPlugins --> Record
+    RepoPlugins --> Chain
+    Views --> Chain
+    Chain --> Block
 ```
 
-Repository 不重新定义 Core 已有的 Record、Asset、identity、signature、confirmation、commit 或 block 语义。具体插件通过 Core 提供的协议与事实能力工作。
+Repository 不重新定义 Core 已有的 Record、Entity identity、signature 或 Block 语义。Asset、membership、confirmation、Repo establishment 和 contribution relation 等领域语义由各自适用的上层 Protocol 定义。
 
 LabourFlow 中的 Personal Repo 是 Flow 的产品模块。它可以复用通用 Asset、Asset-Record relation 等 Protocol plugins，但不是 Repository package 的特殊模式，也不要求运行完整 Repository bootstrap。
+
+## Repo establishment 数据流
+
+Repo 是引用 Core `EntityPublicKey` 的上层领域事实，不继承或扩展 Core `Entity` 对象。
+
+MVP 的 Repo establishment 使用一个 canonical establishment Record 表达最小事实：
+
+```text
+Record.createdBy
+= establishing Worker
+= initial Repo operator
+
+Record.data.repo
+= Repo EntityPublicKey
+```
+
+因此 operator 不需要在 Repo payload 和 Runtime provider 中再建立第二个规范来源。Core `Entity.introducedBy` 也不用于表达 operator、ownership 或 membership。
+
+建立与重新加载的数据流为：
+
+```mermaid
+sequenceDiagram
+    participant Worker as Worker / Client
+    participant Cordis as Cordis
+    participant Repo as Repo Protocol capability
+    participant Chain as Canonical fact capability
+    participant Index as Runtime Repo index
+
+    Worker->>Cordis: establish Repo identity
+    Cordis->>Repo: validate establishment semantics
+    Repo->>Chain: commit establishment Record
+    Chain-->>Repo: canonical Record reference
+    Repo->>Index: index Repo identity -> canonical Record
+    Repo-->>Worker: established Repo
+
+    Worker->>Cordis: load Repo identity
+    Cordis->>Repo: resolve Repo
+    Repo->>Index: lookup canonical Record reference
+    Repo->>Chain: verify/read canonical establishment fact
+    Chain-->>Repo: establishment Record
+    Repo-->>Worker: Repo + derived operator
+```
+
+Runtime index 只是加速 lookup 的可替换数据。canonical establishment Record 才是 Repo identity/operator 的规范来源。缺失或陈旧的 index 不能授权第二次 establishment，也不能覆盖 canonical operator。
 
 ## Contribution 数据流
 
@@ -148,20 +213,20 @@ sequenceDiagram
     participant Cordis as Cordis
     participant Protocol as Repository Protocol plugins
     participant Stage as Runtime staging provider
-    participant Core as Core / Commit
+    participant Chain as Canonical fact capability
 
     Consumer->>Cordis: Asset + Record + relation
     Cordis->>Protocol: execute applicable protocol version
     Protocol->>Protocol: check membership and protocol validity
     Protocol->>Stage: stage contribution
     Protocol->>Protocol: verify required Worker and Repo confirmations
-    Protocol->>Core: accept / commit
-    Core-->>Protocol: committed
+    Protocol->>Chain: commit canonical contribution facts
+    Chain-->>Protocol: committed
     Protocol->>Stage: reconcile / clear runtime state
     Protocol-->>Consumer: accepted contribution
 ```
 
-Contribution 的协议语义由对应 Protocol plugin 定义；Cordis 负责运行这些插件，不额外引入一个把状态机写死的 Repository Runner。
+Contribution 的协议语义由对应 Protocol plugin 定义；Cordis 负责运行这些插件，不额外引入一个把状态机写死的 Repository Runner。canonical commit 的具体服务 API 由提供 chain-state capability 的运行时组件定义，而不是由 Repository 复制一套 Core/chain service。
 
 ## Contribution 状态
 
@@ -171,13 +236,13 @@ Contribution 的协议语义由对应 Protocol plugin 定义；Cordis 负责运�
 stateDiagram-v2
     [*] --> STAGED
     STAGED --> CONFIRMED: required confirmations satisfied
-    CONFIRMED --> COMMITTED: accept / commit succeeds
+    CONFIRMED --> COMMITTED: canonical commit succeeds
     COMMITTED --> PACKED: later block packing
 ```
 
-`STAGED` 是运行时处理状态，不是链上规范事实。`CONFIRMED` 表示该 contribution 已满足适用协议要求的确认条件，但只有成功 commit 后才成为已接受的 `COMMITTED` contribution。
+`STAGED` 是运行时处理状态，不是链上规范事实。`CONFIRMED` 表示该 contribution 已满足适用协议要求的确认条件，但只有 canonical fact capability 确认提交成功后才成为已接受的 `COMMITTED` contribution。
 
-`PACKED` 是后续 Core block packing 的结果，不属于 Repository 接受 contribution 的完成条件。
+`PACKED` 是后续 Block packing 的结果，不属于 Repository 接受 contribution 的完成条件。
 
 运行时可以持久保存 staging 以支持恢复，但持久化不会让 staging 变成 canonical fact。具体 durable staging、重试和 reconcile 机制在 Runtime provider 与 Spec 中确定。
 
@@ -185,13 +250,14 @@ stateDiagram-v2
 
 Repository 不以 service-owned state 复制链上事实。
 
-Record 始终是 Worker 的链上劳动事实。Asset、Repo、成员关系、confirmation 和 contribution relation 的规范含义由各自适用的 Protocol 定义。Repository 插件只执行这些协议并提供仓库产品需要的能力。
+Record 始终是 Worker 的链上劳动事实。Repo、Asset、成员关系、confirmation 和 contribution relation 的规范含义由各自适用的 Protocol 定义。Repository 插件执行这些协议并通过配置的 canonical fact capability 与链事实交互。
 
 Runtime 可以保存：
 
 - Asset payload 或其他协议允许的持久内容；
 - contribution staging；
-- Repo / Asset 查询索引；
+- Repo identity -> canonical establishment Record reference 的查询索引；
+- Asset 查询索引；
 - contribution history projection；
 - cache 和其他可重建运行数据。
 
@@ -211,6 +277,7 @@ Architecture 当前不锁定：
 
 - 具体 npm package 名称和 monorepo 目录；
 - Protocol metadata 最终字段；
+- canonical fact capability 的最终 package/service/API 形式；
 - MongoDB、PostgreSQL、filesystem 等持久化实现；
 - HTTP / REST / WebSocket 接口；
 - UI；
@@ -221,4 +288,4 @@ Architecture 当前不锁定：
 - 节点同步；
 - 私有证明、收益分配和结算机制。
 
-这些内容只有在 Requirement 明确进入范围后，才继续投影到 Design、Spec 和实现。
+这些内容只有在 Requirement 明确进入范围后，或现有 Requirement 的实现确实需要稳定的结构边界时，才继续投影到 Design、Spec 和实现。
