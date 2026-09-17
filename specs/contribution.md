@@ -10,7 +10,7 @@
 
 A Repo contribution is the process by which a member submits an Asset associated with a Worker-produced Record and the relations and confirmations required by the applicable LabourChain Protocols.
 
-Repository participates in Repo-side confirmation of the related labour. It does not produce the Record and does not reinterpret the Asset or Record.
+Repository participates in Repo-side confirmation of the related labour. It does not produce the Worker's labour Record and does not reinterpret the Asset or Record.
 
 ## Preconditions
 
@@ -21,7 +21,8 @@ A contribution may become accepted only if:
 - the Asset, Record and contribution relations are valid under their referenced Protocol versions;
 - required Worker confirmation is satisfied;
 - required Repo-side confirmation is satisfied;
-- the configured canonical fact capability is available.
+- the configured durable Record ingress/journal is available;
+- the accepted Asset can be made durably retrievable.
 
 Membership behavior is defined in [`membership.md`](./membership.md). Exact historical Protocol resolution is defined in [`protocol-resolution.md`](./protocol-resolution.md).
 
@@ -31,72 +32,94 @@ The Repository contribution execution model is:
 
 ```text
 STAGED
-  -> required confirmations satisfied
+  -> required domain confirmations satisfied
 CONFIRMED
-  -> canonical fact commit succeeds
+  -> exact resulting Records are durably accepted
+  -> accepted Asset is durably retrievable
 COMMITTED
-  -> later block packing
+  -> later Block inclusion
 PACKED
 ```
 
-`STAGED` is non-canonical runtime state.
+`STAGED` is temporary Runtime processing state.
 
-`CONFIRMED` means the applicable confirmation requirements are satisfied. It is not Repository acceptance.
+`CONFIRMED` means the applicable domain confirmation requirements are satisfied. It is not Repository acceptance.
 
-`COMMITTED` is the canonical commit boundary required for Repository acceptance.
+`COMMITTED` is the Repository acceptance boundary. It means the accepted contribution can survive process restart: the exact Records needed for the contribution are retained by the durable Record journal and the accepted Asset is durably retrievable.
 
-`PACKED` belongs to later block packing and is not required for Repository acceptance.
+`COMMITTED` does **not** mean the Records have already been included in a Block.
 
-These labels describe execution state. They do not require new canonical entities when chain facts and Protocol-defined relations already represent the same meaning.
+`PACKED` means the relevant Records have been included in a valid Block and therefore have chain-confirmation status. It is not required before Repository returns the contribution as accepted.
+
+These labels describe Repository execution/confirmation state. They do not redefine Core Record or Block identity semantics.
 
 ## Acceptance contract
 
 Repository may report a contribution as accepted only when:
 
-1. the contribution has reached canonical committed state through the configured canonical fact/chain-state capability; and
-2. the accepted Asset can be durably retrieved according to [`asset-storage.md`](./asset-storage.md).
+1. all applicable contribution and confirmation rules have succeeded;
+2. every Record required to preserve the accepted contribution has been durably accepted by the configured Record ingress/journal; and
+3. the accepted Asset can be durably retrieved according to [`asset-storage.md`](./asset-storage.md).
 
-A failed, incomplete, staged or confirmed-but-uncommitted contribution must not be reported as accepted.
+A failed, incomplete, staged or confirmed-but-not-durable contribution must not be reported as accepted.
 
-Repository must not enrich, classify, summarize or silently rewrite the Asset or Record during contribution processing.
+Repository must not enrich, classify, summarize or silently rewrite the Asset or Worker-produced Record during contribution processing.
+
+Block packing is a later chain step. A `COMMITTED` contribution may therefore be pending-chain; callers must not be told that it is block-confirmed unless chain-state evidence says so.
+
+## Durable Record ingress
+
+A usable deployment must provide a durable Record ingress/journal that retains exact signed Records across restart.
+
+The contribution flow requires behavior equivalent to:
+
+```text
+accept exact Record idempotently by RecordId
+read accepted Record by RecordId
+replay/query accepted pending Records sufficiently for recovery
+```
+
+Successful durable acceptance is a Runtime durability property, not Block confirmation.
+
+The journal must preserve the exact Record representation accepted for later chain inclusion. It must not silently normalize or rewrite protocol data.
 
 ## Staging
 
-A usable deployment must persist enough staging state to recover in-flight contribution work after process restart.
+A usable deployment must persist only the staging/correlation state needed to recover work that has not yet reached `COMMITTED`.
 
-Staging must retain enough correlation information to determine whether the corresponding canonical commit occurred without relying on process memory.
+Staging must retain enough correlation information to determine which exact Records and Asset finalization belong to the in-flight contribution.
 
-Persisting staging does not make staging canonical.
+Persisting staging does not make the contribution accepted.
 
 An in-memory staging implementation may be used for isolated tests but does not satisfy the usable-deployment contract.
 
 ## Recovery
 
-Recovery must converge toward canonical chain state.
+Recovery converges toward the durable Repository commit state, while preserving any separate Block-confirmation status.
 
 The implementation must satisfy these invariants:
 
-- uncommitted staged work never appears as accepted;
-- restart does not lose the information needed to determine whether an in-flight contribution committed;
-- if canonical commit succeeded before a crash, recovery converges to an accepted state with a retrievable Asset;
-- if canonical commit did not succeed, recovery does not invent a committed contribution;
-- retrying recovery does not create duplicate commits or duplicate singular confirmations;
+- work that never reached the durable Record journal and durable Asset boundary never appears as `COMMITTED`;
+- if required Records were durably accepted before a crash, recovery does not create duplicate Record acceptance;
+- if the Records are durable but Asset finalization was incomplete, recovery can finish/reconcile Asset persistence before exposing `COMMITTED`;
+- if the Asset is durable but required Record acceptance failed, recovery does not invent `COMMITTED`;
+- retrying recovery does not create duplicate singular confirmations or duplicate accepted Asset finalization;
 - staging cleanup may occur after commit, but cleanup failure does not make a committed contribution appear uncommitted;
-- a crash after commit but before history projection update is repairable by the history capability.
+- later Block inclusion can upgrade/display chain-confirmation status without changing the Repository acceptance fact.
 
-The implementation may resume, reconcile or discard uncommitted staged work as long as these invariants hold.
+The implementation may resume, reconcile or discard pre-commit staged work as long as these invariants hold.
 
 This Spec does not require a particular database transaction model, staging schema or queue implementation.
 
 ## Core and chain-state boundary
 
-Core supplies deterministic Plugin, Entity, Record and Block semantics. It does not by itself imply a Repository-owned database or commit/query service.
+Core supplies deterministic Plugin, Entity, Record and Block semantics. It does not by itself imply a Repository-owned database, Record queue or network node.
 
-Protocol-defined validity and confirmation semantics come from the loaded LabourChain Protocol implementations plus Core primitives. Canonical fact submission/query comes from a separately configured Runtime/composition capability.
+Protocol-defined validity and confirmation semantics come from loaded LabourChain Protocol implementations plus Core primitives.
 
-Repository may temporarily use narrow adapters while that Runtime boundary stabilizes. Such adapters must fail closed, remain internal and avoid duplicating Core protocol definitions or becoming a second canonical chain store.
+Durable pre-pack Record acceptance comes from a Runtime/composition Record journal. Chain inclusion status, when needed, comes from a chain-state/Block-confirmation adapter. These capabilities may later share one node-runtime implementation, but their semantics remain distinct.
 
-Repository does not implement block packing, consensus or peer synchronization.
+Repository does not implement block packing, consensus or peer synchronization in this Story.
 
 ## Failure model
 
@@ -104,26 +127,27 @@ Consumers must be able to distinguish at least:
 
 - contributor is not a Repo member;
 - required Protocol identity/version unavailable;
-- canonical fact capability unavailable;
 - Asset, Record or relation rejected by the applicable Protocol;
 - required Worker or Repo confirmation absent or rejected;
+- durable Record ingress unavailable or failed;
 - staging failure;
-- canonical commit failure;
+- accepted Asset persistence/finalization failure;
 - commit result cannot be determined safely;
-- post-commit Asset persistence/recovery failure.
+- chain-confirmation status unavailable when explicitly requested.
 
 ## Acceptance tests
 
 Tests must demonstrate that:
 
-- a valid member contribution can reach committed accepted state;
+- a valid member contribution can reach Repository `COMMITTED` / accepted state;
 - a non-member contribution cannot become accepted;
 - invalid Asset, Record or relation data is rejected before acceptance;
 - missing required confirmation prevents acceptance;
 - missing exact Protocol version prevents acceptance;
-- missing canonical fact capability fails closed;
-- a crash before commit does not expose the contribution as accepted;
-- a crash after commit but before staging cleanup recovers without duplicating the commit;
+- missing durable Record ingress prevents Repository commit;
+- a crash before durable commit does not expose the contribution as accepted;
+- a crash after Record acceptance but before Asset finalization can recover without duplicating Record acceptance;
 - retrying recovery is safe;
-- a committed contribution is not required to be packed before Repository accepts it;
-- accepted contribution reporting requires durable Asset retrieval.
+- a Repository-committed contribution is not required to be packed before Repository accepts it;
+- accepted contribution reporting requires durable Asset retrieval;
+- pending-chain and block-confirmed states are not conflated.
