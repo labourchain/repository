@@ -48,7 +48,7 @@ flowchart TD
 
 Bootstrap 不因此成为 Cordis 之外的协议管理层。它负责把运行环境启动起来，随后使用 Cordis 本身的插件机制。
 
-Bootstrap 版本同时固定该运行实例所采用的执行代码和 Cordis 运行环境。当前没有必要再建立独立的 execution-profile 或 runner-version 模型。
+Bootstrap 声明其兼容的 Cordis 版本范围，并与所加载插件共享同一个 Cordis runtime。当前不要求 Bootstrap Protocol 固定到某个精确的 Cordis patch 版本，也没有必要再建立独立的 execution-profile 或 runner-version 模型。
 
 ## Node
 

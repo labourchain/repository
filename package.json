@@ -27,6 +27,9 @@
   },
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
+  "bin": {
+    "labourchain-repository": "./lib/bin.js"
+  },
   "exports": {
     ".": {
       "types": "./lib/index.d.ts",
@@ -45,15 +48,16 @@
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-strip-types --test \"test/**/*.test.ts\"",
     "test:coverage": "node --experimental-strip-types --experimental-test-coverage --test-coverage-exclude=\"test/**\" --test-coverage-lines=90 --test-coverage-branches=80 --test-coverage-functions=85 --test \"test/**/*.test.ts\"",
-    "check": "pnpm run typecheck && pnpm run test:coverage && pnpm run build",
+    "test:bin": "node scripts/smoke-bin.mjs",
+    "check": "pnpm run typecheck && pnpm run test:coverage && pnpm run build && pnpm run test:bin && pnpm run package:check",
     "package:check": "node scripts/verify-package-contents.mjs",
     "prepack": "pnpm run check"
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis": "^4.0.1"
+    "@deepseek-ai/cordis": "^4.0.2"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis": "4.0.1",
+    "@deepseek-ai/cordis": "4.0.2",
     "@types/node": "22.20.1",
     "tsdown": "0.22.14",
     "typescript": "6.0.3"

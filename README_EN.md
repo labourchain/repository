@@ -10,7 +10,7 @@ In the LabourChain model, the Worker is the subject of labour, a Record represen
 
 Repository uses Cordis as its runtime plugin model. Repository capability emerges from multiple Cordis plugins. A plugin that defines stable on-chain semantics is additionally declared as a versioned LabourChain Protocol. Repository does not build a separate Runner, Hoster, or mega-service framework around Cordis.
 
-Requirements, Architecture, and the MVP Specs have now completed one round of re-projection. The next development stage derives Stories and engineering Tasks from the stable capability Specs.
+Requirements, Architecture, and the MVP Specs have completed the current re-projection round. The Bootstrap Story is now being implemented, while later Repository domain capabilities continue through the accepted Specs and Issues.
 
 ## Documentation
 
@@ -65,13 +65,15 @@ Bootstrap Protocol instance
 
 Bootstrap is stable executable code with a process entry point. It creates a Cordis application when started, and its stable version is also declared using the Protocol format. After Cordis starts, Repository protocols, storage, index, projection, and adapters continue to be organized as Cordis plugins.
 
+The current Bootstrap provides the executable shell and a programmatic composition API. The concrete Repository product composition is not yet fixed in the executable, and this Story does not introduce an additional configuration loader.
+
 A Protocol plugin is not a second plugin framework. It is a Cordis plugin whose behavior carries long-lived on-chain semantics and version constraints. Discovery, dependencies, Context, Service, Effect, and lifecycle remain Cordis concerns.
 
 See [`docs/architecture.md`](./docs/architecture.md).
 
 ## Repository structure
 
-Documentation and Specs now follow the SDD hierarchy. Final package boundaries are still derived later from accepted protocol and lifecycle boundaries rather than from Spec file count.
+Documentation and Specs follow the SDD hierarchy. Final package boundaries are still derived from accepted protocol and lifecycle boundaries rather than from Spec file count.
 
 ```text
 README.md               Chinese project README (authoritative)
@@ -81,7 +83,7 @@ docs/concepts/          domain baseline and terminology
 docs/requirements.md    product requirements source of truth
 docs/architecture.md    Design / Architecture
 specs/                  MVP umbrella + stable capability Specs
-src/                    current minimal Cordis scaffold
+src/                    Bootstrap runtime and later Repository capabilities
 test/                   tests
 scripts/                engineering and release checks
 .github/                 CI and PR configuration
@@ -100,10 +102,10 @@ pnpm run check
 pnpm run package:check
 ```
 
-The existing checks still mainly validate the current scaffold. They do not imply that the Repository MVP implementation is complete.
+The current checks mainly protect the Bootstrap runtime, Cordis lifecycle, and package executable boundary. They do not imply that the Repository MVP implementation is complete.
 
 ## Status
 
 The current package remains `private: true`.
 
-Requirements, Architecture, and capability Specs have completed the current re-projection round. `src/` is still a minimal Cordis scaffold. Implementation should now proceed from Specs into Stories and Tasks rather than restoring the previous single Repository Service model.
+The Bootstrap runtime now has an executable entry point and a programmatic composition API. Repo, membership, Asset, contribution, recovery, and history capabilities remain for later Stories.

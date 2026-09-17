@@ -57,6 +57,8 @@ The executable bootstrap is special only because it has a process entry point an
 
 Its stable executable version is declared using the Protocol format, so a running node is an instance of a particular Bootstrap Protocol version. After Cordis starts, normal capabilities are loaded and managed through Cordis plugins.
 
+Bootstrap uses the compatible Cordis 4.x range beginning at `^4.0.2` and shares the host Cordis module instance with loaded plugins. Do not bundle a private second Cordis runtime into the executable.
+
 Do not invent a Root Protocol, protocol-of-protocols runtime layer, self-registering Runner registry or other recursive bootstrap model unless a real requirement later proves one necessary.
 
 See [`specs/bootstrap.md`](./specs/bootstrap.md) for the executable runtime contract.
@@ -135,12 +137,10 @@ Derive acceptance tests from the capability Specs relevant to the Story being im
 
 ## Current implementation status
 
-`src/` currently contains only a minimal Cordis scaffold. It is not evidence that the final Architecture should be a single Repository service.
-
-Requirements, Architecture and capability Specs have completed the current re-projection round. The next development step is to derive Stories and Tasks from the accepted Specs before broad implementation.
+Bootstrap implementation is in progress on Story #4. Domain Repository capabilities remain outside this branch.
 
 The current package remains private.
 
 ## Validation
 
-When implementation work resumes, use the relevant project checks and report actual evidence. Do not claim completion without validation.
+Use the relevant project checks when the corresponding integration is available and report actual evidence. Core-linked integration validation is intentionally deferred while Core remains under development.

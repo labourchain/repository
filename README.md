@@ -8,7 +8,7 @@
 
 Repository 采用 Cordis 的插件运行模型。仓库能力由多个 Cordis plugins 共同形成；其中定义链上稳定语义的插件同时声明为版本化 LabourChain Protocol。Repository 不建立独立于 Cordis 的 Runner、Hoster 或 mega-service 体系。
 
-当前 Requirements、Architecture 与 MVP Spec 已完成一轮重新投影，下一阶段从稳定能力 Spec 形成 Stories 与开发 Tasks。
+Requirements、Architecture 与 MVP Specs 已完成当前轮次的重新投影。Bootstrap Story 已进入实现阶段，后续 Repository 领域能力继续按现有 Specs 与 Issues 推进。
 
 ## 文档
 
@@ -65,6 +65,8 @@ Bootstrap Protocol instance
 
 Bootstrap 是具有可执行入口的稳定版本代码，启动时创建 Cordis application。它的稳定版本同样按 Protocol 格式声明。Cordis 启动后，Repository protocol、storage、index、projection 和 adapter 等能力继续按 Cordis plugin 组织。
 
+当前 Bootstrap 提供可执行 shell 与 programmatic composition API；具体 Repository 产品 composition 尚未在 executable 中固定，也不在 Bootstrap Story 中引入额外 config loader。
+
 Protocol plugin 不形成第二套插件系统。它只是具有长期链上语义和版本约束的 Cordis plugin。插件发现、依赖、Context、Service、Effect 和生命周期继续由 Cordis 管理。
 
 详见 [`docs/architecture.md`](./docs/architecture.md)。
@@ -81,7 +83,7 @@ docs/concepts/          概念基线与术语文档
 docs/requirements.md    产品需求唯一事实来源
 docs/architecture.md    Design / Architecture
 specs/                  MVP umbrella + 稳定能力 Specs
-src/                    当前最小 Cordis scaffold
+src/                    Bootstrap runtime 与后续 Repository capability 实现
 test/                   测试
 scripts/                工程与发布检查脚本
 .github/                 CI 与 PR 配置
@@ -102,10 +104,10 @@ pnpm run check
 pnpm run package:check
 ```
 
-现有检查命令仍主要反映当前 scaffold，不代表 Repository MVP 已完成实现。
+当前检查主要保护 Bootstrap runtime、Cordis lifecycle 和 package executable 边界，不代表 Repository MVP 已完成实现。
 
 ## 状态
 
 当前 package 保持 `private: true`。
 
-Requirements、Architecture 与 capability Specs 已完成当前轮次的重新投影；`src/` 仍是最小 Cordis scaffold。后续实现应从 Specs 形成 Stories / Tasks，而不是恢复旧的单一 Repository Service 架构。
+Bootstrap runtime 已形成可执行入口和 programmatic composition API；Repo、membership、Asset、contribution、recovery 与 history 等领域能力仍按后续 Stories 实现。
