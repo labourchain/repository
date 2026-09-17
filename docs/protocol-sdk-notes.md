@@ -96,6 +96,8 @@ export const plugin = createMemberProtocolPlugin()
 
 The SDK bundles that entry and verifies the **built** module namespace contains exactly the named runtime entry `plugin`. Package/source modules may expose helpers and types separately; those exports do not become arbitrary Protocol runtime exports.
 
+The SDK does not need to synthesize another wrapper or introduce a `defineProtocol()` abstraction in v1. The explicit entry is already the thin Cordis wrapper; the SDK bundles and validates it.
+
 This separation keeps package developer APIs and Protocol runtime ABI independent without creating a second runtime abstraction.
 
 ### 5. SDK verification has both identity and Cordis-runtime checks
@@ -117,7 +119,7 @@ A minimal `buildProtocol(...)` path for `cordis-js-esm` should verify:
 13. the imported `plugin` can be mounted by the supported Cordis runtime;
 14. size diagnostics are returned.
 
-Protocol-specific behavior such as `establishMember()` remains the Protocol's own test responsibility, not generic SDK behavior.
+Protocol-specific behavior such as `declareMember()` / `requireMember()` remains the Protocol's own test responsibility, not generic SDK behavior.
 
 ## Current development boundary
 
