@@ -65,13 +65,9 @@ function pendingDiagnostic(fiber: Fiber): string {
  * work until its dependency appears.
  */
 async function settleComposition(fibers: readonly MountedFiber[]): Promise<void> {
-  const maxPasses = Math.max(2, fibers.length + 1)
-
-  for (let pass = 0; pass < maxPasses; pass += 1) {
+  do {
     await Promise.all(fibers.map((fiber) => fiber.await()))
-    await Promise.resolve()
-    if (!fibers.some((fiber) => fiber.inertia)) break
-  }
+  } while (fibers.some((fiber) => fiber.inertia))
 
   const inactive = fibers.filter((fiber) => fiber.state !== FIBER_ACTIVE)
   if (inactive.length === 0) return
