@@ -4,8 +4,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import {
+  BootstrapStartupError,
   RecordJournalConflictError,
   RecordJournalCorruptionError,
+  RecordJournalInputError,
   RecordJournalNotFoundError,
   RecordJournalService,
   RecordJournalStorageError,
@@ -34,6 +36,12 @@ async function createJournalNode(directory: string) {
   return createRepositoryNode({
     plugins: [{ plugin: RecordJournalService, config: { directory } }],
   })
+}
+
+async function finalizedRecordFile(directory: string): Promise<string> {
+  const files = (await readdir(directory)).filter((name) => name.endsWith('.record.json'))
+  assert.equal(files.length, 1)
+  return join(directory, files[0]!)
 }
 
 test('durably accepts and reads an exact Record', async (t) => {
@@ -116,6 +124,42 @@ test('rejects conflicting content under an existing RecordId without overwrite',
   await node.dispose()
 })
 
+test('rejects invalid journal config and invalid Record inputs explicitly', async (t) => {
+  const directory = await tempJournalDir()
+  t.after(() => rm(directory, { recursive: true, force: true }))
+
+  await assert.rejects(
+    createRepositoryNode({
+      plugins: [{ plugin: RecordJournalService, config: { directory: '' } }],
+    }),
+    (error: unknown) => {
+      assert.ok(error instanceof BootstrapStartupError)
+      assert.ok(error.cause instanceof RecordJournalInputError)
+      return true
+    },
+  )
+
+  const node = await createJournalNode(directory)
+  await assert.rejects(
+    node.context.recordJournal.accept(null as unknown as JournalRecord),
+    RecordJournalInputError,
+  )
+  await assert.rejects(
+    node.context.recordJournal.accept({ plugin: 'missing-id' } as unknown as JournalRecord),
+    RecordJournalInputError,
+  )
+  await assert.rejects(
+    node.context.recordJournal.get(''),
+    RecordJournalInputError,
+  )
+  await assert.rejects(
+    node.context.recordJournal.accept(record('a'.repeat(64), { data: { value: 1n } })),
+    RecordJournalInputError,
+  )
+
+  await node.dispose()
+})
+
 test('distinguishes missing Record from provider failure', async (t) => {
   const directory = await tempJournalDir()
   t.after(() => rm(directory, { recursive: true, force: true }))
@@ -134,21 +178,35 @@ test('distinguishes missing Record from provider failure', async (t) => {
     broken.context.recordJournal.get('a'.repeat(64)),
     RecordJournalStorageError,
   )
+  await assert.rejects(
+    broken.context.recordJournal.accept(record('a'.repeat(64))),
+    RecordJournalStorageError,
+  )
   await broken.dispose()
 })
 
-test('detects corrupted persisted Record data', async (t) => {
+test('detects malformed or mismatched persisted Record data', async (t) => {
   const directory = await tempJournalDir()
   t.after(() => rm(directory, { recursive: true, force: true }))
 
   const node = await createJournalNode(directory)
   const expected = record('a'.repeat(64))
   await node.context.recordJournal.accept(expected)
+  const file = await finalizedRecordFile(directory)
 
-  const files = (await readdir(directory)).filter((name) => name.endsWith('.record.json'))
-  assert.equal(files.length, 1)
-  await writeFile(join(directory, files[0]!), '{broken json', 'utf8')
+  await writeFile(file, '{broken json', 'utf8')
+  await assert.rejects(
+    node.context.recordJournal.get(expected.id),
+    RecordJournalCorruptionError,
+  )
 
+  await writeFile(file, JSON.stringify({ plugin: 'missing-id' }), 'utf8')
+  await assert.rejects(
+    node.context.recordJournal.get(expected.id),
+    RecordJournalCorruptionError,
+  )
+
+  await writeFile(file, JSON.stringify(record('b'.repeat(64))), 'utf8')
   await assert.rejects(
     node.context.recordJournal.get(expected.id),
     RecordJournalCorruptionError,
@@ -172,6 +230,38 @@ test('replays accepted Records deterministically without assigning chain meaning
   for await (const item of node.context.recordJournal.iterateAccepted()) ids.push(item.id)
 
   assert.deepEqual(ids, [earlierName.id, laterName.id])
+  await node.dispose()
+})
+
+test('replay handles missing storage as empty but rejects mismatched finalized filenames', async (t) => {
+  const parent = await tempJournalDir()
+  t.after(() => rm(parent, { recursive: true, force: true }))
+
+  const missingDirectory = join(parent, 'missing-journal')
+  const empty = await createJournalNode(missingDirectory)
+  const none: JournalRecord[] = []
+  for await (const item of empty.context.recordJournal.iterateAccepted()) none.push(item)
+  assert.deepEqual(none, [])
+  await empty.dispose()
+
+  const directory = join(parent, 'journal')
+  const node = await createJournalNode(directory)
+  await node.context.recordJournal.accept(record('a'.repeat(64)))
+  await writeFile(
+    join(directory, 'wrong.record.json'),
+    JSON.stringify(record('b'.repeat(64))),
+    'utf8',
+  )
+
+  await assert.rejects(
+    async () => {
+      for await (const _item of node.context.recordJournal.iterateAccepted()) {
+        // Consume replay so corruption is observed.
+      }
+    },
+    RecordJournalCorruptionError,
+  )
+
   await node.dispose()
 })
 
