@@ -10,8 +10,7 @@ import {
   CORE_RECORD_PROTOCOL_SERVICE,
   MEMBER_PROTOCOL_REFERENCE,
   MEMBER_PROTOCOL_SERVICE,
-  MemberConflictError,
-  MemberEstablishmentError,
+  MemberDeclarationError,
   MemberNotFoundError,
   MemberProtocolConfigError,
   RecordJournalService,
@@ -115,19 +114,16 @@ test('Protocol artifact entry exports exactly one named plugin', async () => {
   ])
 })
 
-test('establishes and requires a Member through the Cordis Protocol plugin', async () => {
+test('declares and requires a Member through the Cordis Protocol plugin', async () => {
   await withDirectory(async (directory) => {
     const node = await createRepositoryNode({ plugins: composition(directory) })
     const record = memberRecord('member-record-1')
 
-    const established = await node.context[MEMBER_PROTOCOL_SERVICE].establishMember(record)
+    const declared = await node.context[MEMBER_PROTOCOL_SERVICE].declareMember(record)
     const loaded = await node.context[MEMBER_PROTOCOL_SERVICE].requireMember(MEMBER_KEY)
 
-    assert.deepEqual(established, {
-      identity: MEMBER_KEY,
-      establishmentRecordId: record.id,
-    })
-    assert.deepEqual(loaded, established)
+    assert.deepEqual(declared, { identity: MEMBER_KEY })
+    assert.deepEqual(loaded, declared)
 
     const stored = await node.context.recordJournal.get(record.id)
     assert.deepEqual(stored, record)
@@ -139,13 +135,13 @@ test('rebuilds Member recognition from the durable journal after restart', async
   await withDirectory(async (directory) => {
     const first = await createRepositoryNode({ plugins: composition(directory) })
     const record = memberRecord('member-record-restart')
-    await first.context[MEMBER_PROTOCOL_SERVICE].establishMember(record)
+    await first.context[MEMBER_PROTOCOL_SERVICE].declareMember(record)
     await first.dispose()
 
     const second = await createRepositoryNode({ plugins: composition(directory) })
     assert.deepEqual(
       await second.context[MEMBER_PROTOCOL_SERVICE].requireMember(MEMBER_KEY),
-      { identity: MEMBER_KEY, establishmentRecordId: record.id },
+      { identity: MEMBER_KEY },
     )
     await second.dispose()
   })
@@ -164,29 +160,32 @@ test('rejects a non-Member identity without creating it implicitly', async () =>
   })
 })
 
-test('re-submitting the exact establishment Record is idempotent', async () => {
+test('re-submitting the exact declaration Record is idempotent', async () => {
   await withDirectory(async (directory) => {
     const node = await createRepositoryNode({ plugins: composition(directory) })
     const record = memberRecord('member-record-idempotent')
 
-    const first = await node.context[MEMBER_PROTOCOL_SERVICE].establishMember(record)
-    const second = await node.context[MEMBER_PROTOCOL_SERVICE].establishMember(record)
+    const first = await node.context[MEMBER_PROTOCOL_SERVICE].declareMember(record)
+    const second = await node.context[MEMBER_PROTOCOL_SERVICE].declareMember(record)
 
     assert.deepEqual(second, first)
     await node.dispose()
   })
 })
 
-test('rejects a conflicting establishment Record for the same Member identity', async () => {
+test('multiple valid declarations by the same identity remain set-like', async () => {
   await withDirectory(async (directory) => {
     const node = await createRepositoryNode({ plugins: composition(directory) })
-    await node.context[MEMBER_PROTOCOL_SERVICE].establishMember(memberRecord('member-record-original'))
 
-    await assert.rejects(
-      node.context[MEMBER_PROTOCOL_SERVICE].establishMember(memberRecord('member-record-conflict')),
-      MemberConflictError,
+    await node.context[MEMBER_PROTOCOL_SERVICE].declareMember(memberRecord('member-record-a'))
+    await node.context[MEMBER_PROTOCOL_SERVICE].declareMember(memberRecord('member-record-b'))
+
+    assert.deepEqual(
+      await node.context[MEMBER_PROTOCOL_SERVICE].requireMember(MEMBER_KEY),
+      { identity: MEMBER_KEY },
     )
-
+    assert.deepEqual((await node.context.recordJournal.get('member-record-a')).id, 'member-record-a')
+    assert.deepEqual((await node.context.recordJournal.get('member-record-b')).id, 'member-record-b')
     await node.dispose()
   })
 })
@@ -197,28 +196,28 @@ test('fails closed for wrong protocol identity, signature, payload, and Entity i
     const service = node.context[MEMBER_PROTOCOL_SERVICE]
 
     await assert.rejects(
-      service.establishMember(memberRecord('wrong-ref', { protocol: 'member.profile@0.1.0' })),
-      MemberEstablishmentError,
+      service.declareMember(memberRecord('wrong-ref', { protocol: 'member.profile@0.1.0' })),
+      MemberDeclarationError,
     )
     await assert.rejects(
-      service.establishMember(memberRecord('wrong-hash', { protocolHash: 'b'.repeat(64) })),
-      MemberEstablishmentError,
+      service.declareMember(memberRecord('wrong-hash', { protocolHash: 'b'.repeat(64) })),
+      MemberDeclarationError,
     )
     await assert.rejects(
-      service.establishMember(memberRecord('bad-signature', { signature: 'invalid-signature' })),
-      MemberEstablishmentError,
+      service.declareMember(memberRecord('bad-signature', { signature: 'invalid-signature' })),
+      MemberDeclarationError,
     )
     await assert.rejects(
-      service.establishMember(memberRecord('non-empty', { data: { member: MEMBER_KEY } })),
-      MemberEstablishmentError,
+      service.declareMember(memberRecord('non-empty', { data: { member: MEMBER_KEY } })),
+      MemberDeclarationError,
     )
     await assert.rejects(
-      service.establishMember(memberRecord('bad-identity', { createdBy: 'not-an-entity-key' })),
-      MemberEstablishmentError,
+      service.declareMember(memberRecord('bad-identity', { createdBy: 'not-an-entity-key' })),
+      MemberDeclarationError,
     )
     await assert.rejects(
       service.requireMember('not-an-entity-key'),
-      MemberEstablishmentError,
+      MemberDeclarationError,
     )
 
     await node.dispose()
@@ -245,7 +244,7 @@ test('fails startup when the Host does not supply an exact ProtocolHash', async 
   })
 })
 
-test('fails closed if durable journal contains conflicting Member establishments', async () => {
+test('rebuild accepts multiple durable declarations for the same Member', async () => {
   await withDirectory(async (directory) => {
     const journalNode = await createRepositoryNode({
       plugins: [{ plugin: RecordJournalService, config: { directory } }],
@@ -254,13 +253,11 @@ test('fails closed if durable journal contains conflicting Member establishments
     await journalNode.context.recordJournal.accept(memberRecord('durable-b'))
     await journalNode.dispose()
 
-    await assert.rejects(
-      createRepositoryNode({ plugins: composition(directory) }),
-      (error: unknown) => {
-        assert.ok(error instanceof Error)
-        assert.ok(error.cause instanceof MemberConflictError)
-        return true
-      },
+    const node = await createRepositoryNode({ plugins: composition(directory) })
+    assert.deepEqual(
+      await node.context[MEMBER_PROTOCOL_SERVICE].requireMember(MEMBER_KEY),
+      { identity: MEMBER_KEY },
     )
+    await node.dispose()
   })
 })
