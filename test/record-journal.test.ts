@@ -95,18 +95,19 @@ test('is idempotent for concurrent equivalent Record acceptance', async (t) => {
 
   const node = await createJournalNode(directory)
   const expected = record('a'.repeat(64))
+  const equivalent: TestRecord = {
+    data: { value: 'aaaa' },
+    signature: expected.signature,
+    createdAt: expected.createdAt,
+    createdBy: expected.createdBy,
+    pluginHash: expected.pluginHash,
+    plugin: expected.plugin,
+    id: expected.id,
+  }
 
   await Promise.all([
     node.context.recordJournal.accept(expected),
-    node.context.recordJournal.accept({
-      data: { value: 'aaaa' },
-      signature: expected.signature,
-      createdAt: expected.createdAt,
-      createdBy: expected.createdBy,
-      pluginHash: expected.pluginHash,
-      plugin: expected.plugin,
-      id: expected.id,
-    }),
+    node.context.recordJournal.accept(equivalent),
   ])
 
   const replayed: JournalRecord[] = []
