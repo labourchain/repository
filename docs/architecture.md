@@ -10,17 +10,18 @@ Repository 遵循 Cordis 的“万物皆插件”模型。能够独立装载、�
 
 Repository 不在 Cordis 之外再建立一套 Runner、Hoster、Plugin Manager、Service Container 或生命周期系统。插件发现、依赖、Context、Service、Effect 和生命周期由 Cordis 提供。
 
-LabourChain 在 Cordis plugin 之上增加的是链上 Protocol 的稳定语义：当一个插件定义需要被历史事实长期引用的协议行为时，它同时作为 Protocol plugin 声明自己的协议身份和版本。
+LabourChain 在 Cordis plugin 运行模型之上增加的是链上 Protocol 的稳定语义：需要被历史事实长期引用的协议行为以版本化 Protocol 声明，并由 Cordis plugin 作为其 executable implementation。
 
 ```text
-Cordis plugin
-├── Protocol plugin
-│   └── 具有链上稳定语义和协议版本
-└── Runtime / product plugin
-    └── 提供存储、索引、适配、展示等运行能力
+LabourChain Protocol
+└── executable implementation = Cordis plugin
+
+Cordis plugins without chain-stable semantics
+└── Runtime / product plugins
+    └── 存储、索引、适配、展示等运行能力
 ```
 
-这里的分类描述插件承担的职责，不形成第二套插件类型系统。
+Protocol 与 Cordis Plugin 描述不同层级：前者是链上稳定语义与身份，后者是唯一运行时插件抽象。不建立第二套插件类型系统。
 
 ## Bootstrap
 
@@ -35,7 +36,7 @@ flowchart TD
     OS["Node.js / OS"]
     Bootstrap["Bootstrap Protocol instance"]
     Cordis["Cordis application"]
-    Protocols["Protocol plugins"]
+    Protocols["Protocol implementations\n(Cordis plugins)"]
     Runtime["Runtime / provider plugins"]
     Products["Product / adapter plugins"]
 
@@ -66,26 +67,26 @@ Bootstrap Protocol instance
 
 节点具有哪些 Repository 能力，取决于实际加载了哪些插件，而不是一个固定的 Repository mega-service。
 
-## Protocol plugin
+## Protocol implementation
 
-Protocol plugin 是声明链上稳定语义的 Cordis plugin。
+LabourChain Protocol 定义链上稳定语义和协议版本；对应 executable implementation 是 Cordis plugin。
 
 协议版本与实现一起演进。已经存在并可能被历史事实引用的协议版本不通过在同一个实现中修改分支语义来升级；新的协议语义使用新的版本实现。
 
 ```text
-Protocol A v1 -> executable plugin implementation
-Protocol A v2 -> executable plugin implementation
+Protocol A v1 -> Cordis plugin implementation
+Protocol A v2 -> Cordis plugin implementation
 ```
 
 同一节点可以按需要同时加载多个协议版本。解释或验证历史事实时必须解析事实所引用的具体协议版本，不能隐式替换为当前最新版本。
 
-Protocol plugin 的具体 metadata 字段、发现形式和包命名在 Spec 阶段确定。Architecture 只要求能够稳定识别协议及其版本，并让对应实现通过 Cordis 被加载。
+Protocol 的具体 metadata 字段、发现形式和包命名在 Spec 阶段确定。Architecture 只要求能够稳定识别协议及其版本，并让对应 implementation 通过 Cordis 被加载。
 
 ## 插件边界
 
-插件不按照 CRUD 操作或单个 Requirement 机械拆分。
+Cordis plugins 不按照 CRUD 操作或单个 Requirement 机械拆分。
 
-拆分主要服从协议边界、版本边界和生命周期。一起升级、一起加载、一起失效且没有独立运行价值的紧密协议可以由同一个插件实现；能够被其他产品独立复用的协议应避免与 Repository 产品运行时绑定。
+拆分主要服从协议边界、版本边界和生命周期。一起升级、一起加载、一起失效且没有独立运行价值的紧密协议可以由同一个 Cordis plugin 实现；能够被其他产品独立复用的协议应避免与 Repository 产品运行时绑定。
 
 例如 Asset 和 Asset-Record relation 属于可能被 LabourFlow Personal Repo 复用的通用能力，不应要求调用方加载完整 Repository node 才能使用。
 
@@ -93,7 +94,7 @@ Contribution history 属于事实的 view / projection。它可以由插件提�
 
 ## Core、Record ingress 与链确证边界
 
-当前 LabourChain Core 提供 `core.plugin`、`core.record`、`core.entity`、`core.block` 等确定性协议原语。它们定义数据结构、身份表示、Record/Block 校验和密码学边界，但不因此成为一个固定的数据库、Record store、网络节点或 Repository 专用 commit service。
+当前 LabourChain Core 提供 `core.protocol`、`core.record`、`core.entity`、`core.block` 等确定性协议原语。它们定义数据结构、身份表示、Record/Block 校验和密码学边界，但不因此成为一个固定的数据库、Record store、网络节点或 Repository 专用 commit service。
 
 Core 当前同时明确：Block Chain 表达 Record 被这条链收录和确证的顺序；Runtime arrival / queue order 不具有链确证语义。因此 Repository 不把“本地持久接收 Record”和“Record 已被 Block 确认”混成一个 canonical 状态。
 
@@ -129,7 +130,7 @@ flowchart LR
     subgraph Node["Repository Node"]
         Bootstrap["Bootstrap"]
         Cordis["Cordis"]
-        RepoPlugins["Repository Protocol plugins"]
+        RepoProtocols["Repository Protocol implementations"]
         Journal["Durable Record ingress / journal"]
         ChainState["Chain-state / Block-confirmation adapter"]
         Providers["Asset / index / staging providers"]
@@ -137,14 +138,14 @@ flowchart LR
     end
 
     subgraph Core["LabourChain Core primitives"]
-        Plugin["Plugin identity / verification"]
+        Protocol["Protocol identity / verification"]
         Entity["Entity identity"]
         Record["Record validation / identity"]
         Block["Block validation / identity"]
     end
 
     Bootstrap --> Cordis
-    Cordis --> RepoPlugins
+    Cordis --> RepoProtocols
     Cordis --> Journal
     Cordis --> ChainState
     Cordis --> Providers
@@ -154,18 +155,18 @@ flowchart LR
     Board --> Cordis
     Client --> Cordis
 
-    RepoPlugins --> Plugin
-    RepoPlugins --> Entity
-    RepoPlugins --> Record
-    RepoPlugins --> Journal
+    RepoProtocols --> Protocol
+    RepoProtocols --> Entity
+    RepoProtocols --> Record
+    RepoProtocols --> Journal
     Views --> Journal
     Views --> ChainState
     ChainState --> Block
 ```
 
-Repository 不重新定义 Core 已有的 Plugin、Record、Entity identity、signature 或 Block 语义。Asset、membership、confirmation、Repo establishment 和 contribution relation 等领域语义由各自适用的上层 Protocol 定义。
+Repository 不重新定义 Core 已有的 Protocol、Record、Entity identity、signature 或 Block 语义。Asset、membership、confirmation、Repo establishment 和 contribution relation 等领域语义由各自适用的上层 Protocol 定义。
 
-LabourFlow 中的 Personal Repo 是 Flow 的产品模块。它可以复用通用 Asset、Asset-Record relation 等 Protocol plugins，但不是 Repository package 的特殊模式，也不要求运行完整 Repository bootstrap。
+LabourFlow 中的 Personal Repo 是 Flow 的产品模块。它可以复用通用 Asset、Asset-Record relation 等 Protocol implementations，但不是 Repository package 的特殊模式，也不要求运行完整 Repository bootstrap。
 
 ## Repo establishment 数据流
 
@@ -238,7 +239,7 @@ Repo contribution 不是普通 CRUD。Worker 已经在 Repository 之外产生 R
 sequenceDiagram
     participant Consumer as Flow / Contributor
     participant Cordis as Cordis
-    participant Protocol as Repository Protocol plugins
+    participant Protocol as Repository Protocol implementation
     participant Stage as Runtime staging provider
     participant Assets as Asset provider
     participant Journal as Durable Record journal
@@ -261,7 +262,7 @@ sequenceDiagram
     Chain-->>Protocol: optional block-confirmed status
 ```
 
-Contribution 的协议语义由对应 Protocol plugin 定义；Cordis 负责运行这些插件，不额外引入一个把状态机写死的 Repository Runner。Record ingress/journal 和 chain-state access 是可替换 Runtime 能力，不是 Repository 领域自己的第二套链。
+Contribution 的协议语义由对应 Protocol 定义；其 implementation 由 Cordis 负责运行，不额外引入一个把状态机写死的 Repository Runner。Record ingress/journal 和 chain-state access 是可替换 Runtime 能力，不是 Repository 领域自己的第二套链。
 
 ## Contribution 状态
 
