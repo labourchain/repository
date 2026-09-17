@@ -132,13 +132,15 @@ function memberView(identity: string, establishmentRecordId: string): MemberView
  * Member establishment.
  */
 export class MemberIdentityService {
+  private readonly ctx: Context
+  readonly protocolHash: string
   private readonly members = new Map<string, string>()
   private serialTail: Promise<void> = Promise.resolve()
 
-  constructor(
-    private readonly ctx: Context,
-    readonly protocolHash: string,
-  ) {}
+  constructor(ctx: Context, protocolHash: string) {
+    this.ctx = ctx
+    this.protocolHash = protocolHash
+  }
 
   async rebuild(): Promise<void> {
     const rebuilt = new Map<string, string>()
