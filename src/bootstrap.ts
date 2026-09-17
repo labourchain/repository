@@ -1,5 +1,5 @@
 import { Context } from '@deepseek-ai/cordis'
-import type { Fiber, FiberState, Plugin } from '@deepseek-ai/cordis'
+import type { Fiber, Plugin } from '@deepseek-ai/cordis'
 
 /** Stable source identity shared by every build of this Bootstrap Protocol version. */
 export const BOOTSTRAP_PROTOCOL = Object.freeze({
@@ -39,21 +39,18 @@ export class BootstrapStartupError extends Error {
   }
 }
 
-const FIBER_PENDING = 0 as FiberState.PENDING
-const FIBER_ACTIVE = 2 as FiberState.ACTIVE
-
 type MountedFiber = Fiber & PromiseLike<Fiber>
 
 function mountPlugin(context: Context, entry: RepositoryPluginEntry): MountedFiber {
   return context.plugin(entry.plugin, entry.config)
 }
 
-function pendingDiagnostic(fiber: Fiber): string {
+function inactiveDiagnostic(fiber: Fiber): string {
   const missing = Object.keys(fiber.inject)
     .filter((service) => fiber.ctx.get(service) === undefined)
   return missing.length > 0
-    ? `pending (waiting for services: ${missing.join(', ')})`
-    : 'pending (dependency unavailable)'
+    ? `waiting for services: ${missing.join(', ')}`
+    : 'inactive'
 }
 
 /**
@@ -69,13 +66,11 @@ async function settleComposition(fibers: readonly MountedFiber[]): Promise<void>
     await Promise.all(fibers.map((fiber) => fiber.await()))
   } while (fibers.some((fiber) => fiber.inertia))
 
-  const inactive = fibers.filter((fiber) => fiber.state !== FIBER_ACTIVE)
+  const inactive = fibers.filter((fiber) => fiber.store === undefined)
   if (inactive.length === 0) return
 
-  const diagnostics = inactive.map((fiber) => {
-    if (fiber.state === FIBER_PENDING) return `${fiber.name}: ${pendingDiagnostic(fiber)}`
-    return `${fiber.name}: inactive fiber state ${String(fiber.state)}`
-  })
+  const diagnostics = inactive
+    .map((fiber) => `${fiber.name}: ${inactiveDiagnostic(fiber)}`)
   throw new Error(`Repository composition did not activate:\n${diagnostics.join('\n')}`)
 }
 
