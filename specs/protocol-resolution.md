@@ -14,7 +14,7 @@ Protocol implementations are Cordis plugins. This Spec defines the additional ve
 
 ## Protocol implementation contract
 
-A Protocol plugin must expose enough stable metadata to identify:
+A Protocol implementation must expose enough stable metadata to identify:
 
 - the LabourChain Protocol identity it implements;
 - the Protocol version it implements.
@@ -43,9 +43,9 @@ Resolution must not silently fall back to:
 
 ## Cordis integration
 
-Protocol implementations are loaded, scoped and disposed through Cordis.
+Protocol implementations are Cordis plugins and are loaded, scoped and disposed through Cordis.
 
-Repository must not create a separate Protocol Plugin Manager or lifecycle system. Any lookup/index used to resolve loaded Protocol implementations is runtime support for LabourChain semantics and must remain integrated with Cordis-loaded plugins.
+Repository must not create a separate Protocol implementation manager or lifecycle system. Any lookup/index used to resolve loaded Protocol implementations is runtime support for LabourChain semantics and must remain integrated with Cordis-loaded plugins.
 
 ## Core boundary
 
