@@ -4,7 +4,10 @@ import type { JournalRecord } from './record-journal.ts'
 export const MEMBER_PROTOCOL_NAME = 'member.identity' as const
 export const MEMBER_PROTOCOL_VERSION = '0.1.0' as const
 export const MEMBER_PROTOCOL_REFERENCE = `${MEMBER_PROTOCOL_NAME}@${MEMBER_PROTOCOL_VERSION}` as const
-export const MEMBER_SERVICE = MEMBER_PROTOCOL_NAME
+export const MEMBER_PROTOCOL_SERVICE = `protocol:${MEMBER_PROTOCOL_REFERENCE}` as const
+
+export const CORE_ENTITY_PROTOCOL_SERVICE = 'protocol:core.entity@0.1.0' as const
+export const CORE_RECORD_PROTOCOL_SERVICE = 'protocol:core.record@0.1.0' as const
 
 const DIGEST_RE = /^[0-9a-f]{64}$/u
 
@@ -27,11 +30,13 @@ export interface CoreRecordProtocolService {
 }
 
 /**
- * Runtime identity supplied by the host after resolving and verifying the
- * exact Protocol descriptor. ProtocolHash cannot be embedded in the artifact
- * that it hashes, so the host must supply it when mounting the implementation.
+ * Host-supplied identity for the exact verified Protocol implementation being
+ * mounted. ProtocolHash cannot be embedded in the artifact that it hashes.
+ *
+ * This is intentionally narrow until core-protocols #31 fixes the generic Host
+ * mount-config contract.
  */
-export interface MemberProtocolRuntimeConfig {
+export interface MemberProtocolMountConfig {
   readonly protocolHash: string
 }
 
@@ -87,15 +92,15 @@ export class MemberConflictError extends MemberError {
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
-    'core.entity': CoreEntityProtocolService
-    'core.record': CoreRecordProtocolService
-    'member.identity': MemberIdentityService
+    'protocol:core.entity@0.1.0': CoreEntityProtocolService
+    'protocol:core.record@0.1.0': CoreRecordProtocolService
+    'protocol:member.identity@0.1.0': MemberIdentityService
   }
 }
 
-function requireProtocolHash(config: MemberProtocolRuntimeConfig): string {
+function requireProtocolHash(config: MemberProtocolMountConfig): string {
   if (!config || typeof config.protocolHash !== 'string' || !DIGEST_RE.test(config.protocolHash)) {
-    throw new MemberProtocolConfigError('member.identity requires the exact resolved ProtocolHash.')
+    throw new MemberProtocolConfigError('member.identity requires the exact resolved ProtocolHash from the Host.')
   }
   return config.protocolHash
 }
@@ -120,9 +125,11 @@ function memberView(identity: string, establishmentRecordId: string): MemberView
 }
 
 /**
- * Journal-backed current Member projection for the minimum member.identity
- * Protocol. The journal remains the durable fact source; the in-memory map is
- * replaceable and rebuilt from accepted Records.
+ * Journal-backed current Member projection for member.identity.
+ *
+ * The durable Record journal remains the fact source. This in-memory map is a
+ * replaceable projection and is rebuilt whenever absence would authorize a new
+ * Member establishment.
  */
 export class MemberIdentityService {
   private readonly members = new Map<string, string>()
@@ -156,8 +163,8 @@ export class MemberIdentityService {
     return this.serial(async () => {
       const validated = this.validateEstablishment(record)
 
-      // Another producer may have durably accepted a Member establishment
-      // since this projection was built. Refresh before authorizing a new one.
+      // Durable facts may have changed outside this projection. Refresh before
+      // absence is used to authorize a new establishment.
       await this.rebuild()
 
       const existing = this.members.get(validated.createdBy)
@@ -174,7 +181,7 @@ export class MemberIdentityService {
   async requireMember(identity: unknown): Promise<MemberView> {
     let validatedIdentity: string
     try {
-      validatedIdentity = this.ctx['core.entity'].validateEntityPublicKey(identity)
+      validatedIdentity = this.ctx[CORE_ENTITY_PROTOCOL_SERVICE].validateEntityPublicKey(identity)
     } catch (cause) {
       throw new MemberEstablishmentError('Member identity is not a valid Core EntityPublicKey.', { cause })
     }
@@ -201,7 +208,7 @@ export class MemberIdentityService {
   private validateEstablishment(value: unknown): CoreRecordValue {
     let record: CoreRecordValue
     try {
-      record = this.ctx['core.record'].validateRecord(value)
+      record = this.ctx[CORE_RECORD_PROTOCOL_SERVICE].validateRecord(value)
     } catch (cause) {
       throw new MemberEstablishmentError('Invalid Core Record for member.identity establishment.', { cause })
     }
@@ -214,14 +221,14 @@ export class MemberIdentityService {
     }
 
     try {
-      this.ctx['core.entity'].validateEntityPublicKey(record.createdBy)
+      this.ctx[CORE_ENTITY_PROTOCOL_SERVICE].validateEntityPublicKey(record.createdBy)
     } catch (cause) {
       throw new MemberEstablishmentError('Member establishment author is not a valid Core EntityPublicKey.', { cause })
     }
 
     let signatureValid: boolean
     try {
-      signatureValid = this.ctx['core.record'].verifySignature(record)
+      signatureValid = this.ctx[CORE_RECORD_PROTOCOL_SERVICE].verifySignature(record)
     } catch (cause) {
       throw new MemberEstablishmentError('Unable to verify Member establishment signature.', { cause })
     }
@@ -240,13 +247,26 @@ export class MemberIdentityService {
   }
 }
 
-/** Cordis namespace-plugin metadata for the member.identity Protocol. */
-export const name = MEMBER_PROTOCOL_NAME
-export const inject = ['core.entity', 'core.record', 'recordJournal']
+export const MEMBER_PROTOCOL_INJECT = Object.freeze([
+  CORE_ENTITY_PROTOCOL_SERVICE,
+  CORE_RECORD_PROTOCOL_SERVICE,
+  'recordJournal',
+] as const)
 
-export async function apply(ctx: Context, config: MemberProtocolRuntimeConfig): Promise<void> {
-  const protocolHash = requireProtocolHash(config)
-  const service = new MemberIdentityService(ctx, protocolHash)
-  await service.rebuild()
-  ctx.provide(MEMBER_SERVICE, service)
+/**
+ * Create the Cordis object Plugin that is the runtime implementation of the
+ * member.identity Protocol. The artifact entry re-exports only this object as
+ * the named `plugin` export required by core-protocols #31.
+ */
+export function createMemberProtocolPlugin() {
+  return {
+    name: MEMBER_PROTOCOL_REFERENCE,
+    inject: [...MEMBER_PROTOCOL_INJECT],
+    async apply(ctx: Context, config: MemberProtocolMountConfig): Promise<void> {
+      const protocolHash = requireProtocolHash(config)
+      const service = new MemberIdentityService(ctx, protocolHash)
+      await service.rebuild()
+      ctx.provide(MEMBER_PROTOCOL_SERVICE, service)
+    },
+  }
 }
