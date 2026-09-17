@@ -228,6 +228,11 @@ test('fails closed for wrong protocol identity, signature, payload, and Entity i
 test('fails startup when the Host does not supply an exact ProtocolHash', async () => {
   await withDirectory(async (directory) => {
     await assert.rejects(
+      memberIdentityPlugin.apply({} as Context, { protocolHash: 'not-a-hash' }),
+      MemberProtocolConfigError,
+    )
+
+    await assert.rejects(
       createRepositoryNode({
         plugins: [
           { plugin: memberIdentityPlugin, config: { protocolHash: 'not-a-hash' } },
@@ -236,11 +241,6 @@ test('fails startup when the Host does not supply an exact ProtocolHash', async 
           { plugin: RecordJournalService, config: { directory } },
         ],
       }),
-      (error: unknown) => {
-        assert.ok(error instanceof Error)
-        assert.ok(error.cause instanceof MemberProtocolConfigError)
-        return true
-      },
     )
   })
 })
