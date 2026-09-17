@@ -5,28 +5,49 @@
 - **Requirements:** [`../docs/requirements.md`](../docs/requirements.md)
 - **Architecture:** [`../docs/architecture.md`](../docs/architecture.md)
 - **Umbrella:** [`repository-mvp.md`](./repository-mvp.md)
+- **Member dependency:** [`member.md`](./member.md)
 
 ## Purpose
 
 This Spec defines the stable Repository capability for establishing and loading a Repo.
 
-A Repo is a LabourChain warehouse identity used to preserve Assets and participate in contribution confirmation. This Spec does not define membership behavior beyond the initial operator relationship; membership is covered by [`membership.md`](./membership.md).
+A Repo is a LabourChain warehouse identity used to preserve Assets and participate in contribution confirmation. Repo behavior is composed by protocols over one Core Entity identity rather than fixed into a single Repo object schema.
 
 ## Core identity boundary
 
 Repo identity reuses Core `EntityPublicKey` semantics. Repository does not introduce a second Repo identifier format, derive identity from a database row, or extend the Core `Entity` object with Repository fields.
 
-A Repo is a higher-level domain fact that references an `EntityPublicKey` as its stable identity.
-
 ```text
-EntityPublicKey
+core.entity / EntityPublicKey
     ↓
 Repo identity
+    ├─ repo protocol
+    ├─ asset-related protocols
+    ├─ membership / contribution protocols
+    └─ other protocols...
 ```
 
 Identity/key-pair generation and secret-key custody are Runtime/signer concerns. This capability validates and consumes a Repo identity; it does not define a second key-management system.
 
 Core `Entity.introducedBy` is not the Repo operator relation. It must not be interpreted as ownership, membership, or Repository authorization.
+
+## Member dependency
+
+A Repo establishment actor must satisfy the Member capability defined in [`member.md`](./member.md).
+
+`Member` is the human-participant protocol/implementation term. `Worker` may still describe the labour subject conceptually, but Repo APIs must not accept a generic runtime/process worker merely because of naming overlap.
+
+Repo establishment therefore depends on two distinct identities/capabilities:
+
+```text
+establishing Member
+    = Entity identity satisfying Member protocol
+
+Repo
+    = Entity identity receiving Repo protocol semantics
+```
+
+For a collective Repo these identities may differ. For a Member-scoped Repo they may be the same Entity identity/keypair.
 
 ## Establishment Record
 
@@ -44,26 +65,32 @@ The enclosing Record supplies the actor source:
 
 ```text
 Record.createdBy
-= establishing Worker
+= establishing Member identity
+
+Repo establishment protocol interpretation:
+Record.createdBy
 = initial MVP operator
 
 Record.data.repo
 = stable Repo EntityPublicKey
 ```
 
-The operator is therefore not duplicated inside `Record.data`. The establishment Record is the domain source for both the Repo identity and its initial operator relationship.
+`Record.createdBy` does not universally mean operator. The Repo establishment Protocol assigns that domain meaning for this Record type.
+
+The operator is not duplicated inside `Record.data`. The establishment Record is the domain source for the initial operator relationship.
 
 The exact Protocol package name and historical-resolution mechanism are not fixed here; they must follow the repository-wide Protocol-resolution decision rather than creating a one-off naming model in this Spec.
 
 ## Establishment
 
-Any Worker may establish a Repo.
+Any valid Member may establish a Repo.
 
 Repo establishment must:
 
+- require the establishing identity to satisfy the Member capability;
 - accept or obtain a valid Core `EntityPublicKey` for the Repo;
-- validate an establishment Record whose `createdBy` is the establishing Worker and whose payload names the Repo identity;
-- make exactly that Worker the single MVP operator;
+- validate an establishment Record whose `createdBy` is the establishing Member and whose payload names the Repo identity;
+- interpret that Member as the single initial MVP operator under Repo establishment Protocol semantics;
 - durably accept the establishment Record into the configured Record ingress/journal before reporting the Repo established;
 - make the established Repo loadable again by its stable identity after restart;
 - fail on a conflicting already-accepted or already-chain-confirmed establishment of the same Repo identity rather than silently replacing its operator;
@@ -76,11 +103,27 @@ establishRepo(establishmentRecord)
 loadRepo(repoIdentity)
 ```
 
-A higher-level caller/signer may construct and sign the establishment Record from a Worker identity and Repo identity. Signing UX, secret-key custody and key generation are outside this capability.
+A higher-level caller/signer may construct and sign the establishment Record from a Member identity and Repo identity. Signing UX, secret-key custody and key generation are outside this capability.
+
+## Same-identity Member Repo
+
+A Member may compose Repo capability on the same Core Entity identity/keypair:
+
+```text
+Entity K
+├─ member.*
+└─ repo.*
+```
+
+This is protocol composition, not a nested `PersonalRepo` entity and not a second identity.
+
+Such a Repo may temporarily gather Records/Assets that have not entered a collective Repo. This association does not itself define ownership, private-property status, exclusivity, transfer rights or economic entitlement.
+
+LabourFlow may build a personal product experience on top of this generic composition, but the underlying Repo semantics remain the same.
 
 ## Operator
 
-The operator is the Worker recorded as `createdBy` on the Repo establishment Record.
+The initial operator is the Member recorded as `createdBy` on the Repo establishment Record under the establishment Protocol semantics.
 
 Only this initial operator relationship exists in the MVP. There is no separate mutable `operator` field or provider-owned operator row that can override the establishment Record.
 
@@ -155,17 +198,16 @@ This Spec does not define:
 
 - generic Entity registration/admission;
 - Repo key generation or secret-key custody;
+- `member.profile` schema/UX;
+- ownership or private-property semantics;
 - operator transfer;
 - Block packing or chain selection;
-- Personal Repo creation or lifecycle;
-- member add/remove behavior;
+- Repo member add/remove behavior;
 - Asset contribution;
 - Asset storage format;
 - Project or Board organization;
 - HTTP routes or UI;
 - a Repository-domain canonical Record store or chain database.
-
-Personal Repo belongs to LabourFlow and may reuse generic LabourChain protocols without becoming a special Repository mode.
 
 ## Failure model
 
@@ -173,8 +215,10 @@ Consumers must be able to distinguish at least:
 
 - Repo not found;
 - Repo already established / identity conflict;
-- invalid Repo or Worker identity according to Core identity representation;
+- establishing identity is not a valid Member;
+- invalid Repo or Member identity according to Core identity representation;
 - invalid or rejected establishment Record;
+- required Member or Repo Protocol semantics unavailable;
 - durable Record ingress/journal unavailable or failed;
 - chain-confirmation status unavailable when explicitly requested;
 - Runtime lookup-index/provider failure.
@@ -183,8 +227,9 @@ Consumers must be able to distinguish at least:
 
 Tests must demonstrate that:
 
-- a valid establishment Record can establish a Repo whose identity is a Core `EntityPublicKey`;
-- the establishment Record's `createdBy` is the single MVP operator;
+- a valid Member can establish a Repo whose identity is a Core `EntityPublicKey`;
+- a generic/non-Member Entity identity cannot establish a Repo through the human Member path;
+- the establishment Record's `createdBy` is interpreted by the Repo establishment Protocol as the single initial MVP operator;
 - the exact establishment Record is durably accepted before establishment succeeds;
 - the same Repo can be loaded again by stable identity after restart;
 - Repo identity and operator can be recovered from the durable Record journal even if the lookup index is rebuilt;
@@ -192,5 +237,6 @@ Tests must demonstrate that:
 - stale/missing Runtime index state cannot replace the establishment Record as the domain source;
 - provider-native storage identifiers do not replace Repo identity;
 - `Entity.introducedBy` is not used as the operator relation;
-- accepted/pending-chain and block-confirmed status are not conflated;
-- Personal Repo behavior and generic Entity admission are not introduced by this capability.
+- the same Entity identity can compose both Member and Repo protocols without creating a second keypair;
+- same-identity Member/Repo composition does not imply ownership/private-property semantics;
+- accepted/pending-chain and block-confirmed status are not conflated.
