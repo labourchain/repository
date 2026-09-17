@@ -88,7 +88,7 @@ Cordis plugins 不按照 CRUD 操作或单个 Requirement 机械拆分。
 
 拆分主要服从协议边界、版本边界和生命周期。一起升级、一起加载、一起失效且没有独立运行价值的紧密协议可以由同一个 Cordis plugin 实现；能够被其他产品独立复用的协议应避免与 Repository 产品运行时绑定。
 
-例如 Asset 和 Asset-Record relation 属于可能被 LabourFlow Personal Repo 复用的通用能力，不应要求调用方加载完整 Repository node 才能使用。
+Member、Repo、Asset 和 Asset-Record relation 都应首先按各自协议边界提供可组合能力。LabourFlow 等上层产品可以只加载所需协议，不应为了使用同 identity 的 Member + Repo 能力而加载完整 Repository 产品运行时。
 
 Contribution history 属于事实的 view / projection。它可以由插件提供查询、索引或缓存能力，但不需要为了概念完整性固定建立一个 History Protocol。
 
@@ -130,7 +130,8 @@ flowchart LR
     subgraph Node["Repository Node"]
         Bootstrap["Bootstrap"]
         Cordis["Cordis"]
-        RepoProtocols["Repository Protocol implementations"]
+        MemberProtocols["Member Protocol implementations"]
+        RepoProtocols["Repo Protocol implementations"]
         Journal["Durable Record ingress / journal"]
         ChainState["Chain-state / Block-confirmation adapter"]
         Providers["Asset / index / staging providers"]
@@ -145,6 +146,7 @@ flowchart LR
     end
 
     Bootstrap --> Cordis
+    Cordis --> MemberProtocols
     Cordis --> RepoProtocols
     Cordis --> Journal
     Cordis --> ChainState
@@ -155,6 +157,8 @@ flowchart LR
     Board --> Cordis
     Client --> Cordis
 
+    MemberProtocols --> Protocol
+    MemberProtocols --> Entity
     RepoProtocols --> Protocol
     RepoProtocols --> Entity
     RepoProtocols --> Record
@@ -164,26 +168,33 @@ flowchart LR
     ChainState --> Block
 ```
 
-Repository 不重新定义 Core 已有的 Protocol、Record、Entity identity、signature 或 Block 语义。Asset、membership、confirmation、Repo establishment 和 contribution relation 等领域语义由各自适用的上层 Protocol 定义。
+Repository 不重新定义 Core 已有的 Protocol、Record、Entity identity、signature 或 Block 语义。Member、Repo、Asset、membership、confirmation、Repo establishment 和 contribution relation 等领域语义由各自适用的上层 Protocol 定义。
 
-LabourFlow 中的 Personal Repo 是 Flow 的产品模块。它可以复用通用 Asset、Asset-Record relation 等 Protocol implementations，但不是 Repository package 的特殊模式，也不要求运行完整 Repository bootstrap。
+Member 与 Repo 都是同一类组合原则：先有 Core Entity identity，再通过协议获得领域语义。一个 Entity identity/keypair 可以同时满足 Member 与 Repo 协议；这种组合不产生第二个 identity，也不自动产生所有权或私人财产语义。
+
+LabourFlow 可以在同 identity Member + Repo 协议组合之上提供面向个人的产品体验，但它不需要创建一个嵌套 `PersonalRepo` entity，也不改变底层 Repo 协议。
 
 ## Repo establishment 数据流
 
-Repo 是引用 Core `EntityPublicKey` 的上层领域事实，不继承或扩展 Core `Entity` 对象。
+Repo 是以 Core `EntityPublicKey` 为身份锚点的协议组合，不继承或扩展 Core `Entity` 对象。
+
+Repo establishment 的发起方必须是一个已经满足 Member 协议的 Entity identity。集体 Repo 可以使用另一个独立的 Repo Entity identity；Member-scoped Repo 也允许 Member 与 Repo 使用同一个 identity/keypair。
 
 MVP 的 Repo establishment 使用一个 establishment Record 表达最小事实：
 
 ```text
 Record.createdBy
-= establishing Worker
+= establishing Member identity
+
+Repo establishment Protocol interpretation:
+Record.createdBy
 = initial Repo operator
 
 Record.data.repo
 = Repo EntityPublicKey
 ```
 
-因此 operator 不需要在 Repo payload 和 Runtime provider 中再建立第二个规范来源。Core `Entity.introducedBy` 也不用于表达 operator、ownership 或 membership。
+`Record.createdBy` 本身不普遍等于 operator；是 Repo establishment Protocol 为这一类 Record 赋予 initial operator 语义。因此 operator 不需要在 Repo payload 和 Runtime provider 中再建立第二个规范来源。Core `Entity.introducedBy` 也不用于表达 operator、ownership 或 membership。
 
 一个 establishment Record 可以处于两个不同的确认层级：
 
@@ -201,21 +212,24 @@ block-confirmed
 
 ```mermaid
 sequenceDiagram
-    participant Worker as Worker / Client
+    participant Member as Member / Client
     participant Cordis as Cordis
+    participant MemberProtocol as Member Protocol capability
     participant Repo as Repo Protocol capability
     participant Journal as Durable Record journal
     participant Index as Runtime Repo index
     participant Chain as Chain-state adapter
 
-    Worker->>Cordis: establish Repo
+    Member->>Cordis: establish Repo
+    Cordis->>MemberProtocol: require establishing Member
+    MemberProtocol-->>Cordis: valid Member identity
     Cordis->>Repo: validate establishment Record
     Repo->>Journal: durably accept establishment Record
     Journal-->>Repo: accepted RecordId
     Repo->>Index: index Repo identity -> RecordId
-    Repo-->>Worker: Repo established
+    Repo-->>Member: Repo established
 
-    Worker->>Cordis: load Repo identity
+    Member->>Cordis: load Repo identity
     Cordis->>Repo: resolve Repo
     Repo->>Index: lookup RecordId
     Repo->>Journal: read accepted establishment Record
@@ -224,14 +238,14 @@ sequenceDiagram
         Repo->>Chain: lookup RecordId inclusion
         Chain-->>Repo: pending or block-confirmed
     end
-    Repo-->>Worker: Repo + derived operator/status
+    Repo-->>Member: Repo + derived operator/status
 ```
 
-Runtime Repo index 只是加速 lookup 的可替换数据。operator 始终来自 establishment Record 的 `createdBy`。缺失或陈旧的 index 不能创造第二个 operator；index 可以通过 durable journal，以及在可用时通过 chain state 重新对账。
+Runtime Repo index 只是加速 lookup 的可替换数据。initial operator 来自 establishment Protocol 对 establishment Record `createdBy` 的解释。缺失或陈旧的 index 不能创造第二个 operator；index 可以通过 durable journal，以及在可用时通过 chain state 重新对账。
 
 ## Contribution 数据流
 
-Repo contribution 不是普通 CRUD。Worker 已经在 Repository 之外产生 Record，并可形成或修改 Asset；Repository 接收的是 Asset contribution，并参与该劳动的 Repo 侧确证。
+Repo contribution 不是普通 CRUD。Member 已经在 Repository 之外产生 Record，并可形成或修改 Asset；Repository 接收的是 Asset contribution，并参与该劳动的 Repo 侧确证。
 
 当前流程为：
 
@@ -247,9 +261,9 @@ sequenceDiagram
 
     Consumer->>Cordis: Asset + Record + relations
     Cordis->>Protocol: execute applicable protocol semantics
-    Protocol->>Protocol: check membership and validity
+    Protocol->>Protocol: check Member membership and validity
     Protocol->>Stage: stage contribution
-    Protocol->>Protocol: verify required Worker and Repo confirmations
+    Protocol->>Protocol: verify required Member and Repo confirmations
     Protocol->>Journal: durably accept resulting Records
     Journal-->>Protocol: accepted/pending-chain
     Protocol->>Assets: finalize durable accepted Asset
@@ -331,12 +345,14 @@ Architecture 当前不锁定：
 
 - 具体 npm package 名称和 monorepo 目录；
 - Protocol metadata 最终字段；
+- `member.profile` 的完整字段、更新和隐私模型；
 - durable Record journal 的最终 package/service/API 形式；
 - chain-state adapter 的最终 package/service/API 形式；
 - MongoDB、PostgreSQL、filesystem 等持久化实现；
 - HTTP / REST / WebSocket 接口；
 - UI；
 - 高级 ACL 和角色体系；
+- 所有权、私人财产和收益分配协议；
 - 搜索引擎；
 - Project / Board 业务；
 - Block packing 内部实现；

@@ -14,6 +14,7 @@ The Specs are engineering projections of the current Requirements and Architectu
 | Spec | Stable capability boundary |
 | --- | --- |
 | [`bootstrap.md`](./bootstrap.md) | executable bootstrap and Cordis runtime integration |
+| [`member.md`](./member.md) | human Member identity capability over Core Entity identity |
 | [`repo.md`](./repo.md) | Repo establishment, stable identity, operator and loading |
 | [`membership.md`](./membership.md) | operator-controlled Repo contribution membership |
 | [`protocol-resolution.md`](./protocol-resolution.md) | exact Protocol identity/version resolution |
@@ -29,12 +30,13 @@ A usable Repository MVP is formed by a configured Cordis runtime that satisfies 
 
 ```text
 start Repository node
+  -> recognize/load human Member identity
   -> establish or load Repo
   -> manage contribution membership
   -> resolve exact Protocol versions
-  -> receive Asset + Worker-produced Record + relations
+  -> receive Asset + Member-produced Record + relations
   -> validate required Protocol semantics
-  -> satisfy Worker and Repo confirmations
+  -> satisfy Member and Repo confirmations
   -> durably accept exact resulting Records
   -> durably retrieve accepted Asset
   -> report Repository COMMITTED / accepted
@@ -54,13 +56,21 @@ Repository does not create a second Runner, Hoster, Plugin Manager, Service Cont
 
 Protocol implementations, Runtime providers, projections and adapters are all composed through Cordis. A Protocol implementation is a Cordis plugin that implements one stable LabourChain Protocol identity/version.
 
+### Member and Repo reuse Core identity
+
+Member and Repo do not create separate identity namespaces. Both are protocol compositions over Core `EntityPublicKey` identities.
+
+`Member` is the program/protocol term for a human participant. `Worker` remains a conceptual labour-subject term where useful and must not be confused with runtime/process worker types.
+
+A Member may compose Repo capability on the same Entity identity/keypair. This composition does not itself define ownership, private-property status or economic rights.
+
 ### Historical Protocol semantics are exact
 
 Historical facts must be interpreted by the exact Protocol identity/version they reference. Missing versions fail explicitly. They must not silently fall back to `latest` or another installed version.
 
-### Record remains a Worker fact
+### Record remains a labour fact
 
-Record is a Worker-produced LabourChain fact with stable identity/signature semantics supplied by Core. Repository does not turn Record into a Repository-owned domain object or maintain a canonical `repo.records[]` collection.
+Record is produced/signed by the Member acting as labour subject, with stable identity/signature semantics supplied by Core. Repository does not turn Record into a Repository-owned domain object or maintain a canonical `repo.records[]` collection.
 
 ### Durable Record ingress is not Block confirmation
 
@@ -109,7 +119,9 @@ Block-confirmation status is reconciled separately from chain state when that ca
 
 ### Product boundaries remain external
 
-Personal Repo belongs to LabourFlow. RawEntry recognition and Record drafting belong to LabourFlow or another upper-layer product. Project organization and LabourBoard planning, analysis and presentation remain outside Repository.
+LabourFlow may provide a personal product experience over same-identity Member + Repo protocol composition. RawEntry recognition and Record drafting belong to LabourFlow or another upper-layer product. Project organization and LabourBoard planning, analysis and presentation remain outside Repository.
+
+The personal product experience must not turn Repo association into an implicit private-property model.
 
 ## Cross-Spec relationships
 
@@ -118,6 +130,11 @@ The capability Specs depend on each other through contracts rather than ownershi
 ```text
 bootstrap
   -> provides Cordis runtime
+
+member
+  -> uses Core EntityPublicKey
+  -> identifies a human Member
+  -> may compose Repo on the same identity/keypair
 
 durable Record ingress / journal
   -> Runtime/composition dependency
@@ -128,13 +145,14 @@ chain-state / Block-confirmation access
   -> tells whether RecordIds are included in accepted Blocks
 
 repo
-  -> uses Core EntityPublicKey + establishment Record
+  -> uses Core EntityPublicKey + Member capability + establishment Record
+  -> requires establishment actor to be a Member
   -> persists accepted establishment Record through durable ingress
-  -> derives initial operator from Record.createdBy
+  -> derives initial operator from establishment Protocol interpretation of Record.createdBy
 
 membership
-  -> uses Repo/operator to define contribution eligibility
-  -> membership facts follow the same accepted-vs-packed distinction
+  -> relates Members to Repo contribution eligibility
+  -> uses Repo/operator to define mutation authority
 
 protocol-resolution
   -> resolves exact historical Protocol implementations
@@ -159,13 +177,14 @@ A capability may be implemented by one or more Cordis plugins. These Spec files 
 Implementation must:
 
 - reuse Core Protocol, Entity, Record, signature and Block semantics rather than duplicating them;
+- treat Member and Repo as protocol-composed identities, not fixed provider-owned object schemas;
 - persist exact accepted Records through an explicit Runtime/composition dependency rather than a Repository-domain `records[]` model;
 - distinguish durable pending-chain acceptance from actual Block confirmation;
 - fail closed when required durable ingress, Core primitive or exact Protocol implementation is unavailable;
 - keep concrete database, filesystem and transport choices behind Runtime/plugin boundaries;
 - avoid process-global mutable Repository state;
 - acquire and dispose plugin-owned resources through Cordis lifecycle ownership;
-- avoid prematurely introducing complex ACL, search, synchronization, consensus, settlement or private-proof systems.
+- avoid prematurely introducing ownership/property-right semantics, complex ACL, search, synchronization, consensus, settlement or private-proof systems.
 
 Exact TypeScript names, package names, metadata field names, database schemas, HTTP routes and UI are not fixed by the MVP Specs unless a later accepted Requirement or Architecture decision requires them.
 
@@ -174,16 +193,18 @@ Exact TypeScript names, package names, metadata field names, database schemas, H
 In addition to the acceptance tests defined by each capability Spec, the MVP integration path must demonstrate that:
 
 1. a Repository node can start with its configured Cordis plugins;
-2. a Worker can establish a Repo from an exact establishment Record and reload it after restart;
-3. the operator can establish persistent membership;
-4. a member contribution resolves the exact required Protocol versions;
-5. valid confirmations, durable Record ingress and durable Asset retrieval produce Repository `COMMITTED` / accepted state;
-6. the accepted Asset remains retrievable after restart;
-7. an interrupted contribution recovers without false acceptance or duplicate durable Record acceptance;
-8. a Repository-committed contribution appears in contribution history as pending-chain before Block inclusion;
-9. when chain-state access reports Block inclusion, the same history entry can be represented as block-confirmed without changing its Repository acceptance identity;
-10. the same flow does not require Personal Repo, Project or Board concepts;
-11. plugin activation/disposal does not leak or duplicate owned resources.
+2. a Core Entity identity can satisfy the Member capability without receiving a second Member ID;
+3. a valid Member can establish a Repo from an exact establishment Record and reload it after restart;
+4. the same Entity identity may compose Member + Repo capability without creating a second keypair or ownership semantics;
+5. the operator can establish persistent Repo membership;
+6. a Member contribution resolves the exact required Protocol versions;
+7. valid confirmations, durable Record ingress and durable Asset retrieval produce Repository `COMMITTED` / accepted state;
+8. the accepted Asset remains retrievable after restart;
+9. an interrupted contribution recovers without false acceptance or duplicate durable Record acceptance;
+10. a Repository-committed contribution appears in contribution history as pending-chain before Block inclusion;
+11. when chain-state access reports Block inclusion, the same history entry can be represented as block-confirmed without changing its Repository acceptance identity;
+12. Project and Board concepts are not required for the Repository MVP flow;
+13. plugin activation/disposal does not leak or duplicate owned resources.
 
 An in-memory-only path may be used for isolated unit or contract tests but does not by itself satisfy the usable Repository MVP because restart and recovery behavior are part of the product requirements.
 
@@ -193,7 +214,9 @@ Block packing itself is outside this Repository MVP. Integration tests may use a
 
 The Spec set does not require:
 
-- Personal Repo product behavior;
+- a complete `member.profile` schema or profile product UX;
+- a separate Personal Repo entity/keypair;
+- private-property ownership semantics;
 - Project or Board planning, analysis or presentation;
 - public/common usage accounting or revenue distribution;
 - general Private Repo permission systems;
@@ -208,7 +231,7 @@ The Spec set does not require:
 
 ## Implementation completion
 
-Repository MVP implementation is complete when the configured bootstrap and Cordis plugin set satisfy this umbrella Spec and each applicable capability Spec, the durable Record ingress path demonstrates restart/recovery behavior, pending-chain and Block-confirmed status are not conflated, exact Protocol-version resolution is verified, meaningful tests pass, and build/package checks succeed on supported Node versions.
+Repository MVP implementation is complete when the configured bootstrap and Cordis plugin set satisfy this umbrella Spec and each applicable capability Spec, Member/Repo identity composition is preserved, the durable Record ingress path demonstrates restart/recovery behavior, pending-chain and Block-confirmed status are not conflated, exact Protocol-version resolution is verified, meaningful tests pass, and build/package checks succeed on supported Node versions.
 
 ## Spec evolution
 
