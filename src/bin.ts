@@ -5,37 +5,38 @@ import { createRepositoryNode } from './bootstrap.ts'
 const signals = ['SIGINT', 'SIGTERM'] as const
 
 async function main(): Promise<void> {
-  const node = await createRepositoryNode()
-
-  const shutdownComplete = new Promise<void>((resolve) => {
-    let shuttingDown = false
-
-    const shutdown = async () => {
-      if (shuttingDown) return
-      shuttingDown = true
-
+  let requestShutdown!: () => void
+  let shutdownRequested = false
+  const shutdown = new Promise<void>((resolve) => {
+    requestShutdown = () => {
+      if (shutdownRequested) return
+      shutdownRequested = true
       for (const signal of signals) {
-        process.off(signal, shutdown)
+        process.off(signal, requestShutdown)
       }
-
-      try {
-        await node.dispose()
-      } catch (error) {
-        console.error('Failed to dispose Repository node cleanly.', error)
-        process.exitCode = 1
-      } finally {
-        resolve()
-      }
-    }
-
-    for (const signal of signals) {
-      process.once(signal, shutdown)
+      resolve()
     }
   })
 
-  // Test runners may attach an IPC channel to observe deterministic readiness.
-  process.send?.('ready')
-  await shutdownComplete
+  for (const signal of signals) {
+    process.once(signal, requestShutdown)
+  }
+
+  try {
+    const node = await createRepositoryNode()
+
+    if (!shutdownRequested) {
+      // Test runners may attach an IPC channel to observe deterministic readiness.
+      process.send?.('ready')
+    }
+
+    await shutdown
+    await node.dispose()
+  } finally {
+    for (const signal of signals) {
+      process.off(signal, requestShutdown)
+    }
+  }
 }
 
 main().catch((error) => {
