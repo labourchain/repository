@@ -89,7 +89,32 @@ Protocol plugin 的具体 metadata 字段、发现形式和包命名在 Spec 阶
 
 例如 Asset 和 Asset-Record relation 属于可能被 LabourFlow Personal Repo 复用的通用能力，不应要求调用方加载完整 Repository node 才能使用。
 
-Contribution history 属于链上事实的 view / projection。它可以由插件提供查询、索引或缓存能力，但不需要为了概念完整性固定建立一个 History Protocol。
+Contribution history 属于事实的 view / projection。它可以由插件提供查询、索引或缓存能力，但不需要为了概念完整性固定建立一个 History Protocol。
+
+## Core、Record ingress 与链确证边界
+
+当前 LabourChain Core 提供 `core.plugin`、`core.record`、`core.entity`、`core.block` 等确定性协议原语。它们定义数据结构、身份表示、Record/Block 校验和密码学边界，但不因此成为一个固定的数据库、Record store、网络节点或 Repository 专用 commit service。
+
+Core 当前同时明确：Block Chain 表达 Record 被这条链收录和确证的顺序；Runtime arrival / queue order 不具有链确证语义。因此 Repository 不把“本地持久接收 Record”和“Record 已被 Block 确认”混成一个 canonical 状态。
+
+Repository node 需要区分两类运行能力：
+
+```text
+Durable Record ingress / journal
+    -> 持久接收已经完成领域校验和签名的 Records
+    -> 在 Block packing 之前跨重启保留 pending-chain Records
+    -> 为 Repository committed / accepted 提供 durable runtime boundary
+    -> 不宣称这些 Records 已经被链确证
+
+Chain-state / Block-confirmation access
+    -> 查询哪些 Records 已经被有效 Block 收录
+    -> 提供链确证顺序与 block reference
+    -> 用于状态升级、对账和 projection rebuild
+```
+
+二者可以由同一个未来 node/runtime 实现，也可以作为不同 Cordis providers 组合；Architecture 不锁定 package、数据库或网络实现。
+
+Repository 领域插件只消费这些能力，不通过 `repo.records[]`、general-purpose Repository Record database 或第二套链来替代它们。
 
 ## Repository 与其他 LabourChain 组件
 
@@ -102,21 +127,26 @@ flowchart LR
     end
 
     subgraph Node["Repository Node"]
-        Bootstrap["Bootstrap Protocol instance"]
+        Bootstrap["Bootstrap"]
         Cordis["Cordis"]
-        RepoPlugins["Repository-related Protocol plugins"]
-        Providers["Runtime / provider plugins"]
+        RepoPlugins["Repository Protocol plugins"]
+        Journal["Durable Record ingress / journal"]
+        ChainState["Chain-state / Block-confirmation adapter"]
+        Providers["Asset / index / staging providers"]
         Views["Projection / adapter plugins"]
     end
 
-    subgraph Core["LabourChain Core"]
-        Facts["Canonical facts"]
-        Commit["Commit"]
-        Block["Block packing"]
+    subgraph Core["LabourChain Core primitives"]
+        Plugin["Plugin identity / verification"]
+        Entity["Entity identity"]
+        Record["Record validation / identity"]
+        Block["Block validation / identity"]
     end
 
     Bootstrap --> Cordis
     Cordis --> RepoPlugins
+    Cordis --> Journal
+    Cordis --> ChainState
     Cordis --> Providers
     Cordis --> Views
 
@@ -124,17 +154,79 @@ flowchart LR
     Board --> Cordis
     Client --> Cordis
 
-    RepoPlugins --> Providers
-    RepoPlugins --> Facts
-    RepoPlugins --> Commit
-    Views --> Facts
-    Commit --> Facts
-    Facts --> Block
+    RepoPlugins --> Plugin
+    RepoPlugins --> Entity
+    RepoPlugins --> Record
+    RepoPlugins --> Journal
+    Views --> Journal
+    Views --> ChainState
+    ChainState --> Block
 ```
 
-Repository 不重新定义 Core 已有的 Record、Asset、identity、signature、confirmation、commit 或 block 语义。具体插件通过 Core 提供的协议与事实能力工作。
+Repository 不重新定义 Core 已有的 Plugin、Record、Entity identity、signature 或 Block 语义。Asset、membership、confirmation、Repo establishment 和 contribution relation 等领域语义由各自适用的上层 Protocol 定义。
 
 LabourFlow 中的 Personal Repo 是 Flow 的产品模块。它可以复用通用 Asset、Asset-Record relation 等 Protocol plugins，但不是 Repository package 的特殊模式，也不要求运行完整 Repository bootstrap。
+
+## Repo establishment 数据流
+
+Repo 是引用 Core `EntityPublicKey` 的上层领域事实，不继承或扩展 Core `Entity` 对象。
+
+MVP 的 Repo establishment 使用一个 establishment Record 表达最小事实：
+
+```text
+Record.createdBy
+= establishing Worker
+= initial Repo operator
+
+Record.data.repo
+= Repo EntityPublicKey
+```
+
+因此 operator 不需要在 Repo payload 和 Runtime provider 中再建立第二个规范来源。Core `Entity.introducedBy` 也不用于表达 operator、ownership 或 membership。
+
+一个 establishment Record 可以处于两个不同的确认层级：
+
+```text
+accepted/pending-chain
+    -> 已进入 durable Record journal
+    -> Repository 可以恢复并加载该 Repo
+
+block-confirmed
+    -> establishment Record 已被有效 Block 收录
+    -> 获得链确证状态
+```
+
+建立与重新加载的数据流为：
+
+```mermaid
+sequenceDiagram
+    participant Worker as Worker / Client
+    participant Cordis as Cordis
+    participant Repo as Repo Protocol capability
+    participant Journal as Durable Record journal
+    participant Index as Runtime Repo index
+    participant Chain as Chain-state adapter
+
+    Worker->>Cordis: establish Repo
+    Cordis->>Repo: validate establishment Record
+    Repo->>Journal: durably accept establishment Record
+    Journal-->>Repo: accepted RecordId
+    Repo->>Index: index Repo identity -> RecordId
+    Repo-->>Worker: Repo established
+
+    Worker->>Cordis: load Repo identity
+    Cordis->>Repo: resolve Repo
+    Repo->>Index: lookup RecordId
+    Repo->>Journal: read accepted establishment Record
+    Journal-->>Repo: establishment Record
+    opt chain confirmation status requested/available
+        Repo->>Chain: lookup RecordId inclusion
+        Chain-->>Repo: pending or block-confirmed
+    end
+    Repo-->>Worker: Repo + derived operator/status
+```
+
+Runtime Repo index 只是加速 lookup 的可替换数据。operator 始终来自 establishment Record 的 `createdBy`。缺失或陈旧的 index 不能创造第二个 operator；index 可以通过 durable journal，以及在可用时通过 chain state 重新对账。
 
 ## Contribution 数据流
 
@@ -148,20 +240,28 @@ sequenceDiagram
     participant Cordis as Cordis
     participant Protocol as Repository Protocol plugins
     participant Stage as Runtime staging provider
-    participant Core as Core / Commit
+    participant Assets as Asset provider
+    participant Journal as Durable Record journal
+    participant Chain as Chain-state adapter
 
-    Consumer->>Cordis: Asset + Record + relation
-    Cordis->>Protocol: execute applicable protocol version
-    Protocol->>Protocol: check membership and protocol validity
+    Consumer->>Cordis: Asset + Record + relations
+    Cordis->>Protocol: execute applicable protocol semantics
+    Protocol->>Protocol: check membership and validity
     Protocol->>Stage: stage contribution
     Protocol->>Protocol: verify required Worker and Repo confirmations
-    Protocol->>Core: accept / commit
-    Core-->>Protocol: committed
+    Protocol->>Journal: durably accept resulting Records
+    Journal-->>Protocol: accepted/pending-chain
+    Protocol->>Assets: finalize durable accepted Asset
+    Assets-->>Protocol: retrievable
     Protocol->>Stage: reconcile / clear runtime state
-    Protocol-->>Consumer: accepted contribution
+    Protocol-->>Consumer: Repository committed / accepted
+
+    Note over Journal,Chain: Later, outside Repository acceptance
+    Journal-->>Chain: Records become candidates for chain inclusion
+    Chain-->>Protocol: optional block-confirmed status
 ```
 
-Contribution 的协议语义由对应 Protocol plugin 定义；Cordis 负责运行这些插件，不额外引入一个把状态机写死的 Repository Runner。
+Contribution 的协议语义由对应 Protocol plugin 定义；Cordis 负责运行这些插件，不额外引入一个把状态机写死的 Repository Runner。Record ingress/journal 和 chain-state access 是可替换 Runtime 能力，不是 Repository 领域自己的第二套链。
 
 ## Contribution 状态
 
@@ -170,34 +270,53 @@ Contribution 的协议语义由对应 Protocol plugin 定义；Cordis 负责运�
 ```mermaid
 stateDiagram-v2
     [*] --> STAGED
-    STAGED --> CONFIRMED: required confirmations satisfied
-    CONFIRMED --> COMMITTED: accept / commit succeeds
-    COMMITTED --> PACKED: later block packing
+    STAGED --> CONFIRMED: required domain confirmations satisfied
+    CONFIRMED --> COMMITTED: durable Record ingress + accepted Asset durable
+    COMMITTED --> PACKED: related Records included in a valid Block
 ```
 
-`STAGED` 是运行时处理状态，不是链上规范事实。`CONFIRMED` 表示该 contribution 已满足适用协议要求的确认条件，但只有成功 commit 后才成为已接受的 `COMMITTED` contribution。
+`STAGED` 是临时运行时处理状态，不是已接受 contribution。
 
-`PACKED` 是后续 Core block packing 的结果，不属于 Repository 接受 contribution 的完成条件。
+`CONFIRMED` 表示 contribution 已满足适用协议要求的领域确认条件，但仍未达到 Repository acceptance。
 
-运行时可以持久保存 staging 以支持恢复，但持久化不会让 staging 变成 canonical fact。具体 durable staging、重试和 reconcile 机制在 Runtime provider 与 Spec 中确定。
+`COMMITTED` 是 Repository 的 durable acceptance 边界：所需 Records 已进入可跨重启恢复的 durable journal，accepted Asset 已可持久读取。此时相关 Records 可以仍处于 pending-chain，不能描述为已经获得 Block confirmation。
+
+`PACKED` 表示相关 Records 已被有效 Block 收录并获得链确证。它属于后续链运行过程，不是 Repository 对 contribution 返回 accepted 的前置条件。
 
 ## 数据与投影
 
-Repository 不以 service-owned state 复制链上事实。
+Repository 不以领域 service-owned state 复制链确证事实。
 
-Record 始终是 Worker 的链上劳动事实。Asset、Repo、成员关系、confirmation 和 contribution relation 的规范含义由各自适用的 Protocol 定义。Repository 插件只执行这些协议并提供仓库产品需要的能力。
+需要区分三类 Runtime 数据：
 
-Runtime 可以保存：
+```text
+1. durable pending/accepted journal
+   - 保存 Repository 已接受但可能尚未被 Block 收录的 exact Records
+   - 在其安全进入链或交给等价 durable node runtime 前不能任意丢弃
+   - 不是 Block confirmation
+
+2. staging
+   - contribution 处理中的临时/恢复状态
+   - 未达到 Repository acceptance
+
+3. index / cache / projection
+   - 查询与展示加速数据
+   - 可通过 journal + chain state 重建或对账
+```
+
+Runtime 还可以保存：
 
 - Asset payload 或其他协议允许的持久内容；
-- contribution staging；
-- Repo / Asset 查询索引；
+- Repo identity -> establishment RecordId 的查询索引；
+- Asset 查询索引；
 - contribution history projection；
 - cache 和其他可重建运行数据。
 
-其中 staging、index、projection 和 cache 都属于非规范运行数据。它们不能因为被持久化就成为链上事实。
+本地持久化不会使 pending Record 自动变成 Block-confirmed fact。相反，chain-state adapter 也不负责 Repo 领域语义；它只回答 Record 是否已被链收录等链状态问题。
 
-Contribution history 由链上与 Repo contribution 相关的 Records 和关系投影得到。Repository 不维护规范的 `repo.records[]`。
+Contribution history 可以同时展示 Repository committed/pending-chain 与 block-confirmed contributions，但必须明确区分状态。
+
+Repository 不维护一个将所有链 Records 归 Repository 所有的规范 `repo.records[]`。
 
 ## Cordis 生命周期
 
@@ -211,6 +330,8 @@ Architecture 当前不锁定：
 
 - 具体 npm package 名称和 monorepo 目录；
 - Protocol metadata 最终字段；
+- durable Record journal 的最终 package/service/API 形式；
+- chain-state adapter 的最终 package/service/API 形式；
 - MongoDB、PostgreSQL、filesystem 等持久化实现；
 - HTTP / REST / WebSocket 接口；
 - UI；
@@ -221,4 +342,4 @@ Architecture 当前不锁定：
 - 节点同步；
 - 私有证明、收益分配和结算机制。
 
-这些内容只有在 Requirement 明确进入范围后，才继续投影到 Design、Spec 和实现。
+这些内容只有在 Requirement 明确进入范围后，或现有 Requirement 的实现确实需要稳定的结构边界时，才继续投影到 Design、Spec 和实现。

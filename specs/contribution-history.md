@@ -10,17 +10,24 @@
 
 Repository exposes a view of labour related to accepted Repo contributions.
 
-Contribution history is derived from canonical Records, Assets, confirmations and contribution relations. It is not a canonical Repository-owned Record collection.
+Contribution history is a derived view. It does not create a canonical Repository-owned Record collection.
+
+The view may include both Repository-committed contributions that are still pending Block inclusion and contributions whose Records are already Block-confirmed. These statuses must remain distinguishable.
 
 ## History contract
 
-The capability must expose the labour associated with committed Repo contributions.
+The capability must expose the labour associated with Repo-accepted contributions and enough status to distinguish:
+
+```text
+pending-chain
+block-confirmed
+```
 
 Behavior is equivalent to a Repository contribution-history query rather than a general `listRecords()` store.
 
 The history view must only include contributions that reached the Repository acceptance boundary defined in [`contribution.md`](./contribution.md).
 
-## Canonical and derived data
+## Sources and derived data
 
 Repository must not introduce canonical:
 
@@ -32,33 +39,45 @@ getRecord(record)
 
 solely to support history queries.
 
-Record remains a Worker-produced on-chain fact.
+The history view derives from two explicit Runtime/chain sources:
 
-Runtime plugins may persist indexes, caches or projections that make contribution history efficient to query. These data must:
+```text
+durable Record journal
+    -> Repository accepted / pending-chain exact Records
 
-- remain distinguishable from canonical facts;
-- be repairable or rebuildable from canonical sources when the required chain-query capability is available;
+chain-state / Block-confirmation adapter
+    -> RecordId inclusion in accepted Blocks
+    -> block-confirmed status and chain position
+```
+
+Runtime plugins may persist indexes, caches or projections that make history efficient to query. These derived data must:
+
+- remain distinguishable from the durable journal and Block-confirmation evidence;
+- be repairable or rebuildable from the journal plus available chain state;
 - not silently alter the meaning of Records, Assets, confirmations or relations;
-- not become the source of truth merely because they are persisted.
+- not become authoritative merely because they are persisted.
 
 ## Query behavior
 
 The MVP must support viewing the Records and related contribution information needed to answer which accepted labour contributions are associated with a Repo.
 
+For each entry, the view must not claim `block-confirmed` unless the configured chain-state capability can support that conclusion.
+
+If chain confirmation cannot currently be queried, a Repository-committed contribution may still be shown as accepted/pending-chain. Unknown chain status must not be upgraded to confirmed by inference from local persistence.
+
 This Spec does not require advanced search, full-text indexing, analytics, pagination or Project/Board presentation.
 
-The exact shape of the returned view is not fixed until the available Core query contracts are stable, but it must preserve enough identity/reference information for consumers to relate the history entry back to its canonical facts.
+The exact presentation shape is not fixed, but it must preserve enough identity/reference information for consumers to relate a history entry back to its exact Records and Assets.
 
-## Recovery
+## Recovery and rebuild
 
-A crash after canonical contribution commit but before projection update must not permanently omit that contribution from history.
+A crash after Repository commit but before projection update must not permanently omit that contribution from history.
 
-The projection path must therefore be repairable through one or both of:
+The pending/accepted portion of the projection must be repairable from the durable Record journal and contribution correlation/index data.
 
-- replay/reconciliation from durable contribution correlation state;
-- rebuilding from canonical chain facts when the required query capability is available.
+When chain-state access is available, Block-confirmation status must be reconcilable from actual Block inclusion rather than from a stale local flag.
 
-Projection update failure must not roll back or reinterpret an already canonical commit.
+Projection update failure must not roll back or reinterpret an already Repository-committed contribution or an already Block-confirmed Record.
 
 ## Cordis integration
 
@@ -71,20 +90,24 @@ If the history implementation consumes Protocol-defined facts, historical interp
 Consumers must be able to distinguish at least:
 
 - Repo unavailable;
-- required canonical/query source unavailable;
+- durable accepted-Record source unavailable;
+- chain-confirmation source unavailable when confirmation status is requested;
 - projection unavailable or inconsistent;
 - referenced Protocol version unavailable while interpreting historical facts.
 
-A stale or missing projection must not be presented as authoritative canonical absence when the implementation knows it cannot verify that conclusion.
+A stale or missing projection must not be presented as authoritative absence when the implementation knows it cannot verify that conclusion.
 
 ## Acceptance tests
 
 Tests must demonstrate that:
 
-- a committed accepted contribution appears in Repo contribution history;
-- an uncommitted contribution does not appear as accepted history;
+- a Repository-committed contribution appears in contribution history before Block packing as pending-chain;
+- an uncommitted/staged contribution does not appear as accepted history;
+- a Block-confirmed contribution is distinguishable from pending-chain;
+- missing chain-state access does not cause a pending contribution to be reported as confirmed;
 - history does not require or expose a canonical Repository `records[]` store;
 - persisted projection data remains identifiable as derived data;
-- a crash after commit but before projection update can be repaired so the committed contribution appears;
+- a crash after Repository commit but before projection update can be repaired from durable Runtime state;
+- Block-confirmation status can be reconciled from actual chain state when available;
 - rebuilding or reconciliation does not create duplicate logical history entries;
 - Project or Board concepts are not required to query Repo contribution history.

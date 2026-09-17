@@ -16,7 +16,7 @@ Repository MVP 包括：
 - Repo contribution history；
 - 对历史事实所引用协议版本的正确解释与验证。
 
-Record 是 Worker 的链上劳动事实，不作为 Repository 的另一类规范仓库内容保存。Repository 可以为日常查询和分析保留与 contribution 相关的 Record 投影。
+Record 是 Worker 产生的 LabourChain 事实。Record 本身具有稳定身份和主体签名；被 Block 收录后，获得这条链上的收录与确证顺序。Repository 不把 Record 作为另一类规范仓库内容保存，可以为日常查询和分析保留与 contribution 相关的 Record 投影。
 
 ## Repo 建立与身份
 
@@ -46,14 +46,38 @@ Worker 在 Repository 之外产生 Record。Repository 不负责把 RawEntry 转
 - Asset、相关 Record 和 contribution relation 符合它们各自引用的 LabourChain Protocol；
 - 适用协议要求的 Worker confirmation 已满足；
 - Repo 侧 confirmation 已满足；
-- contribution 已成功提交为 canonical committed state；
+- contribution 及其待上链事实已经进入可跨重启恢复的 Repository accepted / committed 状态；
 - Repo 能够保存并再次读取被接受的 Asset。
 
-失败、未完成或仍处于运行时处理中的 contribution 不得表现为已经被 Repo 接受。
+失败、未完成或仍处于临时处理中的 contribution 不得表现为已经被 Repo 接受。
 
-Block packing 发生在 contribution commit 之后，不是 Repository 接受 contribution 的必要条件。
+Repository acceptance 不要求等待 Block packing。Block 收录发生在 Repository commit 之后，为相关 Records 提供链上的收录与确证；在此之前，Repository committed state 必须明确属于 durable Runtime / pending-chain state，不能冒充已经被 Block 确认的 canonical chain state。
 
 Repo contribution 描述的是包含 Asset 提交的劳动。没有形成或提交 Asset 的劳动仍然可以产生 Record，只是不构成 Repo contribution。
+
+## Repository acceptance 与链确证
+
+MVP 区分两个不同完成边界：
+
+```text
+Repository committed
+= Repo 已完成领域校验与所需确认
++ 待上链 Records 已被可靠持久接收
++ accepted Asset 可持久读取
+
+Block confirmed
+= 相关 Records 已被某个有效 Block 收录
++ 获得这条链上的确证顺序
+```
+
+Repository committed 是产品接受边界；Block confirmed 是链确证边界。两者不能混称为同一个 canonical 状态。
+
+因此：
+
+- Repository 可以在等待下一次 Block packing 时已经向使用方报告 contribution accepted；
+- 运行时必须能够在重启后继续识别并处理这些已接受但尚未被 Block 收录的 Records；
+- 一旦链状态可查询，Runtime/Projection 必须能够区分 pending-chain 与 block-confirmed；
+- 本地持久化不会单独赋予 Record “已被链确证”的含义。
 
 ## 持久性与恢复
 
@@ -61,11 +85,11 @@ Repo contribution 描述的是包含 Asset 提交的劳动。没有形成或提�
 
 Repo identity、operator、成员关系以及已接受 contribution 所需的 Repository 状态，在正常应用重启后必须能够恢复。
 
-应用重启或运行时故障不得把尚未成功 commit 的 contribution 错误地暴露为已接受状态。
+应用重启或运行时故障不得把尚未成功进入 Repository committed state 的 contribution 错误地暴露为已接受状态，也不得丢失已经 Repository committed、正在等待链收录的事实。
 
 Asset 的规范身份和语义由适用的 LabourChain Protocol 定义。Repository 不应为了存储、索引或展示方便而静默改写已经接受的 Asset、Record、confirmation 或 contribution relation。
 
-Record 的规范事实仍在链上。Repository 可以保存本地 Record projection，使日常访问不需要为每次请求重新构建完整 contribution history。该 projection 必须可以与 canonical facts 区分，并且不能成为新的 Record 事实来源。
+被 Block 收录的 Record 确证事实来自链状态。Repository 可以保存本地 pending state、Record projection 和查询索引，使日常访问与恢复不需要为每次请求重新扫描完整链；这些运行时数据必须能够与 Block-confirmed facts 区分，不能成为新的链确证来源。
 
 ## Asset 读取与浏览
 
@@ -79,9 +103,14 @@ MVP 还需要支持查看 Repo 当前的成员和 Assets。
 
 使用方可以查看与 Repo 相关的劳动历史，包括该 Repo 已接受并确证的 contributions。
 
-Contribution history 来自链上与 Repo contribution 相关的 Records、Assets、confirmations 和 relations 的投影，而不是 Repository 自己维护的规范 `records[]` 集合。
+Contribution history 可以组合两类明确区分的数据来源：
 
-日常访问不应要求每次都完整扫描整条链。可以使用可重建的 cache、index 或 projection 支持该视图，但这些数据不是 canonical facts。
+- Repository 已接受、但仍等待 Block 收录的 durable pending/committed state；
+- 已经由链上 Block 收录确证的 Records、Assets、confirmations 和 relations 的投影。
+
+两者在视图中不得被混称为同一种链确证状态。Repository 不因此维护规范的 `records[]` 集合。
+
+日常访问不应要求每次都完整扫描整条链。可以使用可重建或可对账的 cache、index、pending journal 或 projection 支持该视图，但这些运行时数据不是 Block confirmation 本身。
 
 ## 协议有效性与版本
 
@@ -91,7 +120,7 @@ Repository 只接受符合适用 LabourChain Protocol 的事实和关系。
 
 如果处理某个事实所需的协议版本在当前运行环境中不可用，Repository 必须明确失败，而不是使用不同版本猜测其语义。
 
-Repository 不重新定义 Asset、Record、identity、signature、confirmation、commit 或 block 的协议语义。
+Repository 不重新定义 Asset、Record、identity、signature、confirmation 或 block 的协议语义。Repository 自己定义的是仓库领域的 establishment、membership、contribution acceptance 等业务语义。
 
 ## 与 LabourFlow 的关系
 
