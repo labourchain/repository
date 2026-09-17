@@ -11,12 +11,11 @@ const RECORD_FILE_SUFFIX = '.record.json'
  * Minimal Record shape required by the Runtime journal.
  *
  * Core remains the owner of Record representation, RecordId derivation and
- * signature validation. The journal only needs the already-validated `id` to
- * address durable storage and otherwise preserves the complete JSON value.
+ * signature validation. The journal only requires the already-validated `id`
+ * for addressing and otherwise persists the complete runtime JSON value.
  */
 export interface JournalRecord {
   readonly id: string
-  readonly [key: string]: unknown
 }
 
 export interface RecordJournalConfig {
@@ -218,14 +217,15 @@ export class RecordJournalService extends Service {
         if (!isDeepStrictEqual(existing, incoming)) {
           throw new RecordJournalConflictError(recordId)
         }
+
+        // A prior attempt may have linked the finalized file but failed before
+        // syncing the directory. Retry must complete that durability boundary
+        // before equivalent acceptance is reported as successful.
+        await this.syncPublication(recordId)
         return
       }
 
-      try {
-        await syncDirectory(this.directory)
-      } catch (cause) {
-        throw new RecordJournalStorageError(`Unable to sync Record journal directory after accepting ${recordId}.`, { cause })
-      }
+      await this.syncPublication(recordId)
     } catch (cause) {
       if (cause instanceof RecordJournalError) throw cause
       throw new RecordJournalStorageError(`Unable to durably accept Record ${recordId}.`, { cause })
@@ -269,6 +269,14 @@ export class RecordJournalService extends Service {
         throw new RecordJournalCorruptionError(file, 'Stored RecordId does not match its journal filename')
       }
       yield record
+    }
+  }
+
+  private async syncPublication(recordId: string): Promise<void> {
+    try {
+      await syncDirectory(this.directory)
+    } catch (cause) {
+      throw new RecordJournalStorageError(`Unable to sync Record journal directory after accepting ${recordId}.`, { cause })
     }
   }
 
