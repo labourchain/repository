@@ -174,9 +174,9 @@ Derive acceptance tests from the capability Specs relevant to the Story being im
 
 Bootstrap Story #4 is complete and merged on `main`.
 
-Story #5 is active on `feat/5-repo`. Its Repo identity/operator and Repository-commit-vs-chain-confirmation design alignment is being completed before domain implementation is added.
+Story #5 design alignment is complete on `feat/5-repo` / PR #16. The branch separates Repository `COMMITTED` from Block-confirmed `PACKED` and fixes Repo identity/operator boundaries before code implementation.
 
-Issue #15 tracks ownership of the reusable durable Record ingress/journal and chain-state adapter boundaries exposed by #5. Do not invent a pre-pack canonical database merely to unblock tests.
+Architecture review #15 is complete. Runtime implementation issue #17 is the next enabler: a Repo-agnostic durable Record ingress/journal. After #17 is available, Story #5 can implement establish/reload against it.
 
 The current package remains private.
 
@@ -184,4 +184,4 @@ The current package remains private.
 
 Use the relevant project checks when the corresponding integration is available and report actual evidence.
 
-Core deterministic primitives are available in `labourchain/core-plugins`, but full Repository integration cannot be claimed until the required Runtime provider boundaries are available and persistent restart behavior is demonstrated.
+Core deterministic primitives are available in `labourchain/core-plugins`, but full Repository integration cannot be claimed until the durable Runtime provider path exists and persistent restart behavior is demonstrated.
