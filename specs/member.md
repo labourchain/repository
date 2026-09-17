@@ -24,11 +24,11 @@ Member
 
 `Member` is the protocol/implementation term for a human participant. `Worker` may still be used conceptually for the labour subject, but runtime/process worker concepts must not be treated as human Members merely because they share that name.
 
-## Member establishment Record
+## Member identity Record
 
 The minimum human-participant Protocol is `member.identity`.
 
-A Member establishes that capability with one self-authored Record:
+A Member declares that capability with a self-authored Record:
 
 ```text
 Record.protocol
@@ -45,9 +45,9 @@ The payload is intentionally empty. Repeating the same Entity identity in `Recor
 
 The exact `Record.protocolHash` comes from the resolved `member.identity` Protocol descriptor. A runtime must compare the Record against that exact resolved ProtocolHash; the artifact must not hard-code its own hash because ProtocolHash commits to the artifact itself.
 
-The establishment Record must pass Core Record validation and signature verification before it can establish a Member. Repository code must consume Core capabilities rather than copying Entity, RecordId, or Ed25519 rules.
+The declaration Record must pass Core Record validation and signature verification before it can establish Member capability. Repository code must consume Core capabilities rather than copying Entity, RecordId, or Ed25519 rules.
 
-For the MVP, one Member identity has one accepted establishment Record. Replaying the same exact Record is idempotent; a different accepted establishment Record for the same Member identity is a conflict rather than an implicit replacement.
+`member.identity` has marker/set semantics. Once at least one valid accepted declaration exists for an Entity identity, that identity satisfies the Member capability. Additional valid declarations by the same identity are redundant facts, not conflicting replacements, because the Protocol carries no operator, profile, ownership, or other value that could disagree.
 
 ## Protocol composition
 
@@ -81,13 +81,13 @@ A Member may also establish a distinct Repo identity. Repo establishment require
 The minimum runtime behavior is equivalent to:
 
 ```text
-establishMember(establishmentRecord)
+declareMember(identityRecord)
 requireMember(entityIdentity)
 ```
 
-`establishMember` succeeds only after the exact establishment Record is durably accepted by the configured Record ingress/journal. This is Repository/runtime acceptance and may still be pending-chain.
+`declareMember` succeeds only after the exact declaration Record is durably accepted by the configured Record ingress/journal. This is Repository/runtime acceptance and may still be pending-chain.
 
-`requireMember` validates the queried identity with Core Entity semantics and succeeds only when an accepted `member.identity` establishment Record for that identity can be recovered from durable facts. Runtime indexes are derived and replaceable.
+`requireMember` validates the queried identity with Core Entity semantics and succeeds when at least one accepted valid `member.identity` Record for that identity can be recovered from durable facts. Runtime indexes are derived and replaceable.
 
 The Member Protocol implementation is composed through Cordis. It consumes Core Protocol capabilities and durable Record ingress through injected services; it does not introduce another runner, registry, or service container.
 
@@ -110,12 +110,12 @@ This Spec does not define:
 Tests must demonstrate that:
 
 - a Member is anchored by a Core `EntityPublicKey`, not a second identity namespace;
-- a valid self-authored `member.identity` Record can establish that Member;
-- invalid Core identity, invalid Record/signature, wrong Protocol reference/hash, or non-empty establishment payload fail closed;
+- a valid self-authored `member.identity` Record can declare that Member capability;
+- invalid Core identity, invalid Record/signature, wrong Protocol reference/hash, or non-empty declaration payload fail closed;
 - a non-Member Entity identity cannot satisfy `requireMember`;
-- the exact establishment Record is durably accepted before establishment succeeds;
+- the exact declaration Record is durably accepted before declaration succeeds;
 - Member recognition can be rebuilt after restart from durable accepted Records;
-- conflicting establishment Records for the same Member identity do not replace each other;
+- multiple valid declarations by the same Member remain redundant/set-like rather than conflicting;
 - profile data is not required to identify the Member itself;
 - the same Entity identity can compose Member and Repo capabilities;
 - same-identity Member/Repo composition does not create ownership/private-property semantics;
