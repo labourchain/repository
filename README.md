@@ -6,7 +6,7 @@
 
 在 LabourChain 的模型中，Worker 是劳动主体，Record 记录活劳动，Asset 表示已经对象化的劳动成果。Repo 负责保存劳动成果，并在劳动者提交劳动成果时参与相关劳动的仓库侧确证。Repo contribution history 由链上的劳动事实和关系投影得到，运行时可以为日常使用缓存这些视图。
 
-Repository 采用 Cordis 的插件运行模型。仓库能力由多个 Cordis plugins 共同形成；其中定义链上稳定语义的插件同时声明为版本化 LabourChain Protocol。Repository 不建立独立于 Cordis 的 Runner、Hoster 或 mega-service 体系。
+Repository 采用 Cordis 的插件运行模型。仓库能力由多个 Cordis plugins 共同形成；其中需要被链上历史长期引用的稳定语义以版本化 LabourChain Protocol 声明，并由 Cordis plugin 实现。Repository 不建立独立于 Cordis 的 Runner、Hoster 或 mega-service 体系。
 
 Requirements、Architecture 与 MVP Specs 已完成当前轮次的重新投影。Bootstrap Story 已进入实现阶段，后续 Repository 领域能力继续按现有 Specs 与 Issues 推进。
 
@@ -58,7 +58,7 @@ Repository Node
 =
 Bootstrap Protocol instance
 + Cordis
-+ loaded Protocol plugins
++ loaded Protocol implementations (Cordis plugins)
 + Runtime / provider plugins
 + configuration
 ```
@@ -67,7 +67,7 @@ Bootstrap 是具有可执行入口的稳定版本代码，启动时创建 Cordis
 
 当前 Bootstrap 提供可执行 shell 与 programmatic composition API；具体 Repository 产品 composition 尚未在 executable 中固定，也不在 Bootstrap Story 中引入额外 config loader。
 
-Protocol plugin 不形成第二套插件系统。它只是具有长期链上语义和版本约束的 Cordis plugin。插件发现、依赖、Context、Service、Effect 和生命周期继续由 Cordis 管理。
+Protocol 不形成第二套插件系统。每个 Protocol 的 executable implementation 仍然是 Cordis plugin；插件发现、依赖、Context、Service、Effect 和生命周期继续由 Cordis 管理。
 
 详见 [`docs/architecture.md`](./docs/architecture.md)。
 
@@ -89,7 +89,7 @@ scripts/                工程与发布检查脚本
 .github/                 CI 与 PR 配置
 ```
 
-具体 npm packages、monorepo 目录以及 Protocol plugin 的最终拆分不由 Spec 文件数量机械决定。
+具体 npm packages、monorepo 目录以及 Protocol implementation 的最终拆分不由 Spec 文件数量机械决定。
 
 ## 开发
 
