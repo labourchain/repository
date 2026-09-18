@@ -222,6 +222,7 @@ export const MEMBER_PROTOCOL_INJECT = Object.freeze([
 export function createMemberProtocolPlugin() {
   return {
     name: MEMBER_PROTOCOL_REFERENCE,
+    provide: MEMBER_PROTOCOL_SERVICE,
     inject: [...MEMBER_PROTOCOL_INJECT],
     async apply(ctx: Context, config: MemberProtocolMountConfig): Promise<void> {
       const protocolHash = requireProtocolHash(config)
