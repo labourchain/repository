@@ -45,9 +45,9 @@ interface ReleasedProtocolDescriptor {
   }
 }
 
-interface ReleasedPlugin extends Plugin {
-  readonly name?: string
-  readonly provide?: string
+interface RuntimePluginShape {
+  readonly name?: unknown
+  readonly provide?: unknown
   readonly inject?: unknown
   readonly apply?: unknown
 }
@@ -65,7 +65,7 @@ async function loadReleasedCorePlugin(
   name: 'core.entity' | 'core.record',
   expectedProtocolHash: string,
   directory: string,
-): Promise<ReleasedPlugin> {
+): Promise<Plugin> {
   const descriptorUrl =
     CORE_RELEASE_BASE + '/' + name + '-' + CORE_VERSION + '.json'
   const response = await fetch(descriptorUrl, { redirect: 'follow' })
@@ -105,16 +105,19 @@ async function loadReleasedCorePlugin(
 
   assert.deepEqual(Object.keys(namespace), ['plugin'])
 
-  const plugin = namespace.plugin as ReleasedPlugin
-  assert.equal(plugin.name, name + '@' + CORE_VERSION)
-  assert.equal(plugin.provide, 'protocol:' + name + '@' + CORE_VERSION)
-  assert.ok(
-    Array.isArray(plugin.inject) ||
-      (typeof plugin.inject === 'object' && plugin.inject !== null),
+  const pluginShape = namespace.plugin as RuntimePluginShape
+  assert.equal(pluginShape.name, name + '@' + CORE_VERSION)
+  assert.equal(
+    pluginShape.provide,
+    'protocol:' + name + '@' + CORE_VERSION,
   )
-  assert.equal(typeof plugin.apply, 'function')
+  assert.ok(
+    Array.isArray(pluginShape.inject) ||
+      (typeof pluginShape.inject === 'object' && pluginShape.inject !== null),
+  )
+  assert.equal(typeof pluginShape.apply, 'function')
 
-  return plugin
+  return namespace.plugin as Plugin
 }
 
 test(
