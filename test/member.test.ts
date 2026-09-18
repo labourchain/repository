@@ -107,6 +107,7 @@ test('Protocol artifact entry exports exactly one named plugin', async () => {
   const namespace = await import('../src/protocols/member.identity.ts')
   assert.deepEqual(Object.keys(namespace), ['plugin'])
   assert.equal(namespace.plugin.name, MEMBER_PROTOCOL_REFERENCE)
+  assert.equal(namespace.plugin.provide, MEMBER_PROTOCOL_SERVICE)
   assert.deepEqual(namespace.plugin.inject, [
     CORE_ENTITY_PROTOCOL_SERVICE,
     CORE_RECORD_PROTOCOL_SERVICE,
