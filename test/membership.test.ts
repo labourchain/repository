@@ -219,7 +219,7 @@ function hasCause(
   let current: unknown = error
   while (current instanceof Error) {
     if (current instanceof constructor) return true
-    current = current.cause
+    current = (current as Error).cause
   }
   return false
 }
