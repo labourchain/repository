@@ -374,7 +374,7 @@ test(
             member: targetIdentity,
             active: true,
             latestRecordId: membershipAddId,
-            effectiveAt: rawMembershipAdd.createdAt,
+            latestCreatedAt: rawMembershipAdd.createdAt,
           },
         )
         assert.equal(
@@ -416,7 +416,7 @@ test(
             member: targetIdentity,
             active: false,
             latestRecordId: membershipRemoveId,
-            effectiveAt: rawMembershipRemove.createdAt,
+            latestCreatedAt: rawMembershipRemove.createdAt,
           },
         )
       } finally {
