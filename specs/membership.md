@@ -24,7 +24,7 @@ Labour
   -> ...
 ```
 
-Membership only states whether a Member is accepted by a Repo at a given effective time.
+Membership only states whether a Member is accepted by a Repo. The Repo-signed `Record.createdAt` supplies deterministic ordering between those membership facts; it is not a scheduler for future activation.
 
 ## Membership Protocol
 
@@ -46,7 +46,7 @@ interface RepoMembershipFact {
 }
 ```
 
-The enclosing Record supplies both authority and effective time:
+The enclosing Record supplies both authority and the fact's Repo-signed creation time:
 
 ```text
 Record.createdBy
@@ -56,7 +56,7 @@ Record.signature
 = signature by the Repo identity
 
 Record.createdAt
-= membership effective time attested by that Repo
+= Repo-signed membership fact creation/order time
 ```
 
 The Membership Protocol requires `Record.createdBy == Record.data.repo`.
@@ -67,7 +67,7 @@ How an operator causes the Repo key to sign such a Record is signer/key-custody 
 
 Membership facts do not contain `previous`, `previousMutation` or another predecessor pointer.
 
-For one `Repo × Member` relation, the current effective membership is derived from the latest valid Repo-signed membership fact by `Record.createdAt`.
+For one `Repo × Member` relation, the current current membership is derived from the latest valid Repo-signed membership fact by `Record.createdAt`.
 
 `repo.membership@0.1.0` therefore assigns domain meaning to `createdAt` that Core itself deliberately does not assign:
 
@@ -76,14 +76,16 @@ Core Record.createdAt
 = signed string, no generic ordering semantics
 
 repo.membership interpretation
-= Repo-attested membership effective time
+= deterministic Repo-signed ordering time for membership facts
 ```
 
-The Membership Protocol requires `createdAt` to use canonical UTC ISO form with millisecond precision, for example `2026-09-19T00:00:02.000Z`, so every node derives the same ordering.
+The Membership Protocol requires `createdAt` to use canonical UTC ISO form with millisecond precision, for example `2026-09-19T00:00:02.000Z`, so every node derives the same ordering. An accepted fact participates in the current projection immediately; `createdAt` does not mean “activate this membership at that future wall-clock instant”.
 
-If two distinct membership facts for the same `Repo × Member` relation have the same effective time, the history is ambiguous and rebuild fails closed.
+If two distinct membership facts for the same `Repo × Member` relation have the same creation/signing time, the history is ambiguous and rebuild fails closed.
 
-Repeated `add` or repeated `remove` facts are allowed as redundant Repo statements. They do not create duplicate effective membership because only the latest fact determines the current set.
+Repeated `add` or repeated `remove` facts are allowed as redundant Repo statements. They do not create duplicate current membership because only the latest fact determines the current set.
+
+The field name `action` describes what the Repo-signed fact asserts for the relation: `add` asserts membership is active from that fact onward in the membership fact order, while `remove` asserts it is inactive. It is not a command executed against a previous mutation.
 
 ## Block relation
 
@@ -116,6 +118,8 @@ Member EntityPublicKey
 
 It must not mint a second human identity, copy Member profile data, or interpret a runtime/process worker as a human Member.
 
+`requireMember` and `loadRepo` are acceptance-time prerequisites: the Repository must recognize the target Member and Repo when accepting or rebuilding a membership fact. Story #6 does not prove historical ordering such as `member.identity.createdAt < membership.createdAt < labour.createdAt`, nor same-Block positional validity. Those historical relationships belong to later labour/contribution semantics.
+
 ## Runtime contract
 
 The minimum runtime behavior is equivalent to:
@@ -135,13 +139,13 @@ rebuild()
 3. requires the target to satisfy the Member capability;
 4. requires the Repo to already be established;
 5. requires `Record.createdBy == data.repo`;
-6. interprets `Record.createdAt` as the Repo-attested effective time;
-7. durably accepts the exact Record through `recordJournal` before reporting success;
-8. derives current membership from the latest effective fact.
+6. validates `Record.createdAt` as the canonical Repo-signed membership fact ordering time;
+7. durably accepts the exact Record through `recordJournal`;
+8. rebuilds from durable membership facts and reports the resulting current view.
 
 Exact replay of an already accepted Record is idempotent.
 
-A historical fact whose effective time is older than the current fact may still be durably retained without replacing the current effective view.
+A historical fact whose `createdAt` is older than the current fact may still be durably retained without replacing the current view.
 
 `MembershipView` is equivalent to:
 
@@ -151,7 +155,7 @@ interface MembershipView {
   member: EntityPublicKey
   active: boolean
   latestRecordId: RecordId | null
-  effectiveAt: string | null
+  latestCreatedAt: string | null
 }
 ```
 
@@ -165,7 +169,7 @@ Runtime may maintain a replaceable projection equivalent to:
 
 ```text
 Repo × Member
--> latest effective membership Record
+-> latest current membership Record
 -> active / inactive
 ```
 
@@ -178,15 +182,15 @@ Rebuild must not depend on:
 - RecordId lexical order;
 - process arrival order.
 
-It derives the current view from Repo-signed membership effective time.
+It derives the current view from Repo-signed membership `createdAt` ordering.
 
 Accepted membership facts are Repository accepted / pending-chain until actual chain-state evidence reports Block inclusion. Local journal persistence must not be presented as Block confirmation.
 
 ## Contribution eligibility
 
-A Member must have an effective active Repo membership before a contribution can be accepted by that Repo.
+A Member must have an current active Repo membership before a contribution can be accepted by that Repo.
 
-The precise relationship between membership effective time and a Labour/contribution Record belongs to the later contribution/labour protocols. Story #6 only exposes the membership facts and current effective view.
+The precise historical relationship between a membership fact and a Labour/contribution Record belongs to the later contribution/labour protocols. Story #6 only exposes membership facts and the current view.
 
 Contribution execution remains outside Story #6.
 
@@ -199,8 +203,8 @@ Consumers must be able to distinguish at least:
 - target identity is not a valid Member;
 - invalid Core Record, Repo identity or Member identity;
 - wrong membership Protocol reference/hash;
-- invalid membership effective time;
-- ambiguous distinct facts at the same effective time;
+- invalid membership `createdAt` ordering time;
+- ambiguous distinct facts at the same `createdAt`;
 - durable Record ingress/journal failure.
 
 ## Boundaries
@@ -224,15 +228,15 @@ This Spec does not define:
 Tests must demonstrate that:
 
 - a Repo-signed membership add makes a valid Member active;
-- a later Repo-signed remove makes that Member inactive;
+- a later-created Repo-signed remove makes that Member inactive;
 - membership can be checked and active Members listed;
 - a non-Repo signer cannot author membership for that Repo;
 - a non-Member Entity cannot be silently treated as a Repo Member;
-- repeated add/remove facts do not create duplicate effective membership;
+- repeated add/remove facts do not create duplicate current membership;
 - exact accepted Record replay is idempotent;
 - a later effective fact wins regardless of journal enumeration order;
 - an older historical fact may be retained without replacing the current view;
-- distinct facts with the same effective time fail closed;
+- distinct facts with the same creation/signing time fail closed;
 - current membership survives restart and rebuild;
 - accepted/pending-chain membership state is not presented as Block-confirmed;
 - the Membership Protocol service follows Cordis lifecycle disposal.
