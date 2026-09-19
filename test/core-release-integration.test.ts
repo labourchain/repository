@@ -9,6 +9,7 @@ import { test } from 'node:test'
 import type { Plugin } from '@deepseek-ai/cordis'
 import { plugin as memberIdentityPlugin } from '../src/protocols/member.identity.ts'
 import { plugin as repoEstablishmentPlugin } from '../src/protocols/repo.establishment.ts'
+import { plugin as repoEstablishmentPlugin } from '../src/protocols/repo.establishment.ts'
 import {
   CORE_ENTITY_PROTOCOL_SERVICE,
   CORE_RECORD_PROTOCOL_SERVICE,
@@ -216,6 +217,53 @@ test(
         assert.deepEqual(
           await node.context.recordJournal.get(memberRecord.id),
           memberRecord,
+        )
+
+        const { publicKey: repoPublicKey } = generateKeyPairSync('ed25519')
+        const repoPublicKeyDer = repoPublicKey.export({
+          format: 'der',
+          type: 'spki',
+        }) as Buffer
+        const repoIdentity = entityService.encodeBase58btc(
+          repoPublicKeyDer.subarray(repoPublicKeyDer.byteLength - 32),
+        )
+
+        const rawRepoRecord = {
+          protocol: REPO_ESTABLISHMENT_PROTOCOL_REFERENCE,
+          protocolHash: REPO_ESTABLISHMENT_PROTOCOL_HASH,
+          createdBy: identity,
+          createdAt: '2026-09-18T00:00:01.000Z',
+          data: { repo: repoIdentity },
+        }
+        const repoRecordId = recordService.recordId(rawRepoRecord)
+        const repoRecord: CoreRecordValue = {
+          id: repoRecordId,
+          ...rawRepoRecord,
+          signature: sign(
+            null,
+            recordService.signingPayload(repoRecordId),
+            privateKey,
+          ).toString('hex'),
+        }
+
+        assert.equal(recordService.verifySignature(repoRecord), true)
+
+        const establishedRepo = await node.context[
+          REPO_ESTABLISHMENT_PROTOCOL_SERVICE
+        ].establishRepo(repoRecord)
+        const loadedRepo = await node.context[
+          REPO_ESTABLISHMENT_PROTOCOL_SERVICE
+        ].loadRepo(repoIdentity)
+
+        assert.deepEqual(establishedRepo, {
+          identity: repoIdentity,
+          operator: identity,
+          establishmentRecordId: repoRecord.id,
+        })
+        assert.deepEqual(loadedRepo, establishedRepo)
+        assert.deepEqual(
+          await node.context.recordJournal.get(repoRecord.id),
+          repoRecord,
         )
 
         const repoKeyPair = generateKeyPairSync('ed25519')
