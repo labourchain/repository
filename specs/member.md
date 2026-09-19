@@ -91,7 +91,7 @@ requireMember(entityIdentity)
 
 The Member Protocol implementation is composed through Cordis. It consumes Core Protocol capabilities and durable Record ingress through injected services; it does not introduce another runner, registry, or service container.
 
-The runtime must receive the exact resolved `member.identity` ProtocolHash from the verified Protocol descriptor when mounting the implementation. The final generic mount/config shape is coordinated with Core runtime ABI review #31 and Protocol Dev SDK #23; Member semantics must not invent a second hashing or resolution scheme.
+The runtime must receive the exact resolved `member.identity` ProtocolHash from the verified Protocol descriptor when mounting the implementation. Core v0.1.0 intentionally leaves this Host-to-Protocol config shape outside Core validity; Repository currently uses the minimal `{ protocolHash }` mount config. Member semantics must not invent a second hashing or resolution scheme.
 
 ## Boundaries
 
