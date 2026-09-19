@@ -206,6 +206,14 @@ function relationKey(repo: string, member: string): string {
   return repo + '\u0000' + member
 }
 
+function membershipFactTimeKey(
+  repo: string,
+  member: string,
+  createdAt: string,
+): string {
+  return relationKey(repo, member) + '\u0000' + createdAt
+}
+
 function membershipView(
   repo: string,
   member: string,
@@ -238,6 +246,7 @@ export class MembershipService {
   private readonly ctx: Context
   readonly protocolHash: string
   private readonly relations = new Map<string, RelationState>()
+  private readonly factIdsByCreatedAt = new Map<string, string>()
   private operationGate: Promise<void> = Promise.resolve()
 
   constructor(ctx: Context, protocolHash: string) {
@@ -259,18 +268,17 @@ export class MembershipService {
         validated.payload.repo,
         validated.payload.member,
       )
-      const current = this.relations.get(key) ?? EMPTY_RELATION
+      const timeKey = membershipFactTimeKey(
+        validated.payload.repo,
+        validated.payload.member,
+        validated.record.createdAt,
+      )
+      const existingRecordId = this.factIdsByCreatedAt.get(timeKey)
 
-      if (current.latestRecordId === validated.record.id) {
-        await this.ctx.recordJournal.accept(validated.record)
-        return membershipView(
-          validated.payload.repo,
-          validated.payload.member,
-          current,
-        )
-      }
-
-      if (validated.createdTime === current.createdTime) {
+      if (
+        existingRecordId !== undefined &&
+        existingRecordId !== validated.record.id
+      ) {
         throw new MembershipHistoryError(
           'Membership relation contains distinct facts with the same createdAt.',
         )
@@ -278,9 +286,9 @@ export class MembershipService {
 
       await this.ctx.recordJournal.accept(validated.record)
 
-      // Re-derive the result from the durable source. Another valid ingress may
-      // have accepted a newer membership fact while this Record was being
-      // persisted, so the pre-accept projection is not authoritative here.
+      // Re-derive the result from the durable source for both new facts and
+      // exact replay. Another valid ingress may have changed the current view
+      // while this Record was being persisted.
       await this.rebuildUnlocked()
 
       return membershipView(
@@ -332,23 +340,31 @@ export class MembershipService {
 
   private async rebuildUnlocked(): Promise<void> {
     const rebuilt = new Map<string, RelationState>()
+    const factIdsByCreatedAt = new Map<string, string>()
 
     for await (const journalRecord of this.ctx.recordJournal.iterateAccepted()) {
       if (!this.isCandidate(journalRecord)) continue
 
       const validated = await this.validateFact(journalRecord)
       const key = relationKey(validated.payload.repo, validated.payload.member)
-      const current = rebuilt.get(key)
+      const timeKey = membershipFactTimeKey(
+        validated.payload.repo,
+        validated.payload.member,
+        validated.record.createdAt,
+      )
+      const existingRecordId = factIdsByCreatedAt.get(timeKey)
 
-      if (current && validated.createdTime === current.createdTime) {
-        if (validated.record.id !== current.latestRecordId) {
-          throw new MembershipHistoryError(
-            'Membership relation contains distinct facts with the same createdAt.',
-          )
-        }
-        continue
+      if (
+        existingRecordId !== undefined &&
+        existingRecordId !== validated.record.id
+      ) {
+        throw new MembershipHistoryError(
+          'Membership relation contains distinct facts with the same createdAt.',
+        )
       }
+      factIdsByCreatedAt.set(timeKey, validated.record.id)
 
+      const current = rebuilt.get(key)
       if (!current || validated.createdTime > current.createdTime) {
         rebuilt.set(key, {
           active: validated.payload.action === 'add',
@@ -362,6 +378,11 @@ export class MembershipService {
     this.relations.clear()
     for (const [key, state] of rebuilt) {
       this.relations.set(key, state)
+    }
+
+    this.factIdsByCreatedAt.clear()
+    for (const [key, recordId] of factIdsByCreatedAt) {
+      this.factIdsByCreatedAt.set(key, recordId)
     }
   }
 
