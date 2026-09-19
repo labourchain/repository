@@ -67,7 +67,7 @@ How an operator causes the Repo key to sign such a Record is signer/key-custody 
 
 Membership facts do not contain `previous`, `previousMutation` or another predecessor pointer.
 
-For one `Repo × Member` relation, the current current membership is derived from the latest valid Repo-signed membership fact by `Record.createdAt`.
+For one `Repo × Member` relation, the current membership is derived from the latest valid Repo-signed membership fact by `Record.createdAt`.
 
 `repo.membership@0.1.0` therefore assigns domain meaning to `createdAt` that Core itself deliberately does not assign:
 
@@ -81,7 +81,7 @@ repo.membership interpretation
 
 The Membership Protocol requires `createdAt` to use canonical UTC ISO form with millisecond precision, for example `2026-09-19T00:00:02.000Z`, so every node derives the same ordering. An accepted fact participates in the current projection immediately; `createdAt` does not mean “activate this membership at that future wall-clock instant”.
 
-If two distinct membership facts for the same `Repo × Member` relation have the same creation/signing time, the history is ambiguous and rebuild fails closed.
+If two distinct membership facts for the same `Repo × Member` relation have the same `createdAt`, the history is ambiguous and rebuild fails closed.
 
 Repeated `add` or repeated `remove` facts are allowed as redundant Repo statements. They do not create duplicate current membership because only the latest fact determines the current set.
 
@@ -169,7 +169,7 @@ Runtime may maintain a replaceable projection equivalent to:
 
 ```text
 Repo × Member
--> latest current membership Record
+-> latest membership Record by `createdAt`
 -> active / inactive
 ```
 
@@ -188,7 +188,7 @@ Accepted membership facts are Repository accepted / pending-chain until actual c
 
 ## Contribution eligibility
 
-A Member must have an current active Repo membership before a contribution can be accepted by that Repo.
+A Member must have a current active Repo membership before a contribution can be accepted by that Repo.
 
 The precise historical relationship between a membership fact and a Labour/contribution Record belongs to the later contribution/labour protocols. Story #6 only exposes membership facts and the current view.
 
@@ -234,9 +234,9 @@ Tests must demonstrate that:
 - a non-Member Entity cannot be silently treated as a Repo Member;
 - repeated add/remove facts do not create duplicate current membership;
 - exact accepted Record replay is idempotent;
-- a later effective fact wins regardless of journal enumeration order;
+- a later `createdAt` wins regardless of journal enumeration order;
 - an older historical fact may be retained without replacing the current view;
-- distinct facts with the same creation/signing time fail closed;
+- distinct facts with the same `createdAt` fail closed;
 - current membership survives restart and rebuild;
 - accepted/pending-chain membership state is not presented as Block-confirmed;
 - the Membership Protocol service follows Cordis lifecycle disposal.
