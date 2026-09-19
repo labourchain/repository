@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
-import type { Context } from '@deepseek-ai/cordis'
+import { Context } from '@deepseek-ai/cordis'
 import { plugin as memberIdentityPlugin } from '../src/protocols/member.identity.ts'
 import { plugin as repoEstablishmentPlugin } from '../src/protocols/repo.establishment.ts'
 import {
@@ -173,6 +173,44 @@ test('Repo Protocol artifact entry exports exactly one named plugin', async () =
     MEMBER_PROTOCOL_SERVICE,
     'recordJournal',
   ])
+})
+
+test('Repo Protocol service follows the Cordis Plugin Fiber lifecycle', async () => {
+  await withDirectory(async (directory) => {
+    const context = new Context()
+
+    const entityFiber = context.plugin(coreEntityProvider)
+    const recordFiber = context.plugin(coreRecordProvider)
+    const journalFiber = context.plugin(RecordJournalService, { directory })
+    await Promise.all([
+      entityFiber.await(),
+      recordFiber.await(),
+      journalFiber.await(),
+    ])
+
+    const memberFiber = context.plugin(memberIdentityPlugin, {
+      protocolHash: MEMBER_PROTOCOL_HASH,
+    })
+    await memberFiber.await()
+
+    const repoFiber = context.plugin(repoEstablishmentPlugin, {
+      protocolHash: REPO_PROTOCOL_HASH,
+    })
+    await repoFiber.await()
+
+    assert.ok(context.get(MEMBER_PROTOCOL_SERVICE))
+    assert.ok(context.get(REPO_ESTABLISHMENT_PROTOCOL_SERVICE))
+
+    await repoFiber.dispose()
+
+    assert.ok(context.get(MEMBER_PROTOCOL_SERVICE))
+    assert.equal(
+      context.get(REPO_ESTABLISHMENT_PROTOCOL_SERVICE),
+      undefined,
+    )
+
+    await context.fiber.dispose()
+  })
 })
 
 test('a valid Member establishes and loads a Repo from the exact Record', async () => {
