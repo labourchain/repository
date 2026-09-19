@@ -8,7 +8,7 @@
 
 Repository 采用 Cordis 的插件运行模型。仓库能力由多个 Cordis plugins 共同形成；其中需要被链上历史长期引用的稳定语义以版本化 LabourChain Protocol 声明，并由 Cordis plugin 实现。Repository 不建立独立于 Cordis 的 Runner、Hoster 或 mega-service 体系。
 
-Requirements、Architecture 与 MVP Specs 已完成当前轮次的重新投影。Bootstrap 与 durable Record journal 已合并；Core Protocols v0.1.0 已发布。当前开发分支正在实现最小 Member Protocol，并基于其继续推进 Repo establishment/reload。
+Requirements、Architecture 与 MVP Specs 已完成当前轮次的重新投影。Bootstrap 与 durable Record journal 已合并；Core Protocols v0.1.0 已发布。Draft PR #29 已实现最小 Member Protocol 与 Repo establishment/reload，当前等待独立 review/merge。
 
 ## 文档
 
@@ -110,4 +110,4 @@ pnpm run package:check
 
 当前 package 保持 `private: true`。
 
-Bootstrap runtime 与 durable Record journal 已完成。`member.identity` 已在 draft PR #29 中通过真实 Core v0.1.0 `core.entity` / `core.record` artifact 运行测试；当前继续实现 Repo establishment/reload。membership、Asset、contribution、recovery 与 history 仍按后续 Stories 推进。
+Bootstrap runtime 与 durable Record journal 已完成。Draft PR #29 已实现 `member.identity` 与 `repo.establishment@0.1.0`，并通过真实 Core v0.1.0 `core.entity` / `core.record` artifact 的 trusted compatibility smoke；membership、Asset、contribution、recovery 与 history 仍按后续 Stories 推进。
