@@ -176,7 +176,7 @@ Bootstrap Story #4 is complete and merged on `main`.
 
 Story #5 design alignment is complete on `feat/5-repo` / PR #16. The branch separates Repository `COMMITTED` from Block-confirmed `PACKED` and fixes Repo identity/operator boundaries before code implementation.
 
-Architecture review #15 and Runtime journal #17 are complete. Core Protocols v0.1.0 are released under the `cordis-js-esm` ABI v1. Draft PR #29 implements the minimum `member.identity` runtime and passes a real Core v0.1.0 release-artifact integration smoke. Story #5 is the active next domain slice: implement `repo.establishment@0.1.0` and establish/reload against the Member capability plus durable journal.
+Architecture review #15 and Runtime journal #17 are complete. Core Protocols v0.1.0 are released under the `cordis-js-esm` ABI v1. Draft PR #29 implements the minimum `member.identity` runtime plus `repo.establishment@0.1.0`, including restart/conflict tests and a trusted compatibility smoke against the released Core v0.1.0 artifacts. Story #5 is implemented on the branch and awaits review/merge; do not proceed into membership/contribution from this branch without an explicit next Story.
 
 The current package remains private.
 
