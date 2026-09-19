@@ -1,13 +1,13 @@
 import { Context } from '@deepseek-ai/cordis'
 import type { Fiber, Plugin } from '@deepseek-ai/cordis'
 
-/** Stable source identity shared by every build of this Bootstrap Protocol version. */
-export const BOOTSTRAP_PROTOCOL = Object.freeze({
+/** Stable human-readable Protocol reference for the Bootstrap source contract. */
+export const BOOTSTRAP_PROTOCOL_REFERENCE = Object.freeze({
   name: 'repository.bootstrap',
   version: '0.1.0',
 } as const)
 
-export type BootstrapProtocolIdentity = typeof BOOTSTRAP_PROTOCOL
+export type BootstrapProtocolReference = typeof BOOTSTRAP_PROTOCOL_REFERENCE
 
 export interface RepositoryPluginEntry {
   /** Cordis plugin to mount into the Repository root Context. */
@@ -24,8 +24,8 @@ export interface CreateRepositoryNodeOptions {
 export interface RepositoryNode {
   /** Root Cordis context owned by this node instance. */
   readonly context: Context
-  /** Stable source identity of the executable Bootstrap Protocol. */
-  readonly bootstrap: BootstrapProtocolIdentity
+  /** Stable human-readable Protocol reference for this Bootstrap source contract. */
+  readonly bootstrap: BootstrapProtocolReference
   /** Whether root disposal has been requested. */
   readonly disposed: boolean
   /** Dispose the root Cordis fiber and every child plugin it owns. */
@@ -82,9 +82,9 @@ async function settleComposition(fibers: readonly MountedFiber[]): Promise<void>
  * required entry remains inactive. It does not own a second plugin registry,
  * dependency graph, or lifecycle system.
  *
- * Final Core release/artifact identity is intentionally not constructed here.
- * Repository assumes the completed Core supplies that boundary; Bootstrap only
- * owns process/runtime composition in this Story.
+ * Exact Protocol identity is not constructed here. Under Core v0.1.0 that
+ * authority is the verified Protocol descriptor + ProtocolHash supplied by the
+ * Host/runtime boundary. Bootstrap only owns process/runtime composition.
  */
 export async function createRepositoryNode(
   options: CreateRepositoryNodeOptions = {},
@@ -103,7 +103,7 @@ export async function createRepositoryNode(
 
   return {
     context,
-    bootstrap: BOOTSTRAP_PROTOCOL,
+    bootstrap: BOOTSTRAP_PROTOCOL_REFERENCE,
     get disposed() {
       return disposal !== undefined
     },
