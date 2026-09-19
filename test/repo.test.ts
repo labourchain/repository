@@ -18,6 +18,7 @@ import {
   RecordJournalService,
   RepoAlreadyEstablishedError,
   RepoEstablishmentError,
+  RepoEstablishingMemberError,
   RepoNotFoundError,
   RepoProtocolConfigError,
   createRepositoryNode,
@@ -230,7 +231,7 @@ test('a generic Entity that is not a Member cannot establish a Repo', async () =
       node.context[REPO_ESTABLISHMENT_PROTOCOL_SERVICE].establishRepo(
         repoRecord('repo-non-member', REPO_KEY, NON_MEMBER_KEY),
       ),
-      RepoEstablishmentError,
+      RepoEstablishingMemberError,
     )
 
     await assert.rejects(
@@ -314,6 +315,56 @@ test('a conflicting second establishment cannot replace the first operator sourc
         establishmentRecordId: first.id,
       },
     )
+
+    await node.dispose()
+  })
+})
+
+test('same-node concurrent establishments preserve one accepted Repo fact', async () => {
+  await withDirectory(async (directory) => {
+    const node = await createRepositoryNode({ plugins: composition(directory) })
+    await declareMember(node)
+    await declareMember(node, OTHER_MEMBER_KEY)
+
+    const first = repoRecord('repo-concurrent-a')
+    const second = repoRecord(
+      'repo-concurrent-b',
+      REPO_KEY,
+      OTHER_MEMBER_KEY,
+    )
+
+    const results = await Promise.allSettled([
+      node.context[REPO_ESTABLISHMENT_PROTOCOL_SERVICE].establishRepo(first),
+      node.context[REPO_ESTABLISHMENT_PROTOCOL_SERVICE].establishRepo(second),
+    ])
+
+    const fulfilled = results.filter((result) => result.status === 'fulfilled')
+    const rejected = results.filter((result) => result.status === 'rejected')
+
+    assert.equal(fulfilled.length, 1)
+    assert.equal(rejected.length, 1)
+    assert.ok(
+      rejected[0]!.status === 'rejected' &&
+        rejected[0].reason instanceof RepoAlreadyEstablishedError,
+    )
+
+    const accepted = fulfilled[0]!
+    assert.equal(accepted.status, 'fulfilled')
+    const loaded = await node.context[
+      REPO_ESTABLISHMENT_PROTOCOL_SERVICE
+    ].loadRepo(REPO_KEY)
+    assert.deepEqual(loaded, accepted.value)
+
+    const acceptedRecordIds: string[] = []
+    for await (const record of node.context.recordJournal.iterateAccepted()) {
+      if (
+        (record as Partial<CoreRecordValue>).protocol ===
+        REPO_ESTABLISHMENT_PROTOCOL_REFERENCE
+      ) {
+        acceptedRecordIds.push(record.id)
+      }
+    }
+    assert.equal(acceptedRecordIds.length, 1)
 
     await node.dispose()
   })
