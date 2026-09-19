@@ -10,7 +10,14 @@
     "exactOptionalPropertyTypes": true,
     "verbatimModuleSyntax": true,
     "skipLibCheck": true,
-    "types": ["node"]
+    "types": [
+      "node"
+    ]
   },
-  "include": ["src/**/*.ts", "test/**/*.ts", "tsdown.config.ts"]
+  "include": [
+    "src/**/*.ts",
+    "test/**/*.ts",
+    "integration/**/*.ts",
+    "tsdown.config.ts"
+  ]
 }
