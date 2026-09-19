@@ -33,8 +33,9 @@ export interface CoreRecordProtocolService {
  * Host-supplied identity for the exact verified Protocol implementation being
  * mounted. ProtocolHash cannot be embedded in the artifact that it hashes.
  *
- * This is intentionally narrow until core-protocols #31 fixes the generic Host
- * mount-config contract.
+ * Core v0.1.0 deliberately leaves Host mount configuration outside Core
+ * Protocol validity. Repository currently uses this minimal Host-to-Protocol
+ * convention and should only widen it when a concrete runtime need appears.
  */
 export interface MemberProtocolMountConfig {
   readonly protocolHash: string
