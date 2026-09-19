@@ -8,3 +8,4 @@
 export * from './bootstrap.ts'
 export * from './record-journal.ts'
 export * from './member.ts'
+export * from './repo.ts'
