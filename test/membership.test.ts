@@ -20,7 +20,7 @@ import {
   BootstrapStartupError,
   MembershipAuthorizationError,
   MembershipHistoryError,
-  MembershipMutationError,
+  MembershipFactError,
   MembershipProtocolConfigError,
   MembershipTargetMemberError,
   RecordJournalNotFoundError,
@@ -663,7 +663,7 @@ test('membership rejects invalid Protocol, signature, payload and effective time
           protocol: 'repo.other@0.1.0',
         }),
       ),
-      MembershipMutationError,
+      MembershipFactError,
     )
     await assert.rejects(
       service.applyMembership(
@@ -671,7 +671,7 @@ test('membership rejects invalid Protocol, signature, payload and effective time
           protocolHash: 'd'.repeat(64),
         }),
       ),
-      MembershipMutationError,
+      MembershipFactError,
     )
     await assert.rejects(
       service.applyMembership(
@@ -679,7 +679,7 @@ test('membership rejects invalid Protocol, signature, payload and effective time
           signature: 'invalid-signature',
         }),
       ),
-      MembershipMutationError,
+      MembershipFactError,
     )
     await assert.rejects(
       service.applyMembership(
@@ -692,7 +692,7 @@ test('membership rejects invalid Protocol, signature, payload and effective time
           },
         }),
       ),
-      MembershipMutationError,
+      MembershipFactError,
     )
     await assert.rejects(
       service.applyMembership(
@@ -703,7 +703,7 @@ test('membership rejects invalid Protocol, signature, payload and effective time
           'not-a-time',
         ),
       ),
-      MembershipMutationError,
+      MembershipFactError,
     )
 
     await node.dispose()
