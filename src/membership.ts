@@ -20,6 +20,8 @@ export const MEMBERSHIP_PROTOCOL_SERVICE =
   `protocol:${MEMBERSHIP_PROTOCOL_REFERENCE}` as const
 
 const DIGEST_RE = /^[0-9a-f]{64}$/u
+const CANONICAL_UTC_TIME_RE =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u
 
 export type MembershipAction = 'add' | 'remove'
 
@@ -68,10 +70,10 @@ export class MembershipProtocolConfigError extends MembershipError {
   }
 }
 
-export class MembershipMutationError extends MembershipError {
+export class MembershipFactError extends MembershipError {
   constructor(message: string, options?: ErrorOptions) {
     super(message, options)
-    this.name = 'MembershipMutationError'
+    this.name = 'MembershipFactError'
   }
 }
 
@@ -130,14 +132,14 @@ function requireProtocolHash(config: MembershipMountConfig): string {
 
 function requirePayload(value: unknown): MembershipPayload {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    throw new MembershipMutationError(
+    throw new MembershipFactError(
       'repo.membership data must be a plain membership fact object.',
     )
   }
 
   const prototype = Object.getPrototypeOf(value)
   if (prototype !== Object.prototype && prototype !== null) {
-    throw new MembershipMutationError(
+    throw new MembershipFactError(
       'repo.membership data must be a plain membership fact object.',
     )
   }
@@ -148,7 +150,7 @@ function requirePayload(value: unknown): MembershipPayload {
     keys.length !== expected.length ||
     keys.some((key) => typeof key !== 'string' || !expected.includes(key))
   ) {
-    throw new MembershipMutationError(
+    throw new MembershipFactError(
       'repo.membership data must contain exactly repo, member and action.',
     )
   }
@@ -160,7 +162,7 @@ function requirePayload(value: unknown): MembershipPayload {
       descriptor.enumerable !== true ||
       !Object.prototype.hasOwnProperty.call(descriptor, 'value')
     ) {
-      throw new MembershipMutationError(
+      throw new MembershipFactError(
         'repo.membership data fields must be enumerable data properties.',
       )
     }
@@ -168,7 +170,7 @@ function requirePayload(value: unknown): MembershipPayload {
 
   const data = value as Record<string, unknown>
   if (data.action !== 'add' && data.action !== 'remove') {
-    throw new MembershipMutationError(
+    throw new MembershipFactError(
       'repo.membership data.action must be add or remove.',
     )
   }
@@ -181,12 +183,22 @@ function requirePayload(value: unknown): MembershipPayload {
 }
 
 function requireEffectiveTime(createdAt: string): number {
-  const effectiveTime = Date.parse(createdAt)
-  if (!Number.isFinite(effectiveTime)) {
-    throw new MembershipMutationError(
-      'repo.membership Record.createdAt must identify a valid membership effective time.',
+  if (!CANONICAL_UTC_TIME_RE.test(createdAt)) {
+    throw new MembershipFactError(
+      'repo.membership Record.createdAt must be canonical UTC ISO time.',
     )
   }
+
+  const effectiveTime = Date.parse(createdAt)
+  if (
+    !Number.isFinite(effectiveTime) ||
+    new Date(effectiveTime).toISOString() !== createdAt
+  ) {
+    throw new MembershipFactError(
+      'repo.membership Record.createdAt must be canonical UTC ISO time.',
+    )
+  }
+
   return effectiveTime
 }
 
@@ -398,7 +410,7 @@ export class MembershipService {
     try {
       return this.ctx[CORE_ENTITY_PROTOCOL_SERVICE].validateEntityPublicKey(value)
     } catch (cause) {
-      throw new MembershipMutationError(
+      throw new MembershipFactError(
         label + ' is not a valid Core EntityPublicKey.',
         { cause },
       )
@@ -429,21 +441,21 @@ export class MembershipService {
     try {
       record = this.ctx[CORE_RECORD_PROTOCOL_SERVICE].validateRecord(value)
     } catch (cause) {
-      throw new MembershipMutationError(
+      throw new MembershipFactError(
         'Invalid Core Record for repo.membership.',
         { cause },
       )
     }
 
     if (record.protocol !== MEMBERSHIP_PROTOCOL_REFERENCE) {
-      throw new MembershipMutationError(
+      throw new MembershipFactError(
         'Membership Record must reference ' +
           MEMBERSHIP_PROTOCOL_REFERENCE +
           '.',
       )
     }
     if (record.protocolHash !== this.protocolHash) {
-      throw new MembershipMutationError(
+      throw new MembershipFactError(
         'Membership Record references a different ProtocolHash.',
       )
     }
@@ -453,13 +465,13 @@ export class MembershipService {
       signatureValid =
         this.ctx[CORE_RECORD_PROTOCOL_SERVICE].verifySignature(record)
     } catch (cause) {
-      throw new MembershipMutationError(
+      throw new MembershipFactError(
         'Unable to verify membership Record signature.',
         { cause },
       )
     }
     if (!signatureValid) {
-      throw new MembershipMutationError(
+      throw new MembershipFactError(
         'Membership Record signature is invalid.',
       )
     }
