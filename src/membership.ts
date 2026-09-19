@@ -15,9 +15,9 @@ import type { JournalRecord } from './record-journal.ts'
 export const MEMBERSHIP_PROTOCOL_NAME = 'repo.membership' as const
 export const MEMBERSHIP_PROTOCOL_VERSION = '0.1.0' as const
 export const MEMBERSHIP_PROTOCOL_REFERENCE =
-  MEMBERSHIP_PROTOCOL_NAME + '@' + MEMBERSHIP_PROTOCOL_VERSION
+  `${MEMBERSHIP_PROTOCOL_NAME}@${MEMBERSHIP_PROTOCOL_VERSION}` as const
 export const MEMBERSHIP_PROTOCOL_SERVICE =
-  'protocol:' + MEMBERSHIP_PROTOCOL_REFERENCE
+  `protocol:${MEMBERSHIP_PROTOCOL_REFERENCE}` as const
 
 const DIGEST_RE = /^[0-9a-f]{64}$/u
 
@@ -199,10 +199,10 @@ function requirePayload(value: unknown): MembershipPayload {
   }
   if (
     data.previous !== null &&
-    (typeof data.previous !== 'string' || data.previous.length === 0)
+    (typeof data.previous !== 'string' || !DIGEST_RE.test(data.previous))
   ) {
     throw new MembershipMutationError(
-      'repo.membership data.previous must be a RecordId string or null.',
+      'repo.membership data.previous must be a Core RecordId or null.',
     )
   }
 
