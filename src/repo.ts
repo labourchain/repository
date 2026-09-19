@@ -11,9 +11,9 @@ import type { JournalRecord } from './record-journal.ts'
 export const REPO_ESTABLISHMENT_PROTOCOL_NAME = 'repo.establishment' as const
 export const REPO_ESTABLISHMENT_PROTOCOL_VERSION = '0.1.0' as const
 export const REPO_ESTABLISHMENT_PROTOCOL_REFERENCE =
-  'repo.establishment@0.1.0' as const
+  `${REPO_ESTABLISHMENT_PROTOCOL_NAME}@${REPO_ESTABLISHMENT_PROTOCOL_VERSION}` as const
 export const REPO_ESTABLISHMENT_PROTOCOL_SERVICE =
-  'protocol:repo.establishment@0.1.0' as const
+  `protocol:${REPO_ESTABLISHMENT_PROTOCOL_REFERENCE}` as const
 
 const DIGEST_RE = /^[0-9a-f]{64}$/u
 
