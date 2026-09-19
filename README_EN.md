@@ -10,7 +10,7 @@ In the LabourChain model, the Worker is the subject of labour, a Record represen
 
 Repository uses Cordis as its runtime plugin model. Repository capability emerges from multiple Cordis plugins. Stable semantics that must remain historically addressable on chain are declared as versioned LabourChain Protocols and implemented by Cordis plugins. Repository does not build a separate Runner, Hoster, or mega-service framework around Cordis.
 
-Requirements, Architecture, and the MVP Specs have completed the current re-projection round. The Bootstrap Story is now being implemented, while later Repository domain capabilities continue through the accepted Specs and Issues.
+Requirements, Architecture, and the MVP Specs have completed the current re-projection round. Bootstrap and the durable Record journal are merged, Core Protocols v0.1.0 are released, and the active branch is implementing the minimum Member Protocol followed by Repo establishment/reload.
 
 ## Documentation
 
@@ -63,7 +63,7 @@ Bootstrap Protocol instance
 + configuration
 ```
 
-Bootstrap is stable executable code with a process entry point. It creates a Cordis application when started, and its stable version is also declared using the Protocol format. After Cordis starts, Repository protocols, storage, index, projection, and adapters continue to be organized as Cordis plugins.
+Bootstrap is stable executable code with a process entry point. Its source currently carries the human-readable `repository.bootstrap@0.1.0` Protocol reference; under Core v0.1.0, exact Protocol identity additionally requires the built descriptor and ProtocolHash. After Cordis starts, Repository protocols, storage, index, projection, and adapters continue to be organized as Cordis plugins.
 
 The current Bootstrap provides the executable shell and a programmatic composition API. The concrete Repository product composition is not yet fixed in the executable, and this Story does not introduce an additional configuration loader.
 
@@ -108,4 +108,4 @@ The current checks mainly protect the Bootstrap runtime, Cordis lifecycle, and p
 
 The current package remains `private: true`.
 
-The Bootstrap runtime now has an executable entry point and a programmatic composition API. Repo, membership, Asset, contribution, recovery, and history capabilities remain for later Stories.
+Bootstrap and the durable Record journal are complete. Draft PR #29 runs `member.identity` against the released Core v0.1.0 `core.entity` / `core.record` artifacts; Repo establishment/reload is the active next domain slice. Membership, Asset, contribution, recovery, and history follow in later Stories.
