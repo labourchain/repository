@@ -38,7 +38,7 @@ interface MembershipPayload {
   readonly repo: string
   readonly member: string
   readonly action: MembershipAction
-  readonly previous: string | null
+  readonly previousMutation: string | null
 }
 
 interface ValidatedMembershipMutation {
@@ -104,14 +104,14 @@ export class MembershipTargetMemberError extends MembershipError {
 export class MembershipStaleMutationError extends MembershipError {
   readonly repo: string
   readonly member: string
-  readonly expectedPrevious: string | null
-  readonly actualPrevious: string | null
+  readonly expectedPreviousMutation: string | null
+  readonly actualPreviousMutation: string | null
 
   constructor(
     repo: string,
     member: string,
-    expectedPrevious: string | null,
-    actualPrevious: string | null,
+    expectedPreviousMutation: string | null,
+    actualPreviousMutation: string | null,
   ) {
     super(
       'Membership mutation does not consume the current relation head for Repo ' +
@@ -122,8 +122,29 @@ export class MembershipStaleMutationError extends MembershipError {
     this.name = 'MembershipStaleMutationError'
     this.repo = repo
     this.member = member
-    this.expectedPrevious = expectedPrevious
-    this.actualPrevious = actualPrevious
+    this.expectedPreviousMutation = expectedPreviousMutation
+    this.actualPreviousMutation = actualPreviousMutation
+  }
+}
+
+export class MembershipNoChangeError extends MembershipError {
+  readonly repo: string
+  readonly member: string
+  readonly action: MembershipAction
+
+  constructor(repo: string, member: string, action: MembershipAction) {
+    super(
+      'Membership mutation would not change the current relation state: ' +
+        action +
+        ' for Repo ' +
+        repo +
+        ' and Member ' +
+        member,
+    )
+    this.name = 'MembershipNoChangeError'
+    this.repo = repo
+    this.member = member
+    this.action = action
   }
 }
 
@@ -167,14 +188,14 @@ function requirePayload(value: unknown): MembershipPayload {
     )
   }
 
-  const expected = ['action', 'member', 'previous', 'repo']
+  const expected = ['action', 'member', 'previousMutation', 'repo']
   const keys = Reflect.ownKeys(value)
   if (
     keys.length !== expected.length ||
     keys.some((key) => typeof key !== 'string' || !expected.includes(key))
   ) {
     throw new MembershipMutationError(
-      'repo.membership data must contain exactly repo, member, action and previous.',
+      'repo.membership data must contain exactly repo, member, action and previousMutation.',
     )
   }
 
@@ -198,11 +219,11 @@ function requirePayload(value: unknown): MembershipPayload {
     )
   }
   if (
-    data.previous !== null &&
-    (typeof data.previous !== 'string' || !DIGEST_RE.test(data.previous))
+    data.previousMutation !== null &&
+    (typeof data.previousMutation !== 'string' || !DIGEST_RE.test(data.previousMutation))
   ) {
     throw new MembershipMutationError(
-      'repo.membership data.previous must be a Core RecordId or null.',
+      'repo.membership data.previousMutation must be a Core RecordId or null.',
     )
   }
 
@@ -210,7 +231,7 @@ function requirePayload(value: unknown): MembershipPayload {
     repo: data.repo as string,
     member: data.member as string,
     action: data.action,
-    previous: data.previous as string | null,
+    previousMutation: data.previousMutation as string | null,
   }
 }
 
@@ -274,7 +295,7 @@ export class MembershipService {
 
     for (const [key, records] of groups) {
       const byId = new Map<string, ValidatedMembershipMutation>()
-      const childByPrevious = new Map<string, ValidatedMembershipMutation>()
+      const childByPreviousMutation = new Map<string, ValidatedMembershipMutation>()
       let root: ValidatedMembershipMutation | undefined
 
       for (const mutation of records) {
@@ -282,8 +303,8 @@ export class MembershipService {
       }
 
       for (const mutation of records) {
-        const previous = mutation.payload.previous
-        if (previous === null) {
+        const previousMutation = mutation.payload.previousMutation
+        if (previousMutation === null) {
           if (root) {
             throw new MembershipHistoryError(
               'Membership relation contains multiple initial mutations.',
@@ -293,20 +314,20 @@ export class MembershipService {
           continue
         }
 
-        const predecessor = byId.get(previous)
+        const predecessor = byId.get(previousMutation)
         if (!predecessor) {
           throw new MembershipHistoryError(
-            'Membership mutation references a missing predecessor: ' + previous,
+            'Membership mutation references a missing predecessor: ' + previousMutation,
           )
         }
 
-        if (childByPrevious.has(previous)) {
+        if (childByPreviousMutation.has(previousMutation)) {
           throw new MembershipHistoryError(
             'Membership relation contains a predecessor fork at RecordId: ' +
-              previous,
+              previousMutation,
           )
         }
-        childByPrevious.set(previous, mutation)
+        childByPreviousMutation.set(previousMutation, mutation)
       }
 
       if (!root) {
@@ -338,7 +359,7 @@ export class MembershipService {
           )
         }
 
-        const child = childByPrevious.get(current.record.id)
+        const child = childByPreviousMutation.get(current.record.id)
         if (!child) {
           rebuilt.set(key, {
             active: current.payload.action === 'add',
@@ -386,21 +407,21 @@ export class MembershipService {
         )
       }
 
-      if (validated.payload.previous !== current.headRecordId) {
+      if (validated.payload.previousMutation !== current.headRecordId) {
         throw new MembershipStaleMutationError(
           validated.payload.repo,
           validated.payload.member,
           current.headRecordId,
-          validated.payload.previous,
+          validated.payload.previousMutation,
         )
       }
 
       const desiredActive = validated.payload.action === 'add'
       if (current.active === desiredActive) {
-        return membershipView(
+        throw new MembershipNoChangeError(
           validated.payload.repo,
           validated.payload.member,
-          current,
+          validated.payload.action,
         )
       }
 
@@ -426,9 +447,7 @@ export class MembershipService {
     const memberIdentity = await this.requireMember(member)
     const key = relationKey(repoIdentity.identity, memberIdentity)
 
-    if (!this.relations.has(key)) {
-      await this.rebuild()
-    }
+    await this.rebuild()
 
     return membershipView(
       repoIdentity.identity,
@@ -444,9 +463,7 @@ export class MembershipService {
   async listMembers(repo: unknown): Promise<readonly string[]> {
     const repoIdentity = await this.requireRepo(repo)
 
-    if (![...this.relations.keys()].some((key) => key.startsWith(repoIdentity.identity + '\u0000'))) {
-      await this.rebuild()
-    }
+    await this.rebuild()
 
     const prefix = repoIdentity.identity + '\u0000'
     const members: string[] = []
@@ -463,13 +480,13 @@ export class MembershipService {
   private async withMutationGate<T>(
     operation: () => Promise<T>,
   ): Promise<T> {
-    const previous = this.mutationGate
+    const previousMutation = this.mutationGate
     let release!: () => void
     this.mutationGate = new Promise<void>((resolve) => {
       release = resolve
     })
 
-    await previous
+    await previousMutation
     try {
       return await operation()
     } finally {
@@ -500,14 +517,7 @@ export class MembershipService {
   }
 
   private async requireRepo(value: unknown): Promise<RepoView> {
-    try {
-      return await this.ctx[REPO_ESTABLISHMENT_PROTOCOL_SERVICE].loadRepo(value)
-    } catch (cause) {
-      throw new MembershipMutationError(
-        'Membership Repo is not an established Repo.',
-        { cause },
-      )
-    }
+    return this.ctx[REPO_ESTABLISHMENT_PROTOCOL_SERVICE].loadRepo(value)
   }
 
   private async requireMember(value: unknown): Promise<string> {
@@ -584,7 +594,7 @@ export class MembershipService {
         repo,
         member,
         action: payload.action,
-        previous: payload.previous,
+        previousMutation: payload.previousMutation,
       },
     }
   }
