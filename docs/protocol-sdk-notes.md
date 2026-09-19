@@ -1,6 +1,6 @@
 # Protocol SDK notes from `member.identity`
 
-This note records only requirements exposed by implementing the first non-Core Protocol. It is input to `labourchain/core-protocols` #23 and #31, not a second SDK design owned by Repository.
+This note records only requirements exposed by implementing the first non-Core Protocol. Core runtime ABI #31 is complete in v0.1.0; the remaining SDK observations are input to deferred `labourchain/core-protocols` #23, not a second SDK design owned by Repository.
 
 ## Construction flow exercised by Member
 
@@ -52,13 +52,13 @@ A Protocol implementation often validates Records that reference that same Proto
 
 The artifact cannot hard-code its own ProtocolHash because ProtocolHash commits to the artifact bytes. The Host therefore needs a standard mount context/config carrying the identity of the already verified Protocol being mounted, at minimum its exact ProtocolHash.
 
-Repository currently uses the narrow temporary shape:
+Repository currently uses the narrow shape:
 
 ```ts
 { protocolHash }
 ```
 
-Only to expose the requirement. Core #31 should standardize the generic Host-to-Plugin mount identity instead of each Protocol inventing its own config convention.
+Core v0.1.0 deliberately leaves Host mount configuration outside Core Protocol validity. Repository therefore treats this as its current minimal Host-to-Protocol mount convention and will only widen it when a concrete loader/runtime requirement appears.
 
 ### 3. Chain semantic dependencies and Cordis runtime dependencies remain distinct
 
@@ -123,14 +123,9 @@ Protocol-specific behavior such as `declareMember()` / `requireMember()` remains
 
 ## Current development boundary
 
-Repository can implement and test Member semantics against the accepted #31 service convention now, but it should not freeze a publishable `member.identity` Protocol descriptor yet:
+Core v0.1.0 is released and the `core.entity@0.1.0` / `core.record@0.1.0` `cordis-js-esm` identities are frozen. Repository runtime integration may therefore consume those exact released Protocols now.
 
-- Core #31 still has to migrate the four Core artifacts from the old `js-esm` identities to `cordis-js-esm`;
-- that migration intentionally changes the exact `core.entity` and `core.record` ProtocolHashes required by Member;
-- no Core v0.1.0 release exists yet;
-- Protocol Dev SDK #23 is not implemented yet.
-
-Therefore the Member source/runtime contract can progress, while final artifact construction and exact dependency descriptor fixtures should wait for the new Core identities rather than pinning obsolete hashes.
+Protocol Dev SDK #23 remains deferred, so Repository does not yet claim a publishable/frozen `member.identity` or `repo.establishment` artifact. Source/runtime semantics and Host integration can continue independently of SDK implementation.
 
 ## Deliberately not concluded here
 
@@ -141,4 +136,4 @@ This implementation does not decide:
 - automatic source discovery, templates, minification, or a bundler abstraction;
 - richer Protocol metadata not required by the Member use case.
 
-Those remain Core #31 / #23 decisions.
+Those remain future Host/runtime or Protocol Dev SDK #23 decisions; Core #31 is already complete.
