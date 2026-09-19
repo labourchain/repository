@@ -2,11 +2,13 @@
 
 本条目描述 Asset 在 LabourChain 中的私人、公开和公共使用方式，以及授权和使用关系。
 
-## 私人 Asset
+## 私人访问
 
-Personal Repo 是当前默认的私人仓库。存放在其中的 Asset 不会因为进入 LabourChain 环境而自动公开。
+Asset 可以具有非公开的访问状态。Member-scoped Repo 可以作为 LabourFlow 等上层产品组织这类内容的默认空间，但“与某个 Member identity 的 Repo 关联”本身不定义私人财产权。
 
-Worker 可以把特定 Asset 授权给 Project、Repo 或其他受支持的使用方。授权改变的是使用关系，不改变 Asset 的生产者或既有 provenance。
+访问限制、使用授权与财产权语义必须分开表达。Asset 不会仅因为进入 LabourChain 环境而自动公开，也不会仅因为位于 Member-scoped Repo 就自动成为该 Member 的私人财产。
+
+Member 可以把特定 Asset 授权给 Project、Repo 或其他受支持的使用方。授权改变的是使用关系，不改变 Asset 的生产者或既有 provenance。
 
 ## 公开 Asset
 
@@ -80,7 +82,7 @@ clone 或 fork 可以是 contribution 的环节，但不能用来定义普通软
 
 当前普通 Repo 遵循上链即公开，但这不要求未来所有链上 Asset 都公开明文内容。
 
-后续可以通过承诺、零知识证明或其他机制证明 Asset 存在、某项劳动发生，以及 Asset 与 Record、Worker、Repo 之间存在相应关系，同时隐藏 Asset 的具体内容。通用 Private Repo 和这类证明机制目前不属于 Repository MVP。
+后续可以通过承诺、零知识证明或其他机制证明 Asset 存在、某项劳动发生，以及 Asset 与 Record、Member/Worker、Repo 之间存在相应关系，同时隐藏 Asset 的具体内容。通用访问控制产品和这类证明机制目前不属于 Repository MVP。
 
 ## 相关条目
 
