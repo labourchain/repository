@@ -280,7 +280,7 @@ test('Repo-signed add, check, list and later remove derive current membership', 
         member: MEMBER_KEY,
         active: true,
         latestRecordId: add.id,
-        effectiveAt: add.createdAt,
+        latestCreatedAt: add.createdAt,
       },
     )
     assert.equal(
@@ -308,7 +308,7 @@ test('Repo-signed add, check, list and later remove derive current membership', 
         member: MEMBER_KEY,
         active: false,
         latestRecordId: remove.id,
-        effectiveAt: remove.createdAt,
+        latestCreatedAt: remove.createdAt,
       },
     )
     assert.equal(
@@ -406,7 +406,7 @@ test('repeated membership facts remain set-like without a predecessor chain', as
         member: MEMBER_KEY,
         active: true,
         latestRecordId: second.id,
-        effectiveAt: second.createdAt,
+        latestCreatedAt: second.createdAt,
       },
     )
 
@@ -430,7 +430,7 @@ test('exact accepted membership Record replay is idempotent', async () => {
   })
 })
 
-test('latest effective time wins regardless of journal enumeration order', async () => {
+test('latest createdAt wins regardless of journal enumeration order', async () => {
   await withDirectory(async (directory) => {
     const journalNode = await createRepositoryNode({
       plugins: [
@@ -477,7 +477,7 @@ test('latest effective time wins regardless of journal enumeration order', async
         member: MEMBER_KEY,
         active: false,
         latestRecordId: later.id,
-        effectiveAt: later.createdAt,
+        latestCreatedAt: later.createdAt,
       },
     )
 
@@ -511,7 +511,7 @@ test('older historical fact is retained without replacing current membership', a
         member: MEMBER_KEY,
         active: false,
         latestRecordId: current.id,
-        effectiveAt: current.createdAt,
+        latestCreatedAt: current.createdAt,
       },
     )
     assert.deepEqual(
@@ -523,7 +523,7 @@ test('older historical fact is retained without replacing current membership', a
   })
 })
 
-test('distinct membership facts at the same effective time fail closed', async () => {
+test('distinct membership facts at the same createdAt fail closed', async () => {
   await withDirectory(async (directory) => {
     const first = await createRepositoryNode({ plugins: composition(directory) })
     await setupRepo(first)
@@ -594,7 +594,7 @@ test('membership current view survives restart from durable facts', async () => 
         member: MEMBER_KEY,
         active: false,
         latestRecordId: remove.id,
-        effectiveAt: remove.createdAt,
+        latestCreatedAt: remove.createdAt,
       },
     )
     await second.dispose()
@@ -634,6 +634,48 @@ test('membership reads refresh from durable journal facts', async () => {
   })
 })
 
+test('applyMembership returns the durable-derived view after accept', async () => {
+  await withDirectory(async (directory) => {
+    const node = await createRepositoryNode({ plugins: composition(directory) })
+    await setupRepo(node)
+
+    const incoming = membershipRecord(
+      'converge-incoming-add',
+      'add',
+      MEMBER_KEY,
+      '2026-09-19T00:00:02.000Z',
+    )
+    const newer = membershipRecord(
+      'converge-newer-remove',
+      'remove',
+      MEMBER_KEY,
+      '2026-09-19T00:00:03.000Z',
+    )
+
+    const journal = node.context.recordJournal
+    const originalAccept = journal.accept.bind(journal)
+    journal.accept = async (record) => {
+      await originalAccept(record)
+      if (record.id === incoming.id) {
+        await originalAccept(newer)
+      }
+    }
+
+    assert.deepEqual(
+      await node.context[MEMBERSHIP_PROTOCOL_SERVICE].applyMembership(incoming),
+      {
+        repo: REPO_KEY,
+        member: MEMBER_KEY,
+        active: false,
+        latestRecordId: newer.id,
+        latestCreatedAt: newer.createdAt,
+      },
+    )
+
+    await node.dispose()
+  })
+})
+
 test('Repo lookup errors are not reclassified as membership absence', async () => {
   await withDirectory(async (directory) => {
     const node = await createRepositoryNode({ plugins: composition(directory) })
@@ -651,7 +693,7 @@ test('Repo lookup errors are not reclassified as membership absence', async () =
   })
 })
 
-test('membership rejects invalid Protocol, signature, payload and effective time', async () => {
+test('membership rejects invalid Protocol, signature, payload and createdAt', async () => {
   await withDirectory(async (directory) => {
     const node = await createRepositoryNode({ plugins: composition(directory) })
     await setupRepo(node)
