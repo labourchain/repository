@@ -47,6 +47,20 @@ export class RepoEstablishmentError extends RepoError {
   }
 }
 
+export class RepoEstablishingMemberError extends RepoError {
+  readonly identity: string
+
+  constructor(identity: string, options?: ErrorOptions) {
+    super(
+      'Repo establishment author does not satisfy the Member capability: ' +
+        identity,
+      options,
+    )
+    this.name = 'RepoEstablishingMemberError'
+    this.identity = identity
+  }
+}
+
 export class RepoNotFoundError extends RepoError {
   readonly identity: string
 
@@ -146,6 +160,7 @@ export class RepoEstablishmentService {
   private readonly ctx: Context
   readonly protocolHash: string
   private readonly establishments = new Map<string, string>()
+  private establishmentGate: Promise<void> = Promise.resolve()
 
   constructor(ctx: Context, protocolHash: string) {
     this.ctx = ctx
@@ -180,24 +195,26 @@ export class RepoEstablishmentService {
   async establishRepo(value: unknown): Promise<RepoView> {
     const validated = await this.validateEstablishment(value)
 
-    // Durable facts, not the replaceable in-memory index, decide whether the
-    // Repo identity has already been established.
-    await this.rebuild()
+    return this.withEstablishmentGate(async () => {
+      // Durable facts, not the replaceable in-memory index, decide whether the
+      // Repo identity has already been established.
+      await this.rebuild()
 
-    const existing = this.establishments.get(validated.repoIdentity)
-    if (existing !== undefined && existing !== validated.record.id) {
-      throw new RepoAlreadyEstablishedError(
-        validated.repoIdentity,
-        existing,
-      )
-    }
+      const existing = this.establishments.get(validated.repoIdentity)
+      if (existing !== undefined && existing !== validated.record.id) {
+        throw new RepoAlreadyEstablishedError(
+          validated.repoIdentity,
+          existing,
+        )
+      }
 
-    // Exact replay still goes through the journal so non-equivalent content
-    // under one RecordId cannot bypass journal conflict detection.
-    await this.ctx.recordJournal.accept(validated.record)
-    this.establishments.set(validated.repoIdentity, validated.record.id)
+      // Exact replay still goes through the journal so non-equivalent content
+      // under one RecordId cannot bypass journal conflict detection.
+      await this.ctx.recordJournal.accept(validated.record)
+      this.establishments.set(validated.repoIdentity, validated.record.id)
 
-    return repoView(validated.record, validated.repoIdentity)
+      return repoView(validated.record, validated.repoIdentity)
+    })
   }
 
   async loadRepo(identity: unknown): Promise<RepoView> {
@@ -223,6 +240,23 @@ export class RepoEstablishmentService {
     }
 
     return repoView(validated.record, repoIdentity)
+  }
+
+  private async withEstablishmentGate<T>(
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    const previous = this.establishmentGate
+    let release!: () => void
+    this.establishmentGate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+
+    await previous
+    try {
+      return await operation()
+    } finally {
+      release()
+    }
   }
 
   private isCandidate(value: JournalRecord): boolean {
@@ -296,10 +330,7 @@ export class RepoEstablishmentService {
     try {
       await this.ctx[MEMBER_PROTOCOL_SERVICE].requireMember(record.createdBy)
     } catch (cause) {
-      throw new RepoEstablishmentError(
-        'Repo establishment author does not satisfy the Member capability.',
-        { cause },
-      )
+      throw new RepoEstablishingMemberError(record.createdBy, { cause })
     }
 
     return { record, repoIdentity }
