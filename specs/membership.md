@@ -83,7 +83,7 @@ The Membership Protocol requires `createdAt` to use canonical UTC ISO form with 
 
 If two distinct membership facts for the same `Repo × Member` relation have the same `createdAt`, the history is ambiguous and rebuild fails closed.
 
-Repeated `add` or repeated `remove` facts are allowed as redundant Repo statements. They do not create duplicate current membership because only the latest fact determines the current set.
+Repeated `add` or repeated `remove` facts are allowed as redundant Repo statements when they occupy distinct `createdAt` positions. They do not create duplicate current membership because only the latest fact determines the current set. Two distinct Records at the same `createdAt` remain invalid even when they assert the same action, because that ordering position must resolve to one RecordId.
 
 The field name `action` describes what the Repo-signed fact asserts for the relation: `add` asserts membership is active from that fact onward in the membership fact order, while `remove` asserts it is inactive. It is not a command executed against a previous mutation.
 
@@ -163,17 +163,22 @@ interface MembershipView {
 
 ## Persistence and rebuild
 
-The exact accepted membership Records are the durable source.
+The exact accepted membership Records remain the durable facts. Repository Runtime also maintains validated relationship state for normal operation and later packing; this relationship state is part of the Runtime Record database boundary rather than merely a display/query cache.
 
-Runtime may maintain a replaceable projection equivalent to:
+For Story #6, the Membership service implements the minimum relation indexes equivalent to:
 
 ```text
 Repo × Member
 -> latest membership Record by `createdAt`
 -> active / inactive
+
+Repo × Member × createdAt
+-> unique membership RecordId
 ```
 
-Current read operations rebuild from durable facts before answering. This intentionally prefers correctness over a premature cache-invalidation/index-generation mechanism.
+The second index validates that one relation cannot contain two distinct facts at the same ordering position before a new Record is durably accepted through the Membership path. The full shared Runtime Record database and Block packer remain broader Repository Runtime work and are not introduced by Story #6.
+
+Current read operations rebuild these minimum indexes from durable facts before answering. This keeps #6 recoverable while preserving the architecture in which Repository Runtime relationship state is a correctness input for validation and later packing.
 
 Rebuild must not depend on:
 
