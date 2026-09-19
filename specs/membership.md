@@ -1,7 +1,7 @@
 # Membership Specification
 
 - **Status:** Draft
-- **Scope:** Repo operator-controlled contribution membership
+- **Scope:** Repo-signed contribution membership facts
 - **Requirements:** [`../docs/requirements.md`](../docs/requirements.md)
 - **Architecture:** [`../docs/architecture.md`](../docs/architecture.md)
 - **Umbrella:** [`repository-mvp.md`](./repository-mvp.md)
@@ -10,114 +10,103 @@
 
 ## Purpose
 
-Membership determines which human Members may contribute Assets to a Repo.
+Membership determines which human Members are eligible to contribute Assets to a Repo.
 
-Membership is a relation between an already valid Member identity and an already established Repo. It does not create another Member identity and does not determine whether that Member may create Records or Assets outside the Repo.
+Membership is a Repo-authored fact about an already valid Member identity. It does not create another Member identity and it is not itself a causal chain.
+
+The causal production chain belongs to labour and Asset protocols:
+
+```text
+Labour
+  -> Asset
+  -> new Labour using that Asset
+  -> new Asset
+  -> ...
+```
+
+Membership only states whether a Member is accepted by a Repo at a given effective time.
 
 ## Membership Protocol
 
-Story #6 implements the minimum mutation semantics as:
+Story #6 implements:
 
 ```text
 repo.membership@0.1.0
 ```
 
-The exact `Record.protocolHash` must match the exact ProtocolHash supplied by the Host when this Protocol implementation is mounted. `repo.membership@0.1.0` is the signed human-readable reference; ProtocolHash is the exact machine authority under Core v0.1.0.
+The exact `Record.protocolHash` must match the exact ProtocolHash supplied by the Host when this Protocol implementation is mounted.
 
-A membership mutation is one signed Record:
+A membership fact is one signed Record:
 
 ```ts
-interface RepoMembershipMutation {
+interface RepoMembershipFact {
   repo: EntityPublicKey
   member: EntityPublicKey
   action: 'add' | 'remove'
-  previousMutation: RecordId | null
 }
 ```
 
-The enclosing Record supplies the actor:
+The enclosing Record supplies both authority and effective time:
 
 ```text
 Record.createdBy
-= mutation author
+= Repo EntityPublicKey
 
-repo.membership interpretation:
-Record.createdBy must equal the Repo's current MVP operator
+Record.signature
+= signature by the Repo identity
+
+Record.createdAt
+= membership effective time attested by that Repo
 ```
 
-The operator is derived from the accepted Repo establishment Record. Membership does not introduce another owner/admin/operator source.
+The Membership Protocol requires `Record.createdBy == Record.data.repo`.
 
-## Relation sequence
+How an operator causes the Repo key to sign such a Record is signer/key-custody runtime behavior and remains outside Story #6.
 
-Membership is mutable state, while the durable Record journal deliberately carries no business ordering semantics and Core `Record.createdAt` is only a signed string, not a trusted ordering field.
+## Temporal semantics
 
-Therefore the current state of one `Repo × Member` relation is expressed by an explicit predecessor chain.
+Membership facts do not contain `previous`, `previousMutation` or another predecessor pointer.
 
-`previousMutation` is:
+For one `Repo × Member` relation, the current effective membership is derived from the latest valid Repo-signed membership fact by `Record.createdAt`.
 
-- `null` for the first state-changing mutation of that relation;
-- otherwise the RecordId of the immediately preceding accepted `repo.membership@0.1.0` mutation for the same Repo and Member.
-
-A state-changing mutation is accepted only when its `previousMutation` matches the current durable head for that exact relation.
-
-This gives a relation-local causal sequence without relying on:
-
-- journal filename / replay order;
-- process arrival order;
-- wall-clock time;
-- `createdAt` sorting;
-- provider-native sequence numbers.
-
-For one relation, accepted state-changing mutations therefore alternate:
+`repo.membership@0.1.0` therefore assigns domain meaning to `createdAt` that Core itself deliberately does not assign:
 
 ```text
-no relation
-  -> add
-  -> remove
-  -> add
-  -> remove
-  -> ...
+Core Record.createdAt
+= signed string, no generic ordering semantics
+
+repo.membership interpretation
+= Repo-attested membership effective time
 ```
 
-A durable history containing a missing predecessor, predecessor from another relation, cycle, fork, invalid initial `remove`, or non-alternating state transition is invalid and rebuild must fail closed.
+The Membership Protocol requires `createdAt` to identify a valid time.
 
-Cross-node concurrent mutation arbitration is outside Story #6, as node synchronization/consensus is outside the Repository MVP. Same-node mutation handling must serialize the check-and-accept boundary so two state-changing Records cannot both consume the same durable head through one service instance.
+If two distinct membership facts for the same `Repo × Member` relation have the same effective time, the history is ambiguous and rebuild fails closed.
 
-## State-change semantics
+Repeated `add` or repeated `remove` facts are allowed as redundant Repo statements. They do not create duplicate effective membership because only the latest fact determines the current set.
 
-The effective membership view behaves as a set, but a `repo.membership` Record represents an accepted state change rather than a command/request.
+## Block relation
 
-- `add` is valid only when the relation is currently inactive;
-- `remove` is valid only when the relation is currently active;
-- submitting a new mutation that would not change the current state fails explicitly and is not durably accepted;
-- exact replay of an already accepted mutation Record is idempotent;
-- a stale mutation whose `previousMutation` does not equal the current relation head fails explicitly rather than being silently rebased.
+A Block commits to an ordered `Record[]`, but Core does not derive or validate domain DAG semantics from that array.
 
-A caller that wants idempotent product behavior should query the current membership view before constructing/signing a new mutation Record. Protocol success means the exact Record is already accepted as a durable membership fact.
-
-## Authorization
-
-Only the Repo's current MVP operator may author a state-changing or no-op membership request.
-
-Authorization uses the Repo capability:
+This allows, for example, one Block to contain:
 
 ```text
-loadRepo(repo)
--> RepoView.operator
--> compare with Record.createdBy
+1. Member identity fact already exists / is recognized
+2. Repo-signed membership add fact
+3. Labour Record by that Member
+4. resulting Asset Record
 ```
 
-A non-operator mutation must fail before the Record becomes durable membership state.
+The Membership Protocol establishes contribution eligibility. Labour/Asset protocols are responsible for their own input/output and causal relationships.
 
-The MVP does not introduce additional Repository roles or operator transfer.
+Story #6 does not add a rule that every Membership fact must be confirmed in an earlier Block before it can be used. Repository-accepted membership may still be pending-chain.
 
 ## Member identity boundary
 
 Every membership target must satisfy the `member.identity` capability defined in [`member.md`](./member.md).
 
-Repo membership must not mint a new identity, copy profile data into the membership relation, or interpret a generic process/runtime worker as a human Member.
-
-The relation is:
+Membership therefore relates:
 
 ```text
 Repo EntityPublicKey
@@ -125,14 +114,14 @@ Repo EntityPublicKey
 Member EntityPublicKey
 ```
 
-with `repo.membership@0.1.0` supplying only contribution-eligibility semantics.
+It must not mint a second human identity, copy Member profile data, or interpret a runtime/process worker as a human Member.
 
 ## Runtime contract
 
 The minimum runtime behavior is equivalent to:
 
 ```text
-applyMembership(mutationRecord)
+applyMembership(record)
 getMembership(repo, member)
 hasMember(repo, member)
 listMembers(repo)
@@ -144,70 +133,74 @@ rebuild()
 1. validates the exact Core Record, Protocol reference/hash and signature;
 2. validates Repo and target Member identities;
 3. requires the target to satisfy the Member capability;
-4. loads the Repo and requires `Record.createdBy == RepoView.operator`;
-5. compares `previousMutation` with the durable current relation head;
-6. rejects a new mutation that would not change the current relation state;
-7. durably accepts the exact state-changing Record through `recordJournal` before reporting success.
+4. requires the Repo to already be established;
+5. requires `Record.createdBy == data.repo`;
+6. interprets `Record.createdAt` as the Repo-attested effective time;
+7. durably accepts the exact Record through `recordJournal` before reporting success;
+8. derives current membership from the latest effective fact.
 
-`getMembership` exposes enough current relation information for a caller/signer to construct the next mutation without inventing provider ordering:
+Exact replay of an already accepted Record is idempotent.
+
+A historical fact whose effective time is older than the current fact may still be durably retained without replacing the current effective view.
+
+`MembershipView` is equivalent to:
 
 ```ts
 interface MembershipView {
   repo: EntityPublicKey
   member: EntityPublicKey
   active: boolean
-  headRecordId: RecordId | null
+  latestRecordId: RecordId | null
+  effectiveAt: string | null
 }
 ```
 
-`listMembers(repo)` exposes current active Member identities only and must not expose duplicates. Ordering is a query/runtime concern and carries no membership-history semantics.
-
-Signing UX, secret-key custody and Record construction are outside this capability.
+`listMembers(repo)` exposes each currently active Member once.
 
 ## Persistence and rebuild
 
-The exact accepted membership mutation Records are the durable source.
+The exact accepted membership Records are the durable source.
 
-Runtime may maintain replaceable projections equivalent to:
+Runtime may maintain a replaceable projection equivalent to:
 
 ```text
 Repo × Member
--> current head RecordId
+-> latest effective membership Record
 -> active / inactive
 ```
 
-and:
+Current read operations rebuild from durable facts before answering. This intentionally prefers correctness over a premature cache-invalidation/index-generation mechanism.
 
-```text
-Repo
--> current active Member set
-```
+Rebuild must not depend on:
 
-These projections must be rebuildable from accepted `repo.membership@0.1.0` Records without using journal enumeration order as domain order. Current read APIs rebuild from durable facts before answering; a future cache invalidation/index generation mechanism may optimize this only when a concrete scale need appears.
+- journal enumeration order;
+- filesystem filename order;
+- RecordId lexical order;
+- process arrival order.
 
-A usable restart path must recover the same current membership view from the durable predecessor chains.
+It derives the current view from Repo-signed membership effective time.
 
-Accepted membership Records are Repository accepted / pending-chain facts until actual chain-state evidence reports Block inclusion. Local journal persistence must not be presented as Block confirmation.
+Accepted membership facts are Repository accepted / pending-chain until actual chain-state evidence reports Block inclusion. Local journal persistence must not be presented as Block confirmation.
 
 ## Contribution eligibility
 
-A Member must be a current Repo member before that Member can have an Asset contribution accepted by the Repo.
+A Member must have an effective active Repo membership before a contribution can be accepted by that Repo.
 
-Membership failure must prevent the contribution from reaching Repository accepted / `COMMITTED` state.
+The precise relationship between membership effective time and a Labour/contribution Record belongs to the later contribution/labour protocols. Story #6 only exposes the membership facts and current effective view.
 
-Contribution execution remains defined by [`contribution.md`](./contribution.md); Story #6 does not implement contribution.
+Contribution execution remains outside Story #6.
 
 ## Failure model
 
 Consumers must be able to distinguish at least:
 
 - Repo unavailable / not established;
-- actor is not the Repo operator;
+- membership Record not authored by the Repo identity;
 - target identity is not a valid Member;
 - invalid Core Record, Repo identity or Member identity;
 - wrong membership Protocol reference/hash;
-- stale predecessor / relation conflict;
-- malformed or conflicting durable membership history;
+- invalid membership effective time;
+- ambiguous distinct facts at the same effective time;
 - durable Record ingress/journal failure.
 
 ## Boundaries
@@ -215,14 +208,14 @@ Consumers must be able to distinguish at least:
 This Spec does not define:
 
 - Member identity semantics beyond consuming `member.identity`;
-- whether a Member may create Records or Assets generally;
-- a second human identity type;
+- labour/Asset causal DAG semantics;
+- contribution execution;
+- Repo key custody or signing UX;
 - operator transfer;
 - owner/admin/maintainer/editor/viewer roles;
 - generic ACL;
 - Project membership;
 - ownership or private-property semantics;
-- contribution execution;
 - Block packing, consensus or node synchronization;
 - a Repository-domain chain database.
 
@@ -230,18 +223,16 @@ This Spec does not define:
 
 Tests must demonstrate that:
 
-- the Repo operator can add a valid Member;
-- the operator can remove a current Member;
-- membership can be checked and active members listed;
-- a non-operator cannot mutate membership;
+- a Repo-signed membership add makes a valid Member active;
+- a later Repo-signed remove makes that Member inactive;
+- membership can be checked and active Members listed;
+- a non-Repo signer cannot author membership for that Repo;
 - a non-Member Entity cannot be silently treated as a Repo Member;
-- adding an already active Member fails explicitly without creating another durable membership mutation;
-- removing an inactive Member fails explicitly without creating durable membership state;
+- repeated add/remove facts do not create duplicate effective membership;
 - exact accepted Record replay is idempotent;
-- a stale `previousMutation` cannot silently overwrite the current relation head;
-- same-node competing state-changing mutations cannot both consume one head;
-- current membership survives restart and rebuild independent of journal enumeration order;
-- malformed/forked predecessor history fails closed;
-- membership remains Repo-scoped contribution eligibility only;
+- a later effective fact wins regardless of journal enumeration order;
+- an older historical fact may be retained without replacing the current view;
+- distinct facts with the same effective time fail closed;
+- current membership survives restart and rebuild;
 - accepted/pending-chain membership state is not presented as Block-confirmed;
 - the Membership Protocol service follows Cordis lifecycle disposal.
