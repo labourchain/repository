@@ -343,12 +343,14 @@ test('same-node concurrent establishments preserve one accepted Repo fact', asyn
 
     assert.equal(fulfilled.length, 1)
     assert.equal(rejected.length, 1)
-    assert.ok(
-      rejected[0]!.status === 'rejected' &&
-        rejected[0].reason instanceof RepoAlreadyEstablishedError,
-    )
 
-    const accepted = fulfilled[0]!
+    const rejectedResult = rejected[0]
+    assert.ok(rejectedResult)
+    assert.equal(rejectedResult.status, 'rejected')
+    assert.ok(rejectedResult.reason instanceof RepoAlreadyEstablishedError)
+
+    const accepted = fulfilled[0]
+    assert.ok(accepted)
     assert.equal(accepted.status, 'fulfilled')
     const loaded = await node.context[
       REPO_ESTABLISHMENT_PROTOCOL_SERVICE
