@@ -3,6 +3,7 @@ import {
   CORE_ENTITY_PROTOCOL_SERVICE,
   CORE_RECORD_PROTOCOL_SERVICE,
   MEMBER_PROTOCOL_SERVICE,
+  MemberNotFoundError,
   type CoreRecordValue,
 } from './member.ts'
 import type { JournalRecord } from './record-journal.ts'
@@ -330,7 +331,10 @@ export class RepoEstablishmentService {
     try {
       await this.ctx[MEMBER_PROTOCOL_SERVICE].requireMember(record.createdBy)
     } catch (cause) {
-      throw new RepoEstablishingMemberError(record.createdBy, { cause })
+      if (cause instanceof MemberNotFoundError) {
+        throw new RepoEstablishingMemberError(record.createdBy, { cause })
+      }
+      throw cause
     }
 
     return { record, repoIdentity }
