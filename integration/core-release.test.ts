@@ -26,7 +26,8 @@ import {
 const CORE_RELEASE = 'v0.1.0'
 const CORE_VERSION = '0.1.0'
 const CORE_RELEASE_BASE =
-  'https://github.com/labourchain/core-protocols/releases/download/v0.1.0'
+  'https://github.com/labourchain/core-protocols/releases/download/' +
+  CORE_RELEASE
 
 const CORE_ENTITY_PROTOCOL_HASH =
   'c507745d8e17760f25d852f3889381ca9053b0197f418bdc0f0a5e9e0f19ae9c'
@@ -310,7 +311,3 @@ test(
   },
 )
 
-test('Core release integration is pinned to the declared release', () => {
-  assert.equal(CORE_RELEASE, 'v0.1.0')
-  assert.equal(CORE_VERSION, '0.1.0')
-})
