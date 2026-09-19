@@ -480,13 +480,13 @@ export class MembershipService {
   private async withMutationGate<T>(
     operation: () => Promise<T>,
   ): Promise<T> {
-    const previousMutation = this.mutationGate
+    const previousGate = this.mutationGate
     let release!: () => void
     this.mutationGate = new Promise<void>((resolve) => {
       release = resolve
     })
 
-    await previousMutation
+    await previousGate
     try {
       return await operation()
     } finally {
