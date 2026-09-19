@@ -27,6 +27,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm run typecheck
       - run: pnpm run test:coverage
+      - run: pnpm run test:core-release
       - run: pnpm run build
       - name: verify publish tarball
         run: pnpm run package:check
