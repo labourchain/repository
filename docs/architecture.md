@@ -276,7 +276,7 @@ sequenceDiagram
     Chain-->>Protocol: optional block-confirmed status
 ```
 
-Contribution 的协议语义由对应 Protocol 定义；其 implementation 由 Cordis 负责运行，不额外引入一个把状态机写死的 Repository Runner。Record ingress/journal 和 chain-state access 是可替换 Runtime 能力，不是 Repository 领域自己的第二套链。
+Contribution 的协议语义由对应 Protocol 定义；其 implementation 由 Cordis 负责运行，不额外引入一个把状态机写死的 Repository Runner。Repository Runtime 需要维护一层领域感知的 Record database，用于保存已验证的 Record 关系、顺序/依赖和待打包集合，并作为后续关系验证与 Block packing 的运行时输入。Record ingress/journal、Runtime Record database 与 chain-state access 是三个不同职责：journal 保存 exact accepted Records；Runtime Record database 维护协议验证后的关系状态；chain state 回答已收录 Block 的链确证状态。Runtime Record database 不是第二条 blockchain，也不取代 Core Block / canonical-chain 语义。
 
 ## Contribution 状态
 
@@ -302,7 +302,7 @@ stateDiagram-v2
 
 Repository 不以领域 service-owned state 复制链确证事实。
 
-需要区分三类 Runtime 数据：
+需要区分四类 Runtime 数据：
 
 ```text
 1. durable pending/accepted journal
@@ -310,19 +310,26 @@ Repository 不以领域 service-owned state 复制链确证事实。
    - 在其安全进入链或交给等价 durable node runtime 前不能任意丢弃
    - 不是 Block confirmation
 
-2. staging
+2. Runtime Record database
+   - 维护通过适用 Protocol 验证后的 Record 关系、顺序/依赖与 pending packing state
+   - Repository 的关系验证、追溯和后续 Block packing 消费这一层
+   - 可以从 durable Records + exact Protocol semantics 重建/对账，但运行时不是纯查询缓存
+   - 不自行赋予 Block confirmation，也不是 canonical-chain 数据库
+
+3. staging
    - contribution 处理中的临时/恢复状态
    - 未达到 Repository acceptance
 
-3. index / cache / projection
+4. index / cache / projection
    - 查询与展示加速数据
-   - 可通过 journal + chain state 重建或对账
+   - 可由 Runtime Record database、journal 与 chain state 派生或重建
 ```
 
 Runtime 还可以保存：
 
 - Asset payload 或其他协议允许的持久内容；
-- Repo identity -> establishment RecordId 的查询索引；
+- Repo identity -> establishment RecordId 等领域关系索引；
+- 用于验证与打包的 Record relationship / dependency indexes；
 - Asset 查询索引；
 - contribution history projection；
 - cache 和其他可重建运行数据。
