@@ -226,7 +226,7 @@ This Spec does not define:
 - Project membership;
 - ownership or private-property semantics;
 - Block packing, consensus or node synchronization;
-- a Repository-domain chain database.
+- a second blockchain or Repository-owned canonical-chain store.
 
 ## Acceptance tests
 
