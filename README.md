@@ -8,7 +8,7 @@
 
 Repository 采用 Cordis 的插件运行模型。仓库能力由多个 Cordis plugins 共同形成；其中需要被链上历史长期引用的稳定语义以版本化 LabourChain Protocol 声明，并由 Cordis plugin 实现。Repository 不建立独立于 Cordis 的 Runner、Hoster 或 mega-service 体系。
 
-Requirements、Architecture 与 MVP Specs 已完成当前轮次的重新投影。Bootstrap Story 已进入实现阶段，后续 Repository 领域能力继续按现有 Specs 与 Issues 推进。
+Requirements、Architecture 与 MVP Specs 已完成当前轮次的重新投影。Bootstrap 与 durable Record journal 已合并；Core Protocols v0.1.0 已发布。当前开发分支正在实现最小 Member Protocol，并基于其继续推进 Repo establishment/reload。
 
 ## 文档
 
@@ -63,7 +63,7 @@ Bootstrap Protocol instance
 + configuration
 ```
 
-Bootstrap 是具有可执行入口的稳定版本代码，启动时创建 Cordis application。它的稳定版本同样按 Protocol 格式声明。Cordis 启动后，Repository protocol、storage、index、projection 和 adapter 等能力继续按 Cordis plugin 组织。
+Bootstrap 是具有可执行入口的稳定版本代码，启动时创建 Cordis application。源码当前携带 `repository.bootstrap@0.1.0` reference；按 Core v0.1.0，只有构建出的 Protocol descriptor + ProtocolHash 才构成 exact Protocol identity。Cordis 启动后，Repository protocol、storage、index、projection 和 adapter 等能力继续按 Cordis plugin 组织。
 
 当前 Bootstrap 提供可执行 shell 与 programmatic composition API；具体 Repository 产品 composition 尚未在 executable 中固定，也不在 Bootstrap Story 中引入额外 config loader。
 
@@ -110,4 +110,4 @@ pnpm run package:check
 
 当前 package 保持 `private: true`。
 
-Bootstrap runtime 已形成可执行入口和 programmatic composition API；Repo、membership、Asset、contribution、recovery 与 history 等领域能力仍按后续 Stories 实现。
+Bootstrap runtime 与 durable Record journal 已完成。`member.identity` 已在 draft PR #29 中通过真实 Core v0.1.0 `core.entity` / `core.record` artifact 运行测试；当前继续实现 Repo establishment/reload。membership、Asset、contribution、recovery 与 history 仍按后续 Stories 推进。
