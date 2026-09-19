@@ -49,9 +49,17 @@ Repo
 
 For a collective Repo these identities may differ. For a Member-scoped Repo they may be the same Entity identity/keypair.
 
-## Establishment Record
+## Establishment Protocol and Record
 
-Repo establishment is represented by one Record under the applicable Repo establishment Protocol semantics.
+Story #5 implements the minimum establishment semantics as:
+
+```text
+repo.establishment@0.1.0
+```
+
+The exact ProtocolHash is supplied by the Host from the verified descriptor when the Protocol implementation is mounted. `repo.establishment@0.1.0` is the signed human-readable reference; ProtocolHash remains the exact machine authority under Core v0.1.0.
+
+Repo establishment is represented by one Record under these Protocol semantics.
 
 The minimum establishment payload is equivalent to:
 
@@ -79,7 +87,7 @@ Record.data.repo
 
 The operator is not duplicated inside `Record.data`. The establishment Record is the domain source for the initial operator relationship.
 
-The exact Protocol package name and historical-resolution mechanism are not fixed here; they must follow the repository-wide Protocol-resolution decision rather than creating a one-off naming model in this Spec.
+This Spec does not define the generic historical Protocol loader/resolver. Story #5 only consumes the Host-mounted exact `repo.establishment@0.1.0` implementation and its verified ProtocolHash.
 
 ## Establishment
 
@@ -149,7 +157,7 @@ Repository establishment does not wait for Block packing. An accepted/pending es
 
 ## Runtime dependencies
 
-Repository requires a durable Record ingress/journal capable of retaining accepted establishment Records across restart. At minimum, the establishment flow needs behavior equivalent to:
+Repository requires a durable Record ingress/journal capable of retaining accepted establishment Records across restart. The establishment Protocol runtime also depends on the mounted Core v0.1.0 `core.entity@0.1.0` / `core.record@0.1.0` services and `member.identity@0.1.0` capability rather than copying those algorithms or identities. At minimum, the establishment flow needs behavior equivalent to:
 
 ```text
 durably accept an exact signed Record, idempotently by RecordId
