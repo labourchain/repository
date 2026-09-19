@@ -3,15 +3,15 @@ import { spawnSync } from 'node:child_process'
 import { test } from 'node:test'
 import type { Context } from '@deepseek-ai/cordis'
 import {
-  BOOTSTRAP_PROTOCOL,
+  BOOTSTRAP_PROTOCOL_REFERENCE,
   BootstrapStartupError,
   createRepositoryNode,
 } from '../src/index.ts'
 
-test('exposes the stable Bootstrap Protocol source identity', async () => {
+test('exposes the stable Bootstrap Protocol source reference', async () => {
   const node = await createRepositoryNode()
 
-  assert.deepEqual(node.bootstrap, BOOTSTRAP_PROTOCOL)
+  assert.deepEqual(node.bootstrap, BOOTSTRAP_PROTOCOL_REFERENCE)
   assert.equal(node.bootstrap.name, 'repository.bootstrap')
   assert.equal(node.bootstrap.version, '0.1.0')
 
