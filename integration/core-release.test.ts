@@ -291,7 +291,7 @@ test(
           signature: sign(
             null,
             recordService.signingPayload(memberScopedRepoRecordId),
-            repoKeyPair.privateKey,
+            privateKey,
           ).toString('hex'),
         }
 
@@ -361,7 +361,7 @@ test(
           signature: sign(
             null,
             recordService.signingPayload(membershipAddId),
-            privateKey,
+            repoKeyPair.privateKey,
           ).toString('hex'),
         }
 
