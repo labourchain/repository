@@ -430,6 +430,52 @@ test('exact accepted membership Record replay is idempotent', async () => {
   })
 })
 
+test('exact replay also returns the durable-derived current view', async () => {
+  await withDirectory(async (directory) => {
+    const node = await createRepositoryNode({ plugins: composition(directory) })
+    await setupRepo(node)
+
+    const replayed = membershipRecord(
+      'replay-converge-add',
+      'add',
+      MEMBER_KEY,
+      '2026-09-19T00:00:02.000Z',
+    )
+    const newer = membershipRecord(
+      'replay-converge-remove',
+      'remove',
+      MEMBER_KEY,
+      '2026-09-19T00:00:03.000Z',
+    )
+
+    await node.context[MEMBERSHIP_PROTOCOL_SERVICE].applyMembership(replayed)
+
+    const journal = node.context.recordJournal
+    const originalAccept = journal.accept.bind(journal)
+    let injected = false
+    journal.accept = async (record) => {
+      await originalAccept(record)
+      if (record.id === replayed.id && !injected) {
+        injected = true
+        await originalAccept(newer)
+      }
+    }
+
+    assert.deepEqual(
+      await node.context[MEMBERSHIP_PROTOCOL_SERVICE].applyMembership(replayed),
+      {
+        repo: REPO_KEY,
+        member: MEMBER_KEY,
+        active: false,
+        latestRecordId: newer.id,
+        latestCreatedAt: newer.createdAt,
+      },
+    )
+
+    await node.dispose()
+  })
+})
+
 test('latest createdAt wins regardless of journal enumeration order', async () => {
   await withDirectory(async (directory) => {
     const journalNode = await createRepositoryNode({
@@ -517,6 +563,60 @@ test('older historical fact is retained without replacing current membership', a
     assert.deepEqual(
       await node.context.recordJournal.get(historical.id),
       historical,
+    )
+
+    await node.dispose()
+  })
+})
+
+test('historical same-createdAt conflict is rejected before durable acceptance', async () => {
+  await withDirectory(async (directory) => {
+    const node = await createRepositoryNode({ plugins: composition(directory) })
+    await setupRepo(node)
+
+    const historical = membershipRecord(
+      'historical-conflict-existing',
+      'add',
+      MEMBER_KEY,
+      '2026-09-19T00:00:02.000Z',
+    )
+    const current = membershipRecord(
+      'historical-conflict-current',
+      'remove',
+      MEMBER_KEY,
+      '2026-09-19T00:00:03.000Z',
+    )
+    await node.context[MEMBERSHIP_PROTOCOL_SERVICE].applyMembership(historical)
+    await node.context[MEMBERSHIP_PROTOCOL_SERVICE].applyMembership(current)
+
+    const conflicting = membershipRecord(
+      'historical-conflict-rejected',
+      'remove',
+      MEMBER_KEY,
+      historical.createdAt,
+    )
+
+    await assert.rejects(
+      node.context[MEMBERSHIP_PROTOCOL_SERVICE].applyMembership(conflicting),
+      MembershipHistoryError,
+    )
+    await assert.rejects(
+      node.context.recordJournal.get(conflicting.id),
+      RecordJournalNotFoundError,
+    )
+
+    assert.deepEqual(
+      await node.context[MEMBERSHIP_PROTOCOL_SERVICE].getMembership(
+        REPO_KEY,
+        MEMBER_KEY,
+      ),
+      {
+        repo: REPO_KEY,
+        member: MEMBER_KEY,
+        active: false,
+        latestRecordId: current.id,
+        latestCreatedAt: current.createdAt,
+      },
     )
 
     await node.dispose()
