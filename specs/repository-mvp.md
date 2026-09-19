@@ -16,7 +16,7 @@ The Specs are engineering projections of the current Requirements and Architectu
 | [`bootstrap.md`](./bootstrap.md) | executable bootstrap and Cordis runtime integration |
 | [`member.md`](./member.md) | human Member identity capability over Core Entity identity |
 | [`repo.md`](./repo.md) | Repo establishment, stable identity, operator and loading |
-| [`membership.md`](./membership.md) | operator-controlled Repo contribution membership |
+| [`membership.md`](./membership.md) | Repo-signed contribution membership maintained by the Repo operator |
 | [`protocol-resolution.md`](./protocol-resolution.md) | exact Protocol identity/version resolution |
 | [`contribution.md`](./contribution.md) | Asset contribution, confirmation, Repository commit, staging and recovery |
 | [`asset-storage.md`](./asset-storage.md) | durable preservation and retrieval of accepted Assets |
@@ -68,9 +68,9 @@ A Member may compose Repo capability on the same Entity identity/keypair. This c
 
 Historical facts must be interpreted by the exact Protocol identity/version they reference. Missing versions fail explicitly. They must not silently fall back to `latest` or another installed version.
 
-### Record remains a labour fact
+### Labour Records remain labour facts
 
-Record is produced/signed by the Member acting as labour subject, with stable identity/signature semantics supplied by Core. Repository does not turn Record into a Repository-owned domain object or maintain a canonical `repo.records[]` collection.
+A Record describing labour is produced/signed by the Member acting as labour subject, with stable identity/signature semantics supplied by Core. Other Protocol facts may assign authorship to another Entity identity; for example, `repo.membership` is signed by the Repo identity. Repository does not turn either kind of Record into a Repository-owned domain object or maintain a canonical `repo.records[]` collection.
 
 ### Durable Record ingress is not Block confirmation
 
@@ -152,7 +152,8 @@ repo
 
 membership
   -> relates Members to Repo contribution eligibility
-  -> uses Repo/operator to define mutation authority
+  -> records Repo-signed add/remove facts
+  -> leaves the human operator-to-Repo signing mechanism to Runtime/key custody
 
 protocol-resolution
   -> resolves exact historical Protocol implementations
@@ -196,7 +197,7 @@ In addition to the acceptance tests defined by each capability Spec, the MVP int
 2. a Core Entity identity can satisfy the Member capability without receiving a second Member ID;
 3. a valid Member can establish a Repo from an exact establishment Record and reload it after restart;
 4. the same Entity identity may compose Member + Repo capability without creating a second keypair or ownership semantics;
-5. the operator can establish persistent Repo membership;
+5. the operator can maintain persistent membership through Repo-signed membership facts;
 6. a Member contribution resolves the exact required Protocol versions;
 7. valid confirmations, durable Record ingress and durable Asset retrieval produce Repository `COMMITTED` / accepted state;
 8. the accepted Asset remains retrievable after restart;
