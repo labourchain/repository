@@ -12,7 +12,7 @@ Bootstrap is the executable entry point for a Repository node. It starts one Cor
 
 Bootstrap is special only because it is started directly by Node.js or the operating system. After Cordis starts, Repository capabilities follow the normal Cordis plugin model.
 
-The stable bootstrap implementation version is declared using the LabourChain Protocol format. A running Repository node is therefore an instance of a specific Bootstrap Protocol version.
+Bootstrap source carries a stable LabourChain Protocol **reference** (`repository.bootstrap@0.1.0`) for the executable contract. Under Core v0.1.0, `name@version` is not by itself an exact Protocol identity: exact identity additionally requires the built artifact/descriptor and ProtocolHash.
 
 ## Contract
 
@@ -24,7 +24,7 @@ A Bootstrap implementation must:
 - pass each plugin's configuration through to Cordis;
 - wait for the initial composition to settle before reporting startup success;
 - fail startup when a required supplied plugin remains pending, fails activation, or otherwise does not become active;
-- keep its stable implementation version aligned with its declared Bootstrap Protocol version;
+- keep its stable source reference aligned with the executable contract;
 - surface startup failure after disposing Cordis-owned plugins already mounted by that root Context.
 
 Bootstrap must not introduce a Repository-specific Runner, Hoster, Plugin Manager, Service Container, dependency graph or lifecycle system parallel to Cordis.
@@ -62,15 +62,23 @@ Normal Cordis disposer failures follow Cordis lifecycle semantics. Repository Bo
 
 The executable must catch normal termination signals before node startup completes. A first termination request is handled as graceful shutdown; a later signal may fall back to normal operating-system termination rather than requiring a second shutdown framework.
 
-## Version behavior
+## Version and identity behavior
 
-The Bootstrap Protocol version identifies the stable executable runtime contract used for the node instance.
+The current source reference `repository.bootstrap@0.1.0` identifies the intended bootstrap contract for development and composition.
 
-Changing bootstrap behavior in a way that changes that declared stable runtime contract requires a new Bootstrap Protocol version rather than silently changing the meaning of an existing version.
+Under Core v0.1.0:
 
-The exact resolved Cordis release is deployment/runtime metadata, not a second Bootstrap identity.
+```text
+name@version
+= human-readable Protocol reference
 
-This Story does not implement Core's final Protocol artifact packaging while Core remains under development. Repository assumes the completed Core will expose the required release boundary and will integrate with it rather than duplicate Core canonicalization or hashing logic locally.
+ProtocolHash
+= exact machine authority over descriptor + executable identity
+```
+
+Changing bootstrap behavior in a way that changes the stable Protocol semantics requires a new version rather than silently changing an existing reference. A future publishable Bootstrap Protocol artifact must use Core v0.1.0 Protocol/ArtifactHash rules; Bootstrap does not reproduce those algorithms locally.
+
+The exact resolved Cordis release remains deployment/runtime metadata, not a second Protocol identity.
 
 ## Failure model
 
@@ -99,6 +107,6 @@ Tests must demonstrate that:
 - no Repository-specific plugin lifecycle is required beside Cordis;
 - the running instance retains its declared Bootstrap Protocol identity and version.
 
-Core artifact verification is not part of the current Bootstrap acceptance while Core is still being developed in its own repository.
+Core v0.1.0 artifact loading/verification belongs to the Repository Host/runtime composition boundary, not to the Bootstrap Story itself. Bootstrap acceptance therefore remains focused on process entry, Cordis composition, readiness and lifecycle.
 
 Tests should protect these contracts rather than coverage percentages.
