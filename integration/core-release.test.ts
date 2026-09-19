@@ -291,7 +291,7 @@ test(
           signature: sign(
             null,
             recordService.signingPayload(memberScopedRepoRecordId),
-            privateKey,
+            repoKeyPair.privateKey,
           ).toString('hex'),
         }
 
@@ -346,13 +346,12 @@ test(
         const rawMembershipAdd = {
           protocol: MEMBERSHIP_PROTOCOL_REFERENCE,
           protocolHash: MEMBERSHIP_PROTOCOL_HASH,
-          createdBy: identity,
+          createdBy: repoIdentity,
           createdAt: '2026-09-18T00:00:04.000Z',
           data: {
             repo: repoIdentity,
             member: targetIdentity,
             action: 'add',
-            previousMutation: null,
           },
         }
         const membershipAddId = recordService.recordId(rawMembershipAdd)
@@ -374,7 +373,8 @@ test(
             repo: repoIdentity,
             member: targetIdentity,
             active: true,
-            headRecordId: membershipAddId,
+            latestRecordId: membershipAddId,
+            effectiveAt: rawMembershipAdd.createdAt,
           },
         )
         assert.equal(
@@ -388,13 +388,12 @@ test(
         const rawMembershipRemove = {
           protocol: MEMBERSHIP_PROTOCOL_REFERENCE,
           protocolHash: MEMBERSHIP_PROTOCOL_HASH,
-          createdBy: identity,
+          createdBy: repoIdentity,
           createdAt: '2026-09-18T00:00:05.000Z',
           data: {
             repo: repoIdentity,
             member: targetIdentity,
             action: 'remove',
-            previousMutation: membershipAddId,
           },
         }
         const membershipRemoveId = recordService.recordId(rawMembershipRemove)
@@ -404,7 +403,7 @@ test(
           signature: sign(
             null,
             recordService.signingPayload(membershipRemoveId),
-            privateKey,
+            repoKeyPair.privateKey,
           ).toString('hex'),
         }
 
@@ -416,7 +415,8 @@ test(
             repo: repoIdentity,
             member: targetIdentity,
             active: false,
-            headRecordId: membershipRemoveId,
+            latestRecordId: membershipRemoveId,
+            effectiveAt: rawMembershipRemove.createdAt,
           },
         )
       } finally {
