@@ -79,7 +79,7 @@ repo.membership interpretation
 = Repo-attested membership effective time
 ```
 
-The Membership Protocol requires `createdAt` to identify a valid time.
+The Membership Protocol requires `createdAt` to use canonical UTC ISO form with millisecond precision, for example `2026-09-19T00:00:02.000Z`, so every node derives the same ordering.
 
 If two distinct membership facts for the same `Repo × Member` relation have the same effective time, the history is ambiguous and rebuild fails closed.
 
