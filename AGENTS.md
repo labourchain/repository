@@ -49,13 +49,13 @@ A LabourChain Protocol is versioned stable on-chain semantics. Its executable im
 
 Protocol versions are stable historical semantics. When a new protocol version changes those semantics, implement the new version separately rather than changing the meaning of the old version in place. A node may need multiple protocol versions simultaneously to interpret historical facts.
 
-Historical facts must be handled by the exact protocol identity and version they reference. Do not silently route them to `latest`.
+Historical facts must be handled by the exact ProtocolHash they reference. `name@version` remains the signed human-readable Protocol reference and canonical Cordis service name, but ProtocolHash is the exact machine authority. Do not silently route historical facts to `latest` or another implementation with the same-looking reference.
 
 ## Bootstrap
 
 The executable bootstrap is special only because it has a process entry point and starts a Cordis application.
 
-Its stable executable version is declared using the Protocol format, so a running node is an instance of a particular Bootstrap Protocol version. After Cordis starts, normal capabilities are loaded and managed through Cordis plugins.
+Bootstrap source currently carries the stable `repository.bootstrap@0.1.0` Protocol reference. That reference is not by itself an exact Protocol identity: exact identity requires the built artifact/descriptor and ProtocolHash under Core v0.1.0. After Cordis starts, normal capabilities are loaded and managed through Cordis plugins.
 
 Bootstrap uses the compatible Cordis 4.x range beginning at `^4.0.2` and shares the host Cordis module instance with loaded plugins. Do not bundle a private second Cordis runtime into the executable.
 
@@ -176,7 +176,7 @@ Bootstrap Story #4 is complete and merged on `main`.
 
 Story #5 design alignment is complete on `feat/5-repo` / PR #16. The branch separates Repository `COMMITTED` from Block-confirmed `PACKED` and fixes Repo identity/operator boundaries before code implementation.
 
-Architecture review #15 is complete. Runtime implementation issue #17 is the next enabler: a Repo-agnostic durable Record ingress/journal. After #17 is available, Story #5 can implement establish/reload against it.
+Architecture review #15 and Runtime journal #17 are complete. Core Protocols v0.1.0 are released under the `cordis-js-esm` ABI v1. Draft PR #29 implements the minimum `member.identity` runtime plus `repo.establishment@0.1.0`, including restart/conflict tests and a trusted compatibility smoke against the released Core v0.1.0 artifacts. Story #5 is implemented on the branch and awaits review/merge; do not proceed into membership/contribution from this branch without an explicit next Story.
 
 The current package remains private.
 
@@ -184,4 +184,4 @@ The current package remains private.
 
 Use the relevant project checks when the corresponding integration is available and report actual evidence.
 
-Core deterministic primitives are exposed as `@labourchain/core-protocols`; full Repository integration cannot be claimed until the durable Runtime provider path exists and persistent restart behavior is demonstrated.
+Core v0.1.0 supplies the frozen Protocol/Entity/Record/Block primitives and ready-to-mount `cordis-js-esm` artifacts. Repository must consume those boundaries without rebuilding Core algorithms. Full Repository MVP integration still requires the remaining domain capabilities and restart/recovery evidence.

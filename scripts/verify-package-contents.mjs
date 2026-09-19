@@ -22,6 +22,7 @@ const forbiddenPrefixes = [
   'specs/',
   'src/',
   'test/',
+  'integration/',
   'scripts/',
   '.github/',
   'plugin/',
