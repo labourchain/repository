@@ -51,7 +51,8 @@
     "test:bin": "node scripts/smoke-bin.mjs",
     "check": "pnpm run typecheck && pnpm run test:coverage && pnpm run build && pnpm run test:bin && pnpm run package:check",
     "package:check": "node scripts/verify-package-contents.mjs",
-    "prepack": "pnpm run check"
+    "prepack": "pnpm run check",
+    "test:core-release": "node --experimental-strip-types --test \"integration/**/*.test.ts\""
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.2"
