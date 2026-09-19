@@ -21,9 +21,7 @@ import {
   MembershipAuthorizationError,
   MembershipHistoryError,
   MembershipMutationError,
-  MembershipNoChangeError,
   MembershipProtocolConfigError,
-  MembershipStaleMutationError,
   MembershipTargetMemberError,
   RecordJournalNotFoundError,
   RecordJournalService,
@@ -99,12 +97,9 @@ function coreRecordProvider(ctx: Context) {
   ctx.provide(CORE_RECORD_PROTOCOL_SERVICE, coreRecordService)
 }
 
-function memberRecord(
-  identity: string,
-  label = 'member-' + identity,
-): CoreRecordValue {
+function memberRecord(identity: string): CoreRecordValue {
   return {
-    id: recordId(label),
+    id: recordId('member-' + identity),
     protocol: MEMBER_PROTOCOL_REFERENCE,
     protocolHash: MEMBER_PROTOCOL_HASH,
     createdBy: identity,
@@ -114,9 +109,9 @@ function memberRecord(
   }
 }
 
-function repoRecord(label = 'repo-establishment'): CoreRecordValue {
+function repoRecord(): CoreRecordValue {
   return {
-    id: recordId(label),
+    id: recordId('repo-establishment'),
     protocol: REPO_ESTABLISHMENT_PROTOCOL_REFERENCE,
     protocolHash: REPO_PROTOCOL_HASH,
     createdBy: OPERATOR_KEY,
@@ -130,8 +125,8 @@ function membershipRecord(
   label: string,
   action: 'add' | 'remove',
   member = MEMBER_KEY,
-  previousMutation: string | null = null,
-  createdBy = OPERATOR_KEY,
+  createdAt = '2026-09-19T00:00:02.000Z',
+  createdBy = REPO_KEY,
   overrides: Partial<CoreRecordValue> = {},
 ): CoreRecordValue {
   return {
@@ -139,13 +134,12 @@ function membershipRecord(
     protocol: MEMBERSHIP_PROTOCOL_REFERENCE,
     protocolHash: MEMBERSHIP_PROTOCOL_HASH,
     createdBy,
-    createdAt: '2026-09-19T00:00:02.000Z',
+    createdAt,
     signature: 'valid-signature',
     data: {
       repo: REPO_KEY,
       member,
       action,
-      previousMutation,
     },
     ...overrides,
   }
@@ -197,21 +191,6 @@ async function setupRepo(
   await node.context[REPO_ESTABLISHMENT_PROTOCOL_SERVICE].establishRepo(
     repoRecord(),
   )
-}
-
-async function membershipRecordIds(
-  node: Awaited<ReturnType<typeof createRepositoryNode>>,
-): Promise<string[]> {
-  const ids: string[] = []
-  for await (const record of node.context.recordJournal.iterateAccepted()) {
-    if (
-      (record as Partial<CoreRecordValue>).protocol ===
-      MEMBERSHIP_PROTOCOL_REFERENCE
-    ) {
-      ids.push(record.id)
-    }
-  }
-  return ids
 }
 
 function hasCause(
@@ -283,19 +262,25 @@ test('Membership Protocol service follows the Cordis Plugin Fiber lifecycle', as
   })
 })
 
-test('Repo operator can add, list, check and remove a Member', async () => {
+test('Repo-signed add, check, list and later remove derive current membership', async () => {
   await withDirectory(async (directory) => {
     const node = await createRepositoryNode({ plugins: composition(directory) })
     await setupRepo(node)
 
-    const add = membershipRecord('membership-add', 'add')
+    const add = membershipRecord(
+      'membership-add',
+      'add',
+      MEMBER_KEY,
+      '2026-09-19T00:00:02.000Z',
+    )
     assert.deepEqual(
       await node.context[MEMBERSHIP_PROTOCOL_SERVICE].applyMembership(add),
       {
         repo: REPO_KEY,
         member: MEMBER_KEY,
         active: true,
-        headRecordId: add.id,
+        latestRecordId: add.id,
+        effectiveAt: add.createdAt,
       },
     )
     assert.equal(
@@ -314,7 +299,7 @@ test('Repo operator can add, list, check and remove a Member', async () => {
       'membership-remove',
       'remove',
       MEMBER_KEY,
-      add.id,
+      '2026-09-19T00:00:03.000Z',
     )
     assert.deepEqual(
       await node.context[MEMBERSHIP_PROTOCOL_SERVICE].applyMembership(remove),
@@ -322,7 +307,8 @@ test('Repo operator can add, list, check and remove a Member', async () => {
         repo: REPO_KEY,
         member: MEMBER_KEY,
         active: false,
-        headRecordId: remove.id,
+        latestRecordId: remove.id,
+        effectiveAt: remove.createdAt,
       },
     )
     assert.equal(
@@ -332,10 +318,6 @@ test('Repo operator can add, list, check and remove a Member', async () => {
       ),
       false,
     )
-    assert.deepEqual(
-      await node.context[MEMBERSHIP_PROTOCOL_SERVICE].listMembers(REPO_KEY),
-      [],
-    )
 
     assert.deepEqual(await node.context.recordJournal.get(add.id), add)
     assert.deepEqual(await node.context.recordJournal.get(remove.id), remove)
@@ -343,41 +325,17 @@ test('Repo operator can add, list, check and remove a Member', async () => {
   })
 })
 
-test('active member listing is set-like and deterministic', async () => {
-  await withDirectory(async (directory) => {
-    const node = await createRepositoryNode({ plugins: composition(directory) })
-    await setupRepo(node)
-
-    const second = membershipRecord(
-      'second-member-add',
-      'add',
-      SECOND_MEMBER_KEY,
-    )
-    const first = membershipRecord('first-member-add', 'add', MEMBER_KEY)
-
-    await node.context[MEMBERSHIP_PROTOCOL_SERVICE].applyMembership(second)
-    await node.context[MEMBERSHIP_PROTOCOL_SERVICE].applyMembership(first)
-
-    assert.deepEqual(
-      await node.context[MEMBERSHIP_PROTOCOL_SERVICE].listMembers(REPO_KEY),
-      [MEMBER_KEY, SECOND_MEMBER_KEY],
-    )
-
-    await node.dispose()
-  })
-})
-
-test('non-operator cannot mutate membership', async () => {
+test('membership Record must be signed by the Repo identity', async () => {
   await withDirectory(async (directory) => {
     const node = await createRepositoryNode({ plugins: composition(directory) })
     await setupRepo(node)
 
     const record = membershipRecord(
-      'unauthorized-add',
+      'operator-signed-membership',
       'add',
       MEMBER_KEY,
-      null,
-      OTHER_ACTOR_KEY,
+      '2026-09-19T00:00:02.000Z',
+      OPERATOR_KEY,
     )
 
     await assert.rejects(
@@ -408,59 +366,238 @@ test('non-Member Entity cannot become a Repo member', async () => {
       node.context[MEMBERSHIP_PROTOCOL_SERVICE].applyMembership(record),
       MembershipTargetMemberError,
     )
-    await assert.rejects(
-      node.context.recordJournal.get(record.id),
-      RecordJournalNotFoundError,
+
+    await node.dispose()
+  })
+})
+
+test('repeated membership facts remain set-like without a predecessor chain', async () => {
+  await withDirectory(async (directory) => {
+    const node = await createRepositoryNode({ plugins: composition(directory) })
+    await setupRepo(node)
+
+    const first = membershipRecord(
+      'repeated-add-a',
+      'add',
+      MEMBER_KEY,
+      '2026-09-19T00:00:02.000Z',
+    )
+    const second = membershipRecord(
+      'repeated-add-b',
+      'add',
+      MEMBER_KEY,
+      '2026-09-19T00:00:03.000Z',
+    )
+
+    await node.context[MEMBERSHIP_PROTOCOL_SERVICE].applyMembership(first)
+    await node.context[MEMBERSHIP_PROTOCOL_SERVICE].applyMembership(second)
+
+    assert.deepEqual(
+      await node.context[MEMBERSHIP_PROTOCOL_SERVICE].listMembers(REPO_KEY),
+      [MEMBER_KEY],
+    )
+    assert.deepEqual(
+      await node.context[MEMBERSHIP_PROTOCOL_SERVICE].getMembership(
+        REPO_KEY,
+        MEMBER_KEY,
+      ),
+      {
+        repo: REPO_KEY,
+        member: MEMBER_KEY,
+        active: true,
+        latestRecordId: second.id,
+        effectiveAt: second.createdAt,
+      },
     )
 
     await node.dispose()
   })
 })
 
-test('new no-change mutations fail without creating durable facts', async () => {
+test('exact accepted membership Record replay is idempotent', async () => {
   await withDirectory(async (directory) => {
     const node = await createRepositoryNode({ plugins: composition(directory) })
     await setupRepo(node)
 
-    const missingRemove = membershipRecord(
-      'missing-remove',
+    const add = membershipRecord('replay-add', 'add')
+    const first =
+      await node.context[MEMBERSHIP_PROTOCOL_SERVICE].applyMembership(add)
+    const second =
+      await node.context[MEMBERSHIP_PROTOCOL_SERVICE].applyMembership(add)
+
+    assert.deepEqual(second, first)
+    await node.dispose()
+  })
+})
+
+test('latest effective time wins regardless of journal enumeration order', async () => {
+  await withDirectory(async (directory) => {
+    const journalNode = await createRepositoryNode({
+      plugins: [
+        { plugin: coreEntityProvider },
+        { plugin: coreRecordProvider },
+        { plugin: RecordJournalService, config: { directory } },
+      ],
+    })
+
+    await journalNode.context.recordJournal.accept(memberRecord(OPERATOR_KEY))
+    await journalNode.context.recordJournal.accept(memberRecord(MEMBER_KEY))
+    await journalNode.context.recordJournal.accept(repoRecord())
+
+    const later = membershipRecord(
+      'time-order-later',
       'remove',
       MEMBER_KEY,
-      null,
+      '2026-09-19T00:00:04.000Z',
+      REPO_KEY,
+      { id: '0'.repeat(64) },
     )
-    await assert.rejects(
-      node.context[MEMBERSHIP_PROTOCOL_SERVICE].applyMembership(
-        missingRemove,
-      ),
-      MembershipNoChangeError,
-    )
-    await assert.rejects(
-      node.context.recordJournal.get(missingRemove.id),
-      RecordJournalNotFoundError,
-    )
-
-    const add = membershipRecord('state-change-add-root', 'add')
-    await node.context[MEMBERSHIP_PROTOCOL_SERVICE].applyMembership(add)
-
-    const duplicateAdd = membershipRecord(
-      'duplicate-add',
+    const earlier = membershipRecord(
+      'time-order-earlier',
       'add',
       MEMBER_KEY,
-      add.id,
+      '2026-09-19T00:00:02.000Z',
+      REPO_KEY,
+      { id: 'f'.repeat(64) },
     )
-    await assert.rejects(
-      node.context[MEMBERSHIP_PROTOCOL_SERVICE].applyMembership(
-        duplicateAdd,
+
+    await journalNode.context.recordJournal.accept(later)
+    await journalNode.context.recordJournal.accept(earlier)
+    await journalNode.dispose()
+
+    const node = await createRepositoryNode({ plugins: composition(directory) })
+
+    assert.deepEqual(
+      await node.context[MEMBERSHIP_PROTOCOL_SERVICE].getMembership(
+        REPO_KEY,
+        MEMBER_KEY,
       ),
-      MembershipNoChangeError,
+      {
+        repo: REPO_KEY,
+        member: MEMBER_KEY,
+        active: false,
+        latestRecordId: later.id,
+        effectiveAt: later.createdAt,
+      },
     )
-    await assert.rejects(
-      node.context.recordJournal.get(duplicateAdd.id),
-      RecordJournalNotFoundError,
-    )
-    assert.deepEqual(await membershipRecordIds(node), [add.id])
 
     await node.dispose()
+  })
+})
+
+test('older historical fact is retained without replacing current membership', async () => {
+  await withDirectory(async (directory) => {
+    const node = await createRepositoryNode({ plugins: composition(directory) })
+    await setupRepo(node)
+
+    const current = membershipRecord(
+      'current-remove',
+      'remove',
+      MEMBER_KEY,
+      '2026-09-19T00:00:04.000Z',
+    )
+    await node.context[MEMBERSHIP_PROTOCOL_SERVICE].applyMembership(current)
+
+    const historical = membershipRecord(
+      'historical-add',
+      'add',
+      MEMBER_KEY,
+      '2026-09-19T00:00:02.000Z',
+    )
+    assert.deepEqual(
+      await node.context[MEMBERSHIP_PROTOCOL_SERVICE].applyMembership(historical),
+      {
+        repo: REPO_KEY,
+        member: MEMBER_KEY,
+        active: false,
+        latestRecordId: current.id,
+        effectiveAt: current.createdAt,
+      },
+    )
+    assert.deepEqual(
+      await node.context.recordJournal.get(historical.id),
+      historical,
+    )
+
+    await node.dispose()
+  })
+})
+
+test('distinct membership facts at the same effective time fail closed', async () => {
+  await withDirectory(async (directory) => {
+    const first = await createRepositoryNode({ plugins: composition(directory) })
+    await setupRepo(first)
+
+    const add = membershipRecord(
+      'same-time-add',
+      'add',
+      MEMBER_KEY,
+      '2026-09-19T00:00:02.000Z',
+    )
+    await first.context[MEMBERSHIP_PROTOCOL_SERVICE].applyMembership(add)
+    await first.dispose()
+
+    const journal = await createRepositoryNode({
+      plugins: [{ plugin: RecordJournalService, config: { directory } }],
+    })
+    await journal.context.recordJournal.accept(
+      membershipRecord(
+        'same-time-remove',
+        'remove',
+        MEMBER_KEY,
+        '2026-09-19T00:00:02.000Z',
+      ),
+    )
+    await journal.dispose()
+
+    await assert.rejects(
+      createRepositoryNode({ plugins: composition(directory) }),
+      (error: unknown) => {
+        assert.ok(error instanceof BootstrapStartupError)
+        assert.equal(hasCause(error, MembershipHistoryError), true)
+        return true
+      },
+    )
+  })
+})
+
+test('membership current view survives restart from durable facts', async () => {
+  await withDirectory(async (directory) => {
+    const first = await createRepositoryNode({ plugins: composition(directory) })
+    await setupRepo(first)
+
+    const add = membershipRecord(
+      'restart-add',
+      'add',
+      MEMBER_KEY,
+      '2026-09-19T00:00:02.000Z',
+    )
+    const remove = membershipRecord(
+      'restart-remove',
+      'remove',
+      MEMBER_KEY,
+      '2026-09-19T00:00:03.000Z',
+    )
+
+    await first.context[MEMBERSHIP_PROTOCOL_SERVICE].applyMembership(add)
+    await first.context[MEMBERSHIP_PROTOCOL_SERVICE].applyMembership(remove)
+    await first.dispose()
+
+    const second = await createRepositoryNode({ plugins: composition(directory) })
+    assert.deepEqual(
+      await second.context[MEMBERSHIP_PROTOCOL_SERVICE].getMembership(
+        REPO_KEY,
+        MEMBER_KEY,
+      ),
+      {
+        repo: REPO_KEY,
+        member: MEMBER_KEY,
+        active: false,
+        latestRecordId: remove.id,
+        effectiveAt: remove.createdAt,
+      },
+    )
+    await second.dispose()
   })
 })
 
@@ -469,21 +606,19 @@ test('membership reads refresh from durable journal facts', async () => {
     const node = await createRepositoryNode({ plugins: composition(directory) })
     await setupRepo(node)
 
-    const add = membershipRecord('refresh-add', 'add')
-    await node.context[MEMBERSHIP_PROTOCOL_SERVICE].applyMembership(add)
-    assert.equal(
-      await node.context[MEMBERSHIP_PROTOCOL_SERVICE].hasMember(
-        REPO_KEY,
-        MEMBER_KEY,
-      ),
-      true,
+    const add = membershipRecord(
+      'refresh-add',
+      'add',
+      MEMBER_KEY,
+      '2026-09-19T00:00:02.000Z',
     )
+    await node.context[MEMBERSHIP_PROTOCOL_SERVICE].applyMembership(add)
 
     const remove = membershipRecord(
       'refresh-remove',
       'remove',
       MEMBER_KEY,
-      add.id,
+      '2026-09-19T00:00:03.000Z',
     )
     await node.context.recordJournal.accept(remove)
 
@@ -493,10 +628,6 @@ test('membership reads refresh from durable journal facts', async () => {
         MEMBER_KEY,
       ),
       false,
-    )
-    assert.deepEqual(
-      await node.context[MEMBERSHIP_PROTOCOL_SERVICE].listMembers(REPO_KEY),
-      [],
     )
 
     await node.dispose()
@@ -520,167 +651,7 @@ test('Repo lookup errors are not reclassified as membership absence', async () =
   })
 })
 
-test('exact accepted mutation replay is idempotent even after later state', async () => {
-  await withDirectory(async (directory) => {
-    const node = await createRepositoryNode({ plugins: composition(directory) })
-    await setupRepo(node)
-
-    const add = membershipRecord('replay-add', 'add')
-    await node.context[MEMBERSHIP_PROTOCOL_SERVICE].applyMembership(add)
-
-    const remove = membershipRecord(
-      'replay-remove',
-      'remove',
-      MEMBER_KEY,
-      add.id,
-    )
-    await node.context[MEMBERSHIP_PROTOCOL_SERVICE].applyMembership(remove)
-
-    assert.deepEqual(
-      await node.context[MEMBERSHIP_PROTOCOL_SERVICE].applyMembership(add),
-      {
-        repo: REPO_KEY,
-        member: MEMBER_KEY,
-        active: false,
-        headRecordId: remove.id,
-      },
-    )
-    assert.deepEqual(
-      new Set(await membershipRecordIds(node)),
-      new Set([add.id, remove.id]),
-    )
-
-    await node.dispose()
-  })
-})
-
-test('stale predecessor cannot overwrite the current relation head', async () => {
-  await withDirectory(async (directory) => {
-    const node = await createRepositoryNode({ plugins: composition(directory) })
-    await setupRepo(node)
-
-    const add = membershipRecord('stale-add', 'add')
-    await node.context[MEMBERSHIP_PROTOCOL_SERVICE].applyMembership(add)
-
-    const stale = membershipRecord(
-      'stale-remove',
-      'remove',
-      MEMBER_KEY,
-      null,
-    )
-    await assert.rejects(
-      node.context[MEMBERSHIP_PROTOCOL_SERVICE].applyMembership(stale),
-      MembershipStaleMutationError,
-    )
-    await assert.rejects(
-      node.context.recordJournal.get(stale.id),
-      RecordJournalNotFoundError,
-    )
-
-    await node.dispose()
-  })
-})
-
-test('same-node competing mutations cannot both consume one relation head', async () => {
-  await withDirectory(async (directory) => {
-    const node = await createRepositoryNode({ plugins: composition(directory) })
-    await setupRepo(node)
-
-    const first = membershipRecord('concurrent-add-a', 'add')
-    const second = membershipRecord('concurrent-add-b', 'add')
-
-    const results = await Promise.allSettled([
-      node.context[MEMBERSHIP_PROTOCOL_SERVICE].applyMembership(first),
-      node.context[MEMBERSHIP_PROTOCOL_SERVICE].applyMembership(second),
-    ])
-
-    const fulfilled = results.filter((result) => result.status === 'fulfilled')
-    const rejected = results.filter((result) => result.status === 'rejected')
-
-    assert.equal(fulfilled.length, 1)
-    assert.equal(rejected.length, 1)
-    const rejectedResult = rejected[0]
-    if (!rejectedResult || rejectedResult.status !== 'rejected') {
-      assert.fail('expected exactly one rejected membership mutation')
-    }
-    assert.ok(rejectedResult.reason instanceof MembershipStaleMutationError)
-    assert.equal((await membershipRecordIds(node)).length, 1)
-
-    await node.dispose()
-  })
-})
-
-test('membership rebuild follows predecessor links, not journal enumeration order', async () => {
-  await withDirectory(async (directory) => {
-    const first = await createRepositoryNode({ plugins: composition(directory) })
-    await setupRepo(first)
-
-    const add = membershipRecord('order-add', 'add', MEMBER_KEY, null, OPERATOR_KEY, {
-      id: 'f'.repeat(64),
-    })
-    const remove = membershipRecord(
-      'order-remove',
-      'remove',
-      MEMBER_KEY,
-      add.id,
-      OPERATOR_KEY,
-      { id: '0'.repeat(64) },
-    )
-
-    await first.context[MEMBERSHIP_PROTOCOL_SERVICE].applyMembership(add)
-    await first.context[MEMBERSHIP_PROTOCOL_SERVICE].applyMembership(remove)
-    await first.dispose()
-
-    const second = await createRepositoryNode({ plugins: composition(directory) })
-    assert.deepEqual(
-      await second.context[MEMBERSHIP_PROTOCOL_SERVICE].getMembership(
-        REPO_KEY,
-        MEMBER_KEY,
-      ),
-      {
-        repo: REPO_KEY,
-        member: MEMBER_KEY,
-        active: false,
-        headRecordId: remove.id,
-      },
-    )
-
-    await second.dispose()
-  })
-})
-
-test('startup rebuild fails closed on forked durable membership history', async () => {
-  await withDirectory(async (directory) => {
-    const first = await createRepositoryNode({ plugins: composition(directory) })
-    await setupRepo(first)
-
-    const add = membershipRecord('fork-add', 'add')
-    await first.context[MEMBERSHIP_PROTOCOL_SERVICE].applyMembership(add)
-    await first.dispose()
-
-    const journal = await createRepositoryNode({
-      plugins: [{ plugin: RecordJournalService, config: { directory } }],
-    })
-    await journal.context.recordJournal.accept(
-      membershipRecord('fork-remove-a', 'remove', MEMBER_KEY, add.id),
-    )
-    await journal.context.recordJournal.accept(
-      membershipRecord('fork-remove-b', 'remove', MEMBER_KEY, add.id),
-    )
-    await journal.dispose()
-
-    await assert.rejects(
-      createRepositoryNode({ plugins: composition(directory) }),
-      (error: unknown) => {
-        assert.ok(error instanceof BootstrapStartupError)
-        assert.equal(hasCause(error, MembershipHistoryError), true)
-        return true
-      },
-    )
-  })
-})
-
-test('Membership mutation rejects wrong Protocol, hash, signature, payload and predecessor', async () => {
+test('membership rejects invalid Protocol, signature, payload and effective time', async () => {
   await withDirectory(async (directory) => {
     const node = await createRepositoryNode({ plugins: composition(directory) })
     await setupRepo(node)
@@ -688,7 +659,7 @@ test('Membership mutation rejects wrong Protocol, hash, signature, payload and p
 
     await assert.rejects(
       service.applyMembership(
-        membershipRecord('wrong-ref', 'add', MEMBER_KEY, null, OPERATOR_KEY, {
+        membershipRecord('wrong-ref', 'add', MEMBER_KEY, undefined, REPO_KEY, {
           protocol: 'repo.other@0.1.0',
         }),
       ),
@@ -696,7 +667,7 @@ test('Membership mutation rejects wrong Protocol, hash, signature, payload and p
     )
     await assert.rejects(
       service.applyMembership(
-        membershipRecord('wrong-hash', 'add', MEMBER_KEY, null, OPERATOR_KEY, {
+        membershipRecord('wrong-hash', 'add', MEMBER_KEY, undefined, REPO_KEY, {
           protocolHash: 'd'.repeat(64),
         }),
       ),
@@ -704,7 +675,7 @@ test('Membership mutation rejects wrong Protocol, hash, signature, payload and p
     )
     await assert.rejects(
       service.applyMembership(
-        membershipRecord('bad-signature', 'add', MEMBER_KEY, null, OPERATOR_KEY, {
+        membershipRecord('bad-signature', 'add', MEMBER_KEY, undefined, REPO_KEY, {
           signature: 'invalid-signature',
         }),
       ),
@@ -712,13 +683,12 @@ test('Membership mutation rejects wrong Protocol, hash, signature, payload and p
     )
     await assert.rejects(
       service.applyMembership(
-        membershipRecord('bad-payload', 'add', MEMBER_KEY, null, OPERATOR_KEY, {
+        membershipRecord('bad-payload', 'add', MEMBER_KEY, undefined, REPO_KEY, {
           data: {
             repo: REPO_KEY,
             member: MEMBER_KEY,
             action: 'add',
-            previousMutation: null,
-            role: 'admin',
+            extra: true,
           },
         }),
       ),
@@ -726,14 +696,12 @@ test('Membership mutation rejects wrong Protocol, hash, signature, payload and p
     )
     await assert.rejects(
       service.applyMembership(
-        membershipRecord('bad-previous-mutation', 'add', MEMBER_KEY, null, OPERATOR_KEY, {
-          data: {
-            repo: REPO_KEY,
-            member: MEMBER_KEY,
-            action: 'add',
-            previousMutation: 'not-a-record-id',
-          },
-        }),
+        membershipRecord(
+          'bad-time',
+          'add',
+          MEMBER_KEY,
+          'not-a-time',
+        ),
       ),
       MembershipMutationError,
     )
