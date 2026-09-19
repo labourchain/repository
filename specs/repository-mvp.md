@@ -96,18 +96,24 @@ Repository Runtime may persist several kinds of state with different roles:
 
 ```text
 accepted Record journal
-    -> durable and required until safe chain handoff/inclusion
+    -> durable exact accepted Records until safe chain handoff/inclusion
     -> not itself Block confirmation
+
+Runtime Record database
+    -> protocol-validated Record relationships, ordering/dependencies and pending packing state
+    -> correctness input for Repository validation, tracing and later Block packing
+    -> rebuildable/reconcilable from durable Records + exact Protocol semantics
+    -> not itself canonical-chain or Block confirmation
 
 staging
     -> in-flight processing/recovery before Repository commit
 
 index/cache/projection
-    -> derived query acceleration
-    -> rebuildable/reconcilable from durable sources
+    -> derived query/display acceleration
+    -> rebuildable from Runtime Record database and other durable sources
 ```
 
-Persistence alone does not turn staging/index/cache/projection into chain-confirmed facts.
+The Runtime Record database is not merely a query cache: Repository validation and packing may depend on its reconciled relationship state. Persistence alone still does not turn Runtime database, staging, index/cache/projection, or journal state into chain-confirmed facts.
 
 ### Recovery converges to durable Repository state
 
@@ -180,6 +186,7 @@ Implementation must:
 - reuse Core Protocol, Entity, Record, signature and Block semantics rather than duplicating them;
 - treat Member and Repo as protocol-composed identities, not fixed provider-owned object schemas;
 - persist exact accepted Records through an explicit Runtime/composition dependency rather than a Repository-domain `records[]` model;
+- maintain protocol-validated Record relationships and pending packing state in a Repository Runtime database capability, without turning that database into a second blockchain or canonical-chain authority;
 - distinguish durable pending-chain acceptance from actual Block confirmation;
 - fail closed when required durable ingress, Core primitive or exact Protocol implementation is unavailable;
 - keep concrete database, filesystem and transport choices behind Runtime/plugin boundaries;
