@@ -34,7 +34,7 @@ export interface MembershipView {
   readonly member: string
   readonly active: boolean
   readonly latestRecordId: string | null
-  readonly effectiveAt: string | null
+  readonly latestCreatedAt: string | null
 }
 
 interface MembershipPayload {
@@ -46,14 +46,14 @@ interface MembershipPayload {
 interface ValidatedMembershipFact {
   readonly record: CoreRecordValue
   readonly payload: MembershipPayload
-  readonly effectiveTime: number
+  readonly createdTime: number
 }
 
 interface RelationState {
   readonly active: boolean
   readonly latestRecordId: string | null
-  readonly effectiveAt: string | null
-  readonly effectiveTime: number
+  readonly latestCreatedAt: string | null
+  readonly createdTime: number
 }
 
 export class MembershipError extends Error {
@@ -182,24 +182,24 @@ function requirePayload(value: unknown): MembershipPayload {
   }
 }
 
-function requireEffectiveTime(createdAt: string): number {
+function requireCreatedTime(createdAt: string): number {
   if (!CANONICAL_UTC_TIME_RE.test(createdAt)) {
     throw new MembershipFactError(
       'repo.membership Record.createdAt must be canonical UTC ISO time.',
     )
   }
 
-  const effectiveTime = Date.parse(createdAt)
+  const createdTime = Date.parse(createdAt)
   if (
-    !Number.isFinite(effectiveTime) ||
-    new Date(effectiveTime).toISOString() !== createdAt
+    !Number.isFinite(createdTime) ||
+    new Date(createdTime).toISOString() !== createdAt
   ) {
     throw new MembershipFactError(
       'repo.membership Record.createdAt must be canonical UTC ISO time.',
     )
   }
 
-  return effectiveTime
+  return createdTime
 }
 
 function relationKey(repo: string, member: string): string {
@@ -216,23 +216,23 @@ function membershipView(
     member,
     active: state.active,
     latestRecordId: state.latestRecordId,
-    effectiveAt: state.effectiveAt,
+    latestCreatedAt: state.latestCreatedAt,
   })
 }
 
 const EMPTY_RELATION: RelationState = Object.freeze({
   active: false,
   latestRecordId: null,
-  effectiveAt: null,
-  effectiveTime: Number.NEGATIVE_INFINITY,
+  latestCreatedAt: null,
+  createdTime: Number.NEGATIVE_INFINITY,
 })
 
 /**
  * Repo-signed membership fact projection.
  *
  * Membership itself is not a causal chain. The durable facts are ordered by
- * their Repo-attested effective time for the current relation view. Labour /
- * Asset causality belongs to the corresponding domain Protocols instead.
+ * their Repo-signed Record.createdAt value for the current relation view.
+ * Labour / Asset causality belongs to the corresponding domain Protocols instead.
  */
 export class MembershipService {
   private readonly ctx: Context
@@ -270,36 +270,23 @@ export class MembershipService {
         )
       }
 
-      if (validated.effectiveTime === current.effectiveTime) {
+      if (validated.createdTime === current.createdTime) {
         throw new MembershipHistoryError(
-          'Membership relation contains distinct facts with the same effective time.',
+          'Membership relation contains distinct facts with the same createdAt.',
         )
       }
 
       await this.ctx.recordJournal.accept(validated.record)
 
-      // A Repo may durably publish a historical membership fact after a newer
-      // fact is already known. It remains a valid fact without replacing the
-      // current view.
-      if (validated.effectiveTime > current.effectiveTime) {
-        const next: RelationState = {
-          active: validated.payload.action === 'add',
-          latestRecordId: validated.record.id,
-          effectiveAt: validated.record.createdAt,
-          effectiveTime: validated.effectiveTime,
-        }
-        this.relations.set(key, next)
-        return membershipView(
-          validated.payload.repo,
-          validated.payload.member,
-          next,
-        )
-      }
+      // Re-derive the result from the durable source. Another valid ingress may
+      // have accepted a newer membership fact while this Record was being
+      // persisted, so the pre-accept projection is not authoritative here.
+      await this.rebuildUnlocked()
 
       return membershipView(
         validated.payload.repo,
         validated.payload.member,
-        current,
+        this.relations.get(key) ?? EMPTY_RELATION,
       )
     })
   }
@@ -353,21 +340,21 @@ export class MembershipService {
       const key = relationKey(validated.payload.repo, validated.payload.member)
       const current = rebuilt.get(key)
 
-      if (current && validated.effectiveTime === current.effectiveTime) {
+      if (current && validated.createdTime === current.createdTime) {
         if (validated.record.id !== current.latestRecordId) {
           throw new MembershipHistoryError(
-            'Membership relation contains distinct facts with the same effective time.',
+            'Membership relation contains distinct facts with the same createdAt.',
           )
         }
         continue
       }
 
-      if (!current || validated.effectiveTime > current.effectiveTime) {
+      if (!current || validated.createdTime > current.createdTime) {
         rebuilt.set(key, {
           active: validated.payload.action === 'add',
           latestRecordId: validated.record.id,
-          effectiveAt: validated.record.createdAt,
-          effectiveTime: validated.effectiveTime,
+          latestCreatedAt: validated.record.createdAt,
+          createdTime: validated.createdTime,
         })
       }
     }
@@ -492,7 +479,7 @@ export class MembershipService {
         member,
         action: payload.action,
       },
-      effectiveTime: requireEffectiveTime(record.createdAt),
+      createdTime: requireCreatedTime(record.createdAt),
     }
   }
 }
