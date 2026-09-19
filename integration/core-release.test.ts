@@ -352,7 +352,7 @@ test(
             repo: repoIdentity,
             member: targetIdentity,
             action: 'add',
-            previous: null,
+            previousMutation: null,
           },
         }
         const membershipAddId = recordService.recordId(rawMembershipAdd)
@@ -394,7 +394,7 @@ test(
             repo: repoIdentity,
             member: targetIdentity,
             action: 'remove',
-            previous: membershipAddId,
+            previousMutation: membershipAddId,
           },
         }
         const membershipRemoveId = recordService.recordId(rawMembershipRemove)
