@@ -21,6 +21,7 @@ import {
   REPO_ESTABLISHMENT_PROTOCOL_SERVICE,
   RecordJournalService,
   createRepositoryNode,
+  runtimeRecordDatabasePlugin,
   type CoreEntityProtocolService,
   type CoreRecordProtocolService,
   type CoreRecordValue,
@@ -166,6 +167,7 @@ test(
           },
           { plugin: coreEntityPlugin },
           { plugin: coreRecordPlugin },
+          { plugin: runtimeRecordDatabasePlugin },
           {
             plugin: RecordJournalService,
             config: { directory: journalDirectory },
