@@ -23,7 +23,7 @@ export interface RecordJournalConfig {
   readonly directory: string
 }
 
-export interface RecordJournalTransaction {
+export interface RecordJournalExclusiveSession {
   /** Accept one Record while the journal write gate is already held. */
   accept(record: JournalRecord): Promise<void>
   get(recordId: string): Promise<JournalRecord>
@@ -195,10 +195,12 @@ export class RecordJournalService extends Service {
    *
    * Runtime Record database validation uses this boundary so a raw journal
    * accept in the same node cannot interleave between relation validation and
-   * durable publication.
+   * durable publication. This is a serialization session, not a rollback
+   * transaction: a successful session.accept() is durable even if later work in
+   * the callback throws.
    */
   async runExclusive<T>(
-    operation: (journal: RecordJournalTransaction) => Promise<T>,
+    operation: (journal: RecordJournalExclusiveSession) => Promise<T>,
   ): Promise<T> {
     const previousGate = this.operationGate
     let release!: () => void
@@ -208,12 +210,12 @@ export class RecordJournalService extends Service {
 
     await previousGate
     try {
-      const journal: RecordJournalTransaction = {
+      const session: RecordJournalExclusiveSession = {
         accept: (record) => this.acceptUnlocked(record),
         get: (recordId) => this.get(recordId),
         iterateAccepted: () => this.iterateAccepted(),
       }
-      return await operation(journal)
+      return await operation(session)
     } finally {
       release()
     }

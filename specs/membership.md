@@ -134,13 +134,13 @@ rebuild()
 
 `applyMembership`:
 
-1. validates the exact Core Record, Protocol reference/hash and signature;
-2. validates Repo and target Member identities;
-3. requires the target to satisfy the Member capability;
-4. requires the Repo to already be established;
+1. enters the shared Runtime Record database boundary so same-process journal mutation cannot interleave with acceptance-time prerequisite validation;
+2. validates the exact Core Record, Protocol reference/hash and signature;
+3. reconciles and validates Repo and target Member identities from durable facts;
+4. requires the target to satisfy the Member capability and the Repo to have one unambiguous establishment;
 5. requires `Record.createdBy == data.repo`;
 6. validates `Record.createdAt` as the canonical Repo-signed membership fact ordering time;
-7. enters the shared Runtime Record database boundary, validates the relation-local ordering position, and durably accepts the exact Record through its journal session;
+7. validates the relation-local ordering position and durably accepts the exact Record through the journal session;
 8. rebuilds the Membership Runtime database namespace from durable facts and reports the resulting current view.
 
 Exact replay of an already accepted Record is idempotent.
@@ -178,7 +178,7 @@ Repo × Member × createdAt
 
 The second index validates that one relation cannot contain two distinct facts at the same ordering position before a new Record is durably accepted through the Membership path.
 
-Story #6 introduces only the minimum shared Runtime Record database boundary required to make that validation atomic with same-process journal mutation: one serialized Runtime operation boundary plus Protocol-namespaced relationship state. It does not introduce a generic relationship schema, generic DAG engine, SQL model or Block packer.
+Story #6 introduces only the minimum shared Runtime Record database boundary required to make that validation atomic with same-process journal mutation: one serialized Runtime operation boundary plus Protocol-namespaced relationship state. Runtime state is updated by whole-namespace replacement; the operation callback is not given mutable references to previously committed namespace state. The underlying journal session is a serialization boundary, not a rollback transaction: once a Record is durably accepted, a later callback failure does not erase it, and later rebuild must converge from durable facts. It does not introduce a generic relationship schema, generic DAG engine, SQL model or Block packer.
 
 Current read operations rebuild the Membership namespace from durable facts before answering. This keeps #6 recoverable while preserving the architecture in which Repository Runtime relationship state is a correctness input for validation and later packing.
 

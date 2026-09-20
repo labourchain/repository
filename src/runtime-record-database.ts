@@ -1,7 +1,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type {
   JournalRecord,
-  RecordJournalTransaction,
+  RecordJournalExclusiveSession,
 } from './record-journal.ts'
 
 export const RUNTIME_RECORD_DATABASE_SERVICE = 'runtimeRecordDatabase' as const
@@ -12,7 +12,6 @@ export interface RuntimeRecordDatabaseSession {
   accept(record: JournalRecord): Promise<void>
   get(recordId: string): Promise<JournalRecord>
   iterateAccepted(): AsyncIterableIterator<JournalRecord>
-  getState<T>(namespace: string): T | undefined
   replaceState(namespace: string, state: unknown): void
 }
 
@@ -37,6 +36,9 @@ export class RuntimeRecordDatabaseService {
     operation: (database: RuntimeRecordDatabaseSession) => Promise<T>,
   ): Promise<T> {
     return this.ctx.recordJournal.runExclusive(async (journal) => {
+      // Only whole namespace values can be replaced inside an operation.
+      // Committed state references are intentionally not exposed to callbacks,
+      // so a failed operation cannot mutate previously committed state in place.
       const stagedStates = new Map(this.states)
       const database = this.createSession(journal, stagedStates)
       const result = await operation(database)
@@ -51,16 +53,13 @@ export class RuntimeRecordDatabaseService {
   }
 
   private createSession(
-    journal: RecordJournalTransaction,
+    journal: RecordJournalExclusiveSession,
     states: Map<string, unknown>,
   ): RuntimeRecordDatabaseSession {
     return {
       accept: (record) => journal.accept(record),
       get: (recordId) => journal.get(recordId),
       iterateAccepted: () => journal.iterateAccepted(),
-      getState<T>(namespace: string) {
-        return states.get(namespace) as T | undefined
-      },
       replaceState(namespace, state) {
         states.set(namespace, state)
       },

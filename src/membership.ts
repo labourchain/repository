@@ -269,10 +269,12 @@ export class MembershipService {
   }
 
   async applyMembership(value: unknown): Promise<MembershipView> {
-    const validated = await this.validateFact(value)
-
     return this.ctx[RUNTIME_RECORD_DATABASE_SERVICE].runExclusive(
       async (database) => {
+        // Acceptance-time Member/Repo prerequisites are reconciled while the
+        // shared journal mutation gate is held. A raw durable fact therefore
+        // cannot appear between prerequisite validation and publication.
+        const validated = await this.validateFact(value)
         const state = await this.rebuildUnlocked(database)
         const key = relationKey(
           validated.payload.repo,

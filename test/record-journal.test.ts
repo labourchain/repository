@@ -68,6 +68,25 @@ test('durably accepts and reads an exact Record', async (t) => {
   await node.dispose()
 })
 
+test('exclusive journal session does not roll back a successful durable accept', async (t) => {
+  const directory = await tempJournalDir()
+  t.after(() => rm(directory, { recursive: true, force: true }))
+
+  const node = await createJournalNode(directory)
+  const expected = record('d'.repeat(64))
+
+  await assert.rejects(
+    node.context.recordJournal.runExclusive(async (session) => {
+      await session.accept(expected)
+      throw new Error('after durable accept')
+    }),
+    /after durable accept/,
+  )
+
+  assert.deepEqual(await node.context.recordJournal.get(expected.id), expected)
+  await node.dispose()
+})
+
 test('survives Repository node restart with the same persistent path', async (t) => {
   const directory = await tempJournalDir()
   t.after(() => rm(directory, { recursive: true, force: true }))

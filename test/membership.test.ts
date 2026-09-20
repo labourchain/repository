@@ -26,6 +26,7 @@ import {
   MembershipTargetMemberError,
   RecordJournalNotFoundError,
   RecordJournalService,
+  RepoAlreadyEstablishedError,
   RepoNotFoundError,
   createRepositoryNode,
   runtimeRecordDatabasePlugin,
@@ -111,9 +112,9 @@ function memberRecord(identity: string): CoreRecordValue {
   }
 }
 
-function repoRecord(): CoreRecordValue {
+function repoRecord(label = 'repo-establishment'): CoreRecordValue {
   return {
-    id: recordId('repo-establishment'),
+    id: recordId(label),
     protocol: REPO_ESTABLISHMENT_PROTOCOL_REFERENCE,
     protocolHash: REPO_PROTOCOL_HASH,
     createdBy: OPERATOR_KEY,
@@ -759,6 +760,34 @@ test('applyMembership converges to newer durable facts already present in the jo
         latestRecordId: newer.id,
         latestCreatedAt: newer.createdAt,
       },
+    )
+
+    await node.dispose()
+  })
+})
+
+test('membership acceptance fails closed on newly durable conflicting Repo establishment', async () => {
+  await withDirectory(async (directory) => {
+    const node = await createRepositoryNode({ plugins: composition(directory) })
+    await setupRepo(node)
+
+    const conflictingRepo = repoRecord('repo-establishment-conflict')
+    await node.context.recordJournal.accept(conflictingRepo)
+
+    const membership = membershipRecord(
+      'membership-after-repo-conflict',
+      'add',
+      MEMBER_KEY,
+      '2026-09-19T00:00:04.000Z',
+    )
+
+    await assert.rejects(
+      node.context[MEMBERSHIP_PROTOCOL_SERVICE].applyMembership(membership),
+      RepoAlreadyEstablishedError,
+    )
+    await assert.rejects(
+      node.context.recordJournal.get(membership.id),
+      RecordJournalNotFoundError,
     )
 
     await node.dispose()

@@ -221,11 +221,11 @@ export class RepoEstablishmentService {
   async loadRepo(identity: unknown): Promise<RepoView> {
     const repoIdentity = this.validateRepoIdentity(identity)
 
-    let recordId = this.establishments.get(repoIdentity)
-    if (recordId === undefined) {
-      await this.rebuild()
-      recordId = this.establishments.get(repoIdentity)
-    }
+    // Durable establishment facts are authoritative. Always reconcile before
+    // returning a cached Repo so newly durable conflicts cannot be hidden by
+    // the in-memory lookup projection.
+    await this.rebuild()
+    const recordId = this.establishments.get(repoIdentity)
 
     if (recordId === undefined) {
       throw new RepoNotFoundError(repoIdentity)
