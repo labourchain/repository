@@ -11,6 +11,10 @@ import {
   type RepoView,
 } from './repo.ts'
 import type { JournalRecord } from './record-journal.ts'
+import {
+  RUNTIME_RECORD_DATABASE_SERVICE,
+  type RuntimeRecordDatabaseSession,
+} from './runtime-record-database.ts'
 
 export const MEMBERSHIP_PROTOCOL_NAME = 'repo.membership' as const
 export const MEMBERSHIP_PROTOCOL_VERSION = '0.1.0' as const
@@ -54,6 +58,11 @@ interface RelationState {
   readonly latestRecordId: string | null
   readonly latestCreatedAt: string | null
   readonly createdTime: number
+}
+
+interface MembershipRuntimeState {
+  readonly relations: ReadonlyMap<string, RelationState>
+  readonly factIdsByCreatedAt: ReadonlyMap<string, string>
 }
 
 export class MembershipError extends Error {
@@ -245,9 +254,6 @@ const EMPTY_RELATION: RelationState = Object.freeze({
 export class MembershipService {
   private readonly ctx: Context
   readonly protocolHash: string
-  private readonly relations = new Map<string, RelationState>()
-  private readonly factIdsByCreatedAt = new Map<string, string>()
-  private operationGate: Promise<void> = Promise.resolve()
 
   constructor(ctx: Context, protocolHash: string) {
     this.ctx = ctx
@@ -255,64 +261,67 @@ export class MembershipService {
   }
 
   async rebuild(): Promise<void> {
-    return this.withOperationGate(() => this.rebuildUnlocked())
+    await this.ctx[RUNTIME_RECORD_DATABASE_SERVICE].runExclusive(
+      async (database) => {
+        await this.rebuildUnlocked(database)
+      },
+    )
   }
 
   async applyMembership(value: unknown): Promise<MembershipView> {
     const validated = await this.validateFact(value)
 
-    return this.withOperationGate(async () => {
-      await this.rebuildUnlocked()
-
-      const key = relationKey(
-        validated.payload.repo,
-        validated.payload.member,
-      )
-      const timeKey = membershipFactTimeKey(
-        validated.payload.repo,
-        validated.payload.member,
-        validated.record.createdAt,
-      )
-      const existingRecordId = this.factIdsByCreatedAt.get(timeKey)
-
-      if (
-        existingRecordId !== undefined &&
-        existingRecordId !== validated.record.id
-      ) {
-        throw new MembershipHistoryError(
-          'Membership relation contains distinct facts with the same createdAt.',
+    return this.ctx[RUNTIME_RECORD_DATABASE_SERVICE].runExclusive(
+      async (database) => {
+        const state = await this.rebuildUnlocked(database)
+        const key = relationKey(
+          validated.payload.repo,
+          validated.payload.member,
         )
-      }
+        const timeKey = membershipFactTimeKey(
+          validated.payload.repo,
+          validated.payload.member,
+          validated.record.createdAt,
+        )
+        const existingRecordId = state.factIdsByCreatedAt.get(timeKey)
 
-      await this.ctx.recordJournal.accept(validated.record)
+        if (
+          existingRecordId !== undefined &&
+          existingRecordId !== validated.record.id
+        ) {
+          throw new MembershipHistoryError(
+            'Membership relation contains distinct facts with the same createdAt.',
+          )
+        }
 
-      // Re-derive the result from the durable source for both new facts and
-      // exact replay. Another valid ingress may have changed the current view
-      // while this Record was being persisted.
-      await this.rebuildUnlocked()
+        await database.accept(validated.record)
 
-      return membershipView(
-        validated.payload.repo,
-        validated.payload.member,
-        this.relations.get(key) ?? EMPTY_RELATION,
-      )
-    })
+        const next = await this.rebuildUnlocked(database)
+        return membershipView(
+          validated.payload.repo,
+          validated.payload.member,
+          next.relations.get(key) ?? EMPTY_RELATION,
+        )
+      },
+    )
   }
 
   async getMembership(repo: unknown, member: unknown): Promise<MembershipView> {
     const repoIdentity = await this.requireRepo(repo)
     const memberIdentity = await this.requireMember(member)
 
-    return this.withOperationGate(async () => {
-      await this.rebuildUnlocked()
-      return membershipView(
-        repoIdentity.identity,
-        memberIdentity,
-        this.relations.get(
-          relationKey(repoIdentity.identity, memberIdentity),
-        ) ?? EMPTY_RELATION,
-      )
-    })
+    return this.ctx[RUNTIME_RECORD_DATABASE_SERVICE].runExclusive(
+      async (database) => {
+        const state = await this.rebuildUnlocked(database)
+        return membershipView(
+          repoIdentity.identity,
+          memberIdentity,
+          state.relations.get(
+            relationKey(repoIdentity.identity, memberIdentity),
+          ) ?? EMPTY_RELATION,
+        )
+      },
+    )
   }
 
   async hasMember(repo: unknown, member: unknown): Promise<boolean> {
@@ -322,27 +331,30 @@ export class MembershipService {
   async listMembers(repo: unknown): Promise<readonly string[]> {
     const repoIdentity = await this.requireRepo(repo)
 
-    return this.withOperationGate(async () => {
-      await this.rebuildUnlocked()
+    return this.ctx[RUNTIME_RECORD_DATABASE_SERVICE].runExclusive(
+      async (database) => {
+        const state = await this.rebuildUnlocked(database)
+        const prefix = repoIdentity.identity + '\u0000'
+        const members: string[] = []
 
-      const prefix = repoIdentity.identity + '\u0000'
-      const members: string[] = []
+        for (const [key, relation] of state.relations) {
+          if (!relation.active || !key.startsWith(prefix)) continue
+          members.push(key.slice(prefix.length))
+        }
 
-      for (const [key, state] of this.relations) {
-        if (!state.active || !key.startsWith(prefix)) continue
-        members.push(key.slice(prefix.length))
-      }
-
-      members.sort()
-      return Object.freeze(members)
-    })
+        members.sort()
+        return Object.freeze(members)
+      },
+    )
   }
 
-  private async rebuildUnlocked(): Promise<void> {
-    const rebuilt = new Map<string, RelationState>()
+  private async rebuildUnlocked(
+    database: RuntimeRecordDatabaseSession,
+  ): Promise<MembershipRuntimeState> {
+    const relations = new Map<string, RelationState>()
     const factIdsByCreatedAt = new Map<string, string>()
 
-    for await (const journalRecord of this.ctx.recordJournal.iterateAccepted()) {
+    for await (const journalRecord of database.iterateAccepted()) {
       if (!this.isCandidate(journalRecord)) continue
 
       const validated = await this.validateFact(journalRecord)
@@ -364,9 +376,9 @@ export class MembershipService {
       }
       factIdsByCreatedAt.set(timeKey, validated.record.id)
 
-      const current = rebuilt.get(key)
+      const current = relations.get(key)
       if (!current || validated.createdTime > current.createdTime) {
-        rebuilt.set(key, {
+        relations.set(key, {
           active: validated.payload.action === 'add',
           latestRecordId: validated.record.id,
           latestCreatedAt: validated.record.createdAt,
@@ -375,32 +387,12 @@ export class MembershipService {
       }
     }
 
-    this.relations.clear()
-    for (const [key, state] of rebuilt) {
-      this.relations.set(key, state)
-    }
-
-    this.factIdsByCreatedAt.clear()
-    for (const [key, recordId] of factIdsByCreatedAt) {
-      this.factIdsByCreatedAt.set(key, recordId)
-    }
-  }
-
-  private async withOperationGate<T>(
-    operation: () => Promise<T>,
-  ): Promise<T> {
-    const previousGate = this.operationGate
-    let release!: () => void
-    this.operationGate = new Promise<void>((resolve) => {
-      release = resolve
+    const state: MembershipRuntimeState = Object.freeze({
+      relations,
+      factIdsByCreatedAt,
     })
-
-    await previousGate
-    try {
-      return await operation()
-    } finally {
-      release()
-    }
+    database.replaceState(MEMBERSHIP_PROTOCOL_REFERENCE, state)
+    return state
   }
 
   private isCandidate(value: JournalRecord): boolean {
@@ -510,7 +502,7 @@ export const MEMBERSHIP_PROTOCOL_INJECT = Object.freeze([
   CORE_RECORD_PROTOCOL_SERVICE,
   MEMBER_PROTOCOL_SERVICE,
   REPO_ESTABLISHMENT_PROTOCOL_SERVICE,
-  'recordJournal',
+  RUNTIME_RECORD_DATABASE_SERVICE,
 ] as const)
 
 export function createMembershipProtocolPlugin() {
