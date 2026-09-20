@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { setImmediate as delayImmediate } from 'node:timers/promises'
 import { test } from 'node:test'
 import { Context } from '@deepseek-ai/cordis'
 import { plugin as memberIdentityPlugin } from '../src/protocols/member.identity.ts'
@@ -13,6 +14,7 @@ import {
   MemberDeclarationError,
   MemberNotFoundError,
   MemberProtocolConfigError,
+  RecordJournalNotFoundError,
   RecordJournalService,
   createRepositoryNode,
   type CoreRecordProtocolService,
@@ -182,6 +184,39 @@ test('rejects a non-Member identity without creating it implicitly', async () =>
     await assert.rejects(
       node.context[MEMBER_PROTOCOL_SERVICE].requireMember(OTHER_KEY),
       MemberNotFoundError,
+    )
+
+    await node.dispose()
+  })
+})
+
+test('raw journal acceptance cannot invalidate Member history between reconcile and declaration publish', async () => {
+  await withDirectory(async (directory) => {
+    const node = await createRepositoryNode({ plugins: composition(directory) })
+
+    const incoming = memberRecord('member-gated-incoming')
+    const invalidHistory = memberRecord('member-gated-invalid', {
+      signature: 'invalid-signature',
+    })
+
+    let pending: Promise<unknown> | undefined
+
+    await node.context.recordJournal.runExclusive(async (journal) => {
+      pending = node.context[MEMBER_PROTOCOL_SERVICE].declareMember(incoming)
+
+      await delayImmediate()
+      await journal.accept(invalidHistory)
+    })
+
+    assert.ok(pending)
+    await assert.rejects(pending, MemberDeclarationError)
+    await assert.rejects(
+      node.context.recordJournal.get(incoming.id),
+      RecordJournalNotFoundError,
+    )
+    assert.deepEqual(
+      await node.context.recordJournal.get(invalidHistory.id),
+      invalidHistory,
     )
 
     await node.dispose()

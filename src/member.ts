@@ -142,10 +142,17 @@ export class MemberIdentityService {
   }
 
   async declareMember(record: unknown): Promise<MemberView> {
-    const validated = this.validateDeclaration(record)
-    await this.ctx.recordJournal.accept(validated)
-    this.members.add(validated.createdBy)
-    return memberView(validated.createdBy)
+    return this.ctx.recordJournal.runExclusive(async (journal) => {
+      // Existing durable Member facts, validation of the incoming declaration
+      // and publication share one mutation boundary. A raw same-process journal
+      // write therefore cannot make Member history invalid between reconcile
+      // and durable acceptance.
+      const validated = this.validateDeclaration(record)
+      await this.rebuild()
+      await journal.accept(validated)
+      this.members.add(validated.createdBy)
+      return memberView(validated.createdBy)
+    })
   }
 
   async requireMember(identity: unknown): Promise<MemberView> {
