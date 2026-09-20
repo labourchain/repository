@@ -124,6 +124,49 @@ Chain-state / Block-confirmation access
 
 Repository 领域插件消费这些运行能力，但不通过 `repo.records[]` 或第二套链来替代 Core Block / canonical-chain 语义。
 
+
+## Repo Runtime 与链上信任边界
+
+Repository Runtime 是正常节点生成、接收、校验、组织和打包候选事实的执行路径，但它不是 LabourChain 的最终可信执行边界。节点可以使用官方开源 Repository 与 Protocol plugins 形成自洽的候选 Records，也可以使用等价实现；一个恶意或非标准节点甚至可以绕过正常 Repository 流程手工构造候选 Block。链上有效性不能建立在“生产者确实运行了官方 Repo 代码”这一假设上。
+
+Block 被其他节点接受之前，Repository 本地的 pending / candidate state 都可以继续被修订、替换或放弃。这里需要区分两种不同的不变性：
+
+```text
+specific signed Record
+    -> RecordId / signature 约束这个具体 Record 的内容
+    -> 修改其签名覆盖的内容后，原 RecordId / signature 不再证明修改后的值
+    -> 若要形成新的有效事实，应重新形成对应的有效 Record
+
+candidate set before Block confirmation
+    -> Repo 可以选择、替换、追加或放弃待打包 Records
+    -> journal / Runtime database 只描述节点当前接受和准备处理的状态
+    -> 这些状态本身不是 canonical chain truth
+```
+
+因此 Repository 的本地 validation 主要服务于正常节点的运行自洽、恢复、关系维护和打包准备。它可以尽早拒绝明显非法的事实，但 peer node 不信任生产节点已经执行过这些检查，也不把 Runtime database、journal、snapshot 或本地 plugin 执行结果作为链级证明。
+
+当 Block packing 能力实现后，每个 Block 的 Header 必须提交该 Block 打包时 Repository 实际采用的 Protocol composition，并包含能够精确绑定这些 Protocol implementations / artifacts 的 hashes。具体 Header 字段和 manifest 编码留给 Block/packing Spec；Architecture 固定的是验证原则：
+
+```text
+Block
+├─ Header
+│  └─ Repo Protocol composition + exact hashes
+└─ Records
+       ↓
+Peer validator
+├─ 取得 Header 声明的 exact Protocol implementations
+├─ 重新计算并核对对应 hashes
+├─ 独立验证 Block 中实际包含的 Records
+├─ 按这些 Protocol 解释并验证 Record 关系
+└─ 验证通过后才接受该 Block
+```
+
+Peer validation 不依赖生产节点之前使用了什么内存对象、snapshot 或执行路径，而只依赖 Block 实际提交的数据及其绑定的验证语义。当前 LabourChain 不要求像通用智能合约平台那样建立一套加密虚拟机或把所有 Repository 执行过程复制到链上；需要重放的是对应 Protocol 对 Block 内容及关系的确定性验证。
+
+Block 内的 Records 可以按照适用 Protocol 建立一个或多个有逻辑的生产关系结构。劳动与 Asset 的输入/输出关系自然形成 tree / forest，必要时可表现为更一般的依赖图；Block validation 必须确认这些关系在 Header 所提交的 Protocol composition 下自洽。Membership 等非生产因果事实不因此被强行塞入同一棵生产树，也不重新引入 `previous` 链。
+
+当前 Repository MVP 和 Story #6 只建立支持未来打包所需的 Runtime 边界，不实现完整 Block packer、Protocol-composition Header 编码、peer validator、节点同步或共识。
+
 ## Repository 与其他 LabourChain 组件
 
 ```mermaid
@@ -346,6 +389,23 @@ Runtime 还可以保存：
 Contribution history 可以同时展示 Repository committed/pending-chain 与 block-confirmed contributions，但必须明确区分状态。
 
 Repository 不维护一个将所有链 Records 归 Repository 所有的规范 `repo.records[]`。
+
+
+Repo 中需要更新的事实状态沿用 Record + Patch 的演化方式，而不是把某个完整 Snapshot 反复写回事实历史。具体 Patch Protocol / schema 由相应领域 Spec 定义，但 Architecture 固定以下数据角色：
+
+```text
+Record + Patch history
+    -> 可验证的事实与事实变更来源
+    -> 进入 Block 时按适用 Protocol 被独立验证
+
+Snapshot
+    -> 节点按当前可用事实和 exact Protocol semantics 物化出的运行时状态
+    -> 用于快速恢复、读取、索引或计算
+    -> 可以丢弃并重新计算
+    -> 不进入 Record history，也不作为新的事实来源
+```
+
+Snapshot 因此不能反向覆盖 Record / Patch history，也不能仅因被某个 Repo Runtime 缓存就获得链上权威。节点升级、插件切换或缓存重建时，可以重新从事实历史计算 Snapshot，而不改写已经存在的事实。
 
 ## Cordis 生命周期
 

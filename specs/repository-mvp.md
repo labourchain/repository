@@ -68,6 +68,19 @@ A Member may compose Repo capability on the same Entity identity/keypair. This c
 
 Historical facts must be interpreted by the exact Protocol identity/version they reference. Missing versions fail explicitly. They must not silently fall back to `latest` or another installed version.
 
+
+### Repository Runtime is not the chain trust root
+
+Repository Runtime is the normal production path for validating, relating, retaining and preparing candidate Records, but chain validity does not depend on a producer having executed the official Repository implementation.
+
+Before Block confirmation, a node may replace, add or discard candidate Records. A specific signed Record remains bound by its RecordId and signature; changing signed content requires a value that independently satisfies the corresponding Record identity and signature rules.
+
+When Block packing is implemented, each Block Header must commit the Repo Protocol composition used for that Block together with exact hashes that bind the corresponding Protocol implementations / artifacts. Peer validation must resolve those exact implementations, recompute the committed hashes, and validate the actual Block contents and their Protocol-defined relationships independently of the producer's Runtime state.
+
+Records in one Block may form one or more Protocol-defined production trees / forests or other explicit dependency structures. The validator must validate those relationships as part of Block validity. This does not turn Membership into a predecessor chain and does not require every fact type to participate in one global DAG.
+
+The MVP does not require a general smart-contract VM, trusted execution environment, full Block packer, peer validator, synchronization or consensus implementation. It only preserves the Runtime and Protocol boundaries those later capabilities will consume.
+
 ### Labour Records remain labour facts
 
 A Record describing labour is produced/signed by the Member acting as labour subject, with stable identity/signature semantics supplied by Core. Other Protocol facts may assign authorship to another Entity identity; for example, `repo.membership` is signed by the Repo identity. Repository does not turn either kind of Record into a Repository-owned domain object or maintain a canonical `repo.records[]` collection.
@@ -114,6 +127,9 @@ index/cache/projection
 ```
 
 The Runtime Record database is not merely a query cache: Repository validation and packing may depend on its reconciled relationship state. Persistence alone still does not turn Runtime database, staging, index/cache/projection, or journal state into chain-confirmed facts.
+
+
+Repo state evolution uses Record + Patch facts. Runtime Snapshot is a materialized cache/projection derived from those facts under exact Protocol semantics: it may accelerate recovery and reads, may be discarded and rebuilt, and must not be written back as a substitute for the Record + Patch history or treated as an independent chain fact.
 
 ### Recovery converges to durable Repository state
 
@@ -193,6 +209,8 @@ Implementation must:
 - treat Member and Repo as protocol-composed identities, not fixed provider-owned object schemas;
 - persist exact accepted Records through an explicit Runtime/composition dependency rather than a Repository-domain `records[]` model;
 - maintain protocol-validated Record relationships and pending packing state in a Repository Runtime database capability, without turning that database into a second blockchain or canonical-chain authority;
+- treat Repository Runtime validation as the normal producer path rather than a chain trust root; peer validation of a future Block must independently verify the Block's actual Records against the exact Protocol composition and hashes committed by that Block;
+- keep Repo fact evolution in Record + Patch history while treating Snapshot only as rebuildable Runtime materialization;
 - distinguish durable pending-chain acceptance from actual Block confirmation;
 - fail closed when required durable ingress, Core primitive or exact Protocol implementation is unavailable;
 - keep concrete database, filesystem and transport choices behind Runtime/plugin boundaries;

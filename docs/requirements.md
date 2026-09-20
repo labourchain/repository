@@ -90,6 +90,23 @@ Repository committed 是产品接受边界；Block confirmed 是链确证边界�
 - 一旦链状态可查询，Runtime/Projection 必须能够区分 pending-chain 与 block-confirmed；
 - 本地持久化不会单独赋予 Record “已被链确证”的含义。
 
+
+## 链上信任与独立验证
+
+Repository 的正常运行路径负责尽早检查 Protocol 语义、维护关系并准备待打包 Records，但 Repository Runtime 本身不是链的最终信任根。Block 的有效性不得依赖“生产者运行了官方 Repository 代码”这一假设；能够生成 Block 的节点即使使用自定义实现或绕过正常 Repo 流程，其结果也只能在其他节点独立验证通过后成为有效链事实。
+
+Block packing 与 peer validation 后续实现时必须满足：
+
+- Block Header 记录打包时 Repo 实际采用的 Protocol composition，并提交能够精确绑定对应 Protocol implementations / artifacts 的 hashes；
+- 验证节点能够根据 Header 获取或解析 exact Protocol implementations，重新计算对应 hashes，而不是使用本地 `latest` 猜测历史语义；
+- 验证节点针对 Block 中实际包含的 Records 重新执行 Record、signature、Protocol 及关系验证，不信任生产节点的本地 validation 结果；
+- Block 内相关 Records 按各自 Protocol 形成的生产关系 tree / forest 或其他明确依赖关系必须能够被重建并验证为自洽；
+- 只有完成这些独立验证并接受 Block 后，相关事实才获得该链上的确证状态。
+
+在 Block 被接受之前，Repository 可以继续修改其本地 candidate set：替换、追加或放弃待打包事实都属于 Runtime 行为。一个具体的签名 Record 仍受其 RecordId 与 signature 约束；如果修改了该 Record 的签名覆盖内容，修改后的值必须重新满足对应的 RecordId / signature 规则，不能沿用原 Record 身份冒充同一事实。
+
+当前 MVP 不要求实现通用加密 VM、智能合约虚拟机或可信执行环境来证明 Repo Runtime 按某一固定过程运行。链级验证针对最终 Block 内容及其声明的 Protocol composition。
+
 ## 持久性与恢复
 
 已经接受的 Asset 必须能够持久保存，并在正常应用重启后再次读取。
@@ -101,6 +118,9 @@ Member / Repo identity、operator、成员关系以及已接受 contribution 所
 Repository Runtime 必须维护经过适用 Protocol 验证的 Record 关系、顺序/依赖和待打包状态。新的 Repository 领域 Record 在进入正常 accepted/pending-chain 路径时，应在同一 Runtime 写入边界内完成关系验证并可靠持久接收；这些关系状态用于后续验证、追溯和 Block packing，但不因此成为链确证来源。
 
 Asset 的规范身份和语义由适用的 LabourChain Protocol 定义。Repository 不应为了存储、索引或展示方便而静默改写已经接受的 Asset、Record、confirmation 或 contribution relation。
+
+
+Repo 可更新状态采用 Record + Patch 的事实演化方式。Snapshot 只允许作为节点 Runtime 对这些事实的可重建物化结果，用于恢复、查询、索引或计算加速；Snapshot 不进入 Record 历史，不作为独立链上事实，也不得反向替代或覆盖 Record + Patch history。具体 Patch 数据结构由相应 Protocol / Spec 在进入实现范围时定义。
 
 被 Block 收录的 Record 确证事实来自链状态。Repository 可以保存本地 pending state、Record projection 和查询索引，使日常访问与恢复不需要为每次请求重新扫描完整链；这些运行时数据必须能够与 Block-confirmed facts 区分，不能成为新的链确证来源。
 
