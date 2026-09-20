@@ -98,6 +98,8 @@ Member / Repo identity、operator、成员关系以及已接受 contribution 所
 
 应用重启或运行时故障不得把尚未成功进入 Repository committed state 的 contribution 错误地暴露为已接受状态，也不得丢失已经 Repository committed、正在等待链收录的事实。
 
+Repository Runtime 必须维护经过适用 Protocol 验证的 Record 关系、顺序/依赖和待打包状态。新的 Repository 领域 Record 在进入正常 accepted/pending-chain 路径时，应在同一 Runtime 写入边界内完成关系验证并可靠持久接收；这些关系状态用于后续验证、追溯和 Block packing，但不因此成为链确证来源。
+
 Asset 的规范身份和语义由适用的 LabourChain Protocol 定义。Repository 不应为了存储、索引或展示方便而静默改写已经接受的 Asset、Record、confirmation 或 contribution relation。
 
 被 Block 收录的 Record 确证事实来自链状态。Repository 可以保存本地 pending state、Record projection 和查询索引，使日常访问与恢复不需要为每次请求重新扫描完整链；这些运行时数据必须能够与 Block-confirmed facts 区分，不能成为新的链确证来源。
