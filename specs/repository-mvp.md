@@ -33,7 +33,7 @@ start Repository node
   -> recognize/load human Member identity
   -> establish or load Repo
   -> manage contribution membership
-  -> resolve exact Protocol versions
+  -> resolve exact ProtocolHash / verified implementations
   -> receive Asset + Member-produced Record + relations
   -> validate required Protocol semantics
   -> satisfy Member and Repo confirmations
@@ -239,7 +239,7 @@ In addition to the acceptance tests defined by each capability Spec, the MVP int
 3. a valid Member can establish a Repo from an exact establishment Record and reload it after restart;
 4. the same Entity identity may compose Member + Repo capability without creating a second keypair or ownership semantics;
 5. the operator can maintain persistent membership through Repo-signed membership facts;
-6. a Member contribution resolves the exact required Protocol versions;
+6. a Member contribution resolves and verifies the exact required ProtocolHash / implementation artifacts;
 7. valid confirmations, durable Record ingress and durable Asset retrieval produce Repository `COMMITTED` / accepted state;
 8. the accepted Asset remains retrievable after restart;
 9. an interrupted contribution recovers without false acceptance or duplicate durable Record acceptance;

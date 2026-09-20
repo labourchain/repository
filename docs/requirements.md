@@ -15,7 +15,7 @@ Repository MVP 包括：
 - Repo 侧劳动确证；
 - 已接受 Asset 的持久保存与读取；
 - Repo contribution history；
-- 对历史事实所引用协议版本的正确解释与验证。
+- 对历史事实所引用 Protocol reference 与 exact ProtocolHash / verified artifact 的正确解析与验证。
 
 Member 是人类参与者在协议与实现层的称呼，以 Core Entity identity 为身份锚点。`Worker` 保留为概念层的劳动主体描述，不作为程序中的人类实体类型。描述劳动的 Record 由承担劳动的 Member 以其 Entity identity 产生或签署；其他协议事实由相应协议规定其 author，例如 Repo membership 由 Repo identity 签名。Record 被 Block 收录后获得这条链上的收录与确证顺序。Repository 不把 Record 作为另一类规范仓库内容保存，可以为日常查询和分析保留与 contribution 相关的 Record 投影。
 
