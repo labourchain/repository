@@ -146,6 +146,12 @@ durable Record ingress / journal
   -> Runtime/composition dependency
   -> retains exact accepted Records across restart
 
+Runtime Record database
+  -> Runtime/composition dependency
+  -> serializes validated Repository Record ingress in one node
+  -> maintains Protocol-owned relationship state for validation and later packing
+  -> delegates exact Record durability to the journal
+
 chain-state / Block-confirmation access
   -> Runtime/composition dependency
   -> tells whether RecordIds are included in accepted Blocks
