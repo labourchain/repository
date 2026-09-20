@@ -220,62 +220,71 @@ export class RecordJournalService extends Service {
   }
 
   private async acceptUnlocked(record: JournalRecord): Promise<void> {
-      const recordId = requireRecordId(record)
-      const serialized = serializeRecord(record)
-  
-      try {
-        await mkdir(this.directory, { recursive: true })
-      } catch (cause) {
-        throw new RecordJournalStorageError(`Unable to prepare Record journal directory: ${this.directory}`, { cause })
-      }
-  
-      const target = join(this.directory, recordFilename(recordId))
-      const temporary = join(
-        this.directory,
-        `.record-${process.pid}-${randomUUID()}.tmp`,
+    const recordId = requireRecordId(record)
+    const serialized = serializeRecord(record)
+
+    try {
+      await mkdir(this.directory, { recursive: true })
+    } catch (cause) {
+      throw new RecordJournalStorageError(
+        `Unable to prepare Record journal directory: ${this.directory}`,
+        { cause },
       )
-  
-      let handle: Awaited<ReturnType<typeof open>> | undefined
-  
+    }
+
+    const target = join(this.directory, recordFilename(recordId))
+    const temporary = join(
+      this.directory,
+      `.record-${process.pid}-${randomUUID()}.tmp`,
+    )
+
+    let handle: Awaited<ReturnType<typeof open>> | undefined
+
+    try {
+      handle = await open(temporary, 'wx', 0o600)
+      await handle.writeFile(serialized, 'utf8')
+      await handle.sync()
+      await handle.close()
+      handle = undefined
+
       try {
-        handle = await open(temporary, 'wx', 0o600)
-        await handle.writeFile(serialized, 'utf8')
-        await handle.sync()
-        await handle.close()
-        handle = undefined
-  
-        try {
-          // Hard-link publication is atomic and does not overwrite an existing
-          // RecordId, including when multiple processes accept concurrently.
-          await link(temporary, target)
-        } catch (cause) {
-          if (errorCode(cause) !== 'EEXIST') {
-            throw new RecordJournalStorageError(`Unable to publish Record ${recordId} into the journal.`, { cause })
-          }
-  
-          const existing = await this.readStored(recordId, target, false)
-          const incoming = parseStoredRecord(serialized, temporary)
-          if (!isDeepStrictEqual(existing, incoming)) {
-            throw new RecordJournalConflictError(recordId)
-          }
-  
-          // A prior attempt may have linked the finalized file but failed before
-          // syncing the directory. Retry must complete that durability boundary
-          // before equivalent acceptance is reported as successful.
-          await this.syncPublication(recordId)
-          return
-        }
-  
-        await this.syncPublication(recordId)
+        // Hard-link publication is atomic and does not overwrite an existing
+        // RecordId, including when multiple processes accept concurrently.
+        await link(temporary, target)
       } catch (cause) {
-        if (cause instanceof RecordJournalError) throw cause
-        throw new RecordJournalStorageError(`Unable to durably accept Record ${recordId}.`, { cause })
-      } finally {
-        if (handle) {
-          await handle.close().catch(() => undefined)
+        if (errorCode(cause) !== 'EEXIST') {
+          throw new RecordJournalStorageError(
+            `Unable to publish Record ${recordId} into the journal.`,
+            { cause },
+          )
         }
-        await unlink(temporary).catch(() => undefined)
+
+        const existing = await this.readStored(recordId, target, false)
+        const incoming = parseStoredRecord(serialized, temporary)
+        if (!isDeepStrictEqual(existing, incoming)) {
+          throw new RecordJournalConflictError(recordId)
+        }
+
+        // A prior attempt may have linked the finalized file but failed before
+        // syncing the directory. Retry must complete that durability boundary
+        // before equivalent acceptance is reported as successful.
+        await this.syncPublication(recordId)
+        return
       }
+
+      await this.syncPublication(recordId)
+    } catch (cause) {
+      if (cause instanceof RecordJournalError) throw cause
+      throw new RecordJournalStorageError(
+        `Unable to durably accept Record ${recordId}.`,
+        { cause },
+      )
+    } finally {
+      if (handle) {
+        await handle.close().catch(() => undefined)
+      }
+      await unlink(temporary).catch(() => undefined)
+    }
   }
 
   /** Read one exact accepted Record by RecordId. */
