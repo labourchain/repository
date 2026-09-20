@@ -140,8 +140,8 @@ rebuild()
 4. requires the Repo to already be established;
 5. requires `Record.createdBy == data.repo`;
 6. validates `Record.createdAt` as the canonical Repo-signed membership fact ordering time;
-7. durably accepts the exact Record through `recordJournal`;
-8. rebuilds from durable membership facts and reports the resulting current view.
+7. enters the shared Runtime Record database boundary, validates the relation-local ordering position, and durably accepts the exact Record through its journal session;
+8. rebuilds the Membership Runtime database namespace from durable facts and reports the resulting current view.
 
 Exact replay of an already accepted Record is idempotent.
 
@@ -176,9 +176,11 @@ Repo × Member × createdAt
 -> unique membership RecordId
 ```
 
-The second index validates that one relation cannot contain two distinct facts at the same ordering position before a new Record is durably accepted through the Membership path. The full shared Runtime Record database and Block packer remain broader Repository Runtime work and are not introduced by Story #6.
+The second index validates that one relation cannot contain two distinct facts at the same ordering position before a new Record is durably accepted through the Membership path.
 
-Current read operations rebuild these minimum indexes from durable facts before answering. This keeps #6 recoverable while preserving the architecture in which Repository Runtime relationship state is a correctness input for validation and later packing.
+Story #6 introduces only the minimum shared Runtime Record database boundary required to make that validation atomic with same-process journal mutation: one serialized Runtime operation boundary plus Protocol-namespaced relationship state. It does not introduce a generic relationship schema, generic DAG engine, SQL model or Block packer.
+
+Current read operations rebuild the Membership namespace from durable facts before answering. This keeps #6 recoverable while preserving the architecture in which Repository Runtime relationship state is a correctness input for validation and later packing.
 
 Rebuild must not depend on:
 
