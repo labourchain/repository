@@ -98,14 +98,21 @@ Contribution history 属于事实的 view / projection。它可以由插件提�
 
 Core 当前同时明确：Block Chain 表达 Record 被这条链收录和确证的顺序；Runtime arrival / queue order 不具有链确证语义。因此 Repository 不把“本地持久接收 Record”和“Record 已被 Block 确认”混成一个 canonical 状态。
 
-Repository node 需要区分两类运行能力：
+Repository node 需要区分三类运行能力：
 
 ```text
 Durable Record ingress / journal
-    -> 持久接收已经完成领域校验和签名的 Records
+    -> 持久保存 exact accepted Records
     -> 在 Block packing 之前跨重启保留 pending-chain Records
-    -> 为 Repository committed / accepted 提供 durable runtime boundary
+    -> 不负责 Repository 领域关系验证
     -> 不宣称这些 Records 已经被链确证
+
+Runtime Record database
+    -> 在同一 Repository Runtime 写入边界内执行适用 Protocol 的关系验证
+    -> 维护已验证 Record 的关系、顺序/依赖和 pending packing state
+    -> 为后续关系验证、追溯与 Block packing 提供运行状态
+    -> 可由 durable Records + exact Protocol semantics 重建/对账
+    -> 不是 canonical chain state
 
 Chain-state / Block-confirmation access
     -> 查询哪些 Records 已经被有效 Block 收录
@@ -113,9 +120,9 @@ Chain-state / Block-confirmation access
     -> 用于状态升级、对账和 projection rebuild
 ```
 
-二者可以由同一个未来 node/runtime 实现，也可以作为不同 Cordis providers 组合；Architecture 不锁定 package、数据库或网络实现。
+三者可以由同一个未来 node/runtime 实现，也可以作为不同 Cordis providers 组合；Architecture 不锁定 package、数据库或网络实现。当前 Runtime Record database 只需要一个最小共享写入边界和按 Protocol 隔离的关系状态，不预设通用 DAG schema、SQL 模型或 packer API。
 
-Repository 领域插件只消费这些能力，不通过 `repo.records[]`、general-purpose Repository Record database 或第二套链来替代它们。
+Repository 领域插件消费这些运行能力，但不通过 `repo.records[]` 或第二套链来替代 Core Block / canonical-chain 语义。
 
 ## Repository 与其他 LabourChain 组件
 
