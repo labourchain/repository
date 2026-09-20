@@ -149,9 +149,9 @@ Contribution history 可以组合两类明确区分的数据来源：
 
 Repository 只接受符合适用 LabourChain Protocol 的事实和关系。
 
-历史事实必须按照它实际引用的 Protocol identity 和 version 解释或验证。存在多个协议版本时，不得把历史事实隐式交给 `latest` 或其他未引用版本处理。
+历史事实必须按照它实际引用的 Protocol reference 与 exact `ProtocolHash` 解释或验证。人类可读的 identity/version 用于表达协议引用，但不能替代机器权威的 hash。存在多个版本或 artifact 时，不得把历史事实隐式交给 `latest`、同版本的其他 artifact 或任何未被该事实精确引用的实现。
 
-如果处理某个事实所需的协议版本在当前运行环境中不可用，Repository 必须明确失败，而不是使用不同版本猜测其语义。
+如果处理某个事实所需的 exact Protocol descriptor / artifact 在当前运行环境中不可解析或无法通过 Core 的 hash / artifact 验证边界，Repository 必须明确失败，而不是使用不同版本或兼容实现猜测其语义。
 
 Repository 不重新定义 Member、Asset、Record、identity、signature、confirmation 或 block 的协议语义。Repository 自己定义的是仓库领域的 establishment、membership、contribution acceptance 等业务语义。
 

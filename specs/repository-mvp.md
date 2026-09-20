@@ -17,7 +17,7 @@ The Specs are engineering projections of the current Requirements and Architectu
 | [`member.md`](./member.md) | human Member identity capability over Core Entity identity |
 | [`repo.md`](./repo.md) | Repo establishment, stable identity, operator and loading |
 | [`membership.md`](./membership.md) | Repo-signed contribution membership maintained by the Repo operator |
-| [`protocol-resolution.md`](./protocol-resolution.md) | exact Protocol identity/version resolution |
+| [`protocol-resolution.md`](./protocol-resolution.md) | exact ProtocolHash / verified artifact resolution |
 | [`contribution.md`](./contribution.md) | Asset contribution, confirmation, Repository commit, staging and recovery |
 | [`asset-storage.md`](./asset-storage.md) | durable preservation and retrieval of accepted Assets |
 | [`contribution-history.md`](./contribution-history.md) | contribution-history view and derived projection |
@@ -66,7 +66,9 @@ A Member may compose Repo capability on the same Entity identity/keypair. This c
 
 ### Historical Protocol semantics are exact
 
-Historical facts must be interpreted by the exact Protocol identity/version they reference. Missing versions fail explicitly. They must not silently fall back to `latest` or another installed version.
+Historical facts carry a human-readable Protocol reference and an exact `ProtocolHash`. The hash is the machine authority for selecting the descriptor / executable artifact used to interpret that fact. Resolution must verify the exact artifact through the Core boundary and cross-check the human-readable reference; missing exact hashes fail explicitly.
+
+A historical fact must never silently fall back to `latest`, a different artifact with the same version string, a nearest compatible version, or another installed implementation.
 
 
 ### Repository Runtime is not the chain trust root
@@ -93,15 +95,23 @@ Successful durable ingress means the Record can survive restart and continue tow
 
 ### Repository acceptance is distinct from chain confirmation
 
+Repository execution and chain confirmation are separate status dimensions.
+
 A contribution reaches Repository `COMMITTED` only when:
 
-- the applicable contribution requirements and confirmations are satisfied;
+- the applicable contribution requirements and domain confirmations are satisfied;
 - every required exact Record is durably accepted by the Record journal; and
 - the accepted Asset can be durably retrieved.
 
+The Repository execution path is:
+
+```text
+STAGED -> DOMAIN_CONFIRMED -> COMMITTED
+```
+
 `COMMITTED` is the Repository product acceptance boundary.
 
-`PACKED` means the relevant Records were included in a valid Block and therefore have chain-confirmation status. Later Block packing is not required before Repository returns accepted.
+Its chain status is separately `pending-chain` until accepted-chain evidence shows that the relevant Records are included in an independently validated Block, at which point it may be represented as `block-confirmed`. Merely producing or locally packing a candidate Block is not chain confirmation.
 
 ### Runtime state types remain distinct
 
@@ -212,7 +222,7 @@ Implementation must:
 - treat Repository Runtime validation as the normal producer path rather than a chain trust root; peer validation of a future Block must independently verify the Block's actual Records against the exact Protocol composition and hashes committed by that Block;
 - keep Repo fact evolution in Record + Patch history while treating Snapshot only as rebuildable Runtime materialization;
 - distinguish durable pending-chain acceptance from actual Block confirmation;
-- fail closed when required durable ingress, Core primitive or exact Protocol implementation is unavailable;
+- fail closed when required durable ingress, Core primitive or exact ProtocolHash / verified implementation is unavailable;
 - keep concrete database, filesystem and transport choices behind Runtime/plugin boundaries;
 - avoid process-global mutable Repository state;
 - acquire and dispose plugin-owned resources through Cordis lifecycle ownership;
@@ -263,7 +273,7 @@ The Spec set does not require:
 
 ## Implementation completion
 
-Repository MVP implementation is complete when the configured bootstrap and Cordis plugin set satisfy this umbrella Spec and each applicable capability Spec, Member/Repo identity composition is preserved, the durable Record ingress path demonstrates restart/recovery behavior, pending-chain and Block-confirmed status are not conflated, exact Protocol-version resolution is verified, meaningful tests pass, and build/package checks succeed on supported Node versions.
+Repository MVP implementation is complete when the configured bootstrap and Cordis plugin set satisfy this umbrella Spec and each applicable capability Spec, Member/Repo identity composition is preserved, the durable Record ingress path demonstrates restart/recovery behavior, pending-chain and Block-confirmed status are not conflated, exact ProtocolHash / artifact resolution is verified, meaningful tests pass, and build/package checks succeed on supported Node versions.
 
 ## Spec evolution
 

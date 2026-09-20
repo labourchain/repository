@@ -50,7 +50,7 @@ Asset storage participates in the acceptance contract defined in [`contribution.
 
 A contribution must not be reported as accepted until its committed Asset can be durably retrieved.
 
-If Core commit has already succeeded but Asset finalization is interrupted, recovery must be able to converge to a retrievable accepted Asset rather than treating the canonical commit as nonexistent.
+If the required Records have already crossed the durable Repository ingress boundary but Asset finalization is interrupted, recovery must be able to converge to a retrievable accepted Asset before exposing Repository `COMMITTED`. No local persistence step is described as a Core or canonical-chain commit.
 
 ## Listing and lookup
 
@@ -63,6 +63,9 @@ Repository must support:
 Advanced search, pagination, full-text indexing and large-scale query infrastructure are outside the MVP.
 
 Internal indexes may be used, but they are Runtime data and do not become canonical facts.
+
+
+A provider may also cache a materialized current Asset/Repo view for retrieval efficiency. Such a Snapshot remains Runtime materialization: it may be discarded and rebuilt from the relevant accepted Record + Patch facts under exact Protocol semantics and must not replace that fact history.
 
 ## Boundaries
 

@@ -78,9 +78,11 @@ Protocol A v1 -> Cordis plugin implementation
 Protocol A v2 -> Cordis plugin implementation
 ```
 
-同一节点可以按需要同时加载多个协议版本。解释或验证历史事实时必须解析事实所引用的具体协议版本，不能隐式替换为当前最新版本。
+同一节点可以按需要同时加载多个协议版本或多个历史 Protocol artifacts。人类可读的 `name@version` 用于表达 Protocol reference，但历史解释和验证的机器权威是事实实际携带的 exact `ProtocolHash`。节点不能仅凭相同版本号、兼容范围或本地最新版本选择 implementation。
 
-Protocol 的具体 metadata 字段、发现形式和包命名在 Spec 阶段确定。Architecture 只要求能够稳定识别协议及其版本，并让对应 implementation 通过 Cordis 被加载。
+历史解析必须以 `ProtocolHash` 精确取得对应 descriptor / executable artifact，使用 Core 提供的验证边界核对 descriptor、artifact 与 hash，并确认其人类可读 Protocol reference 与事实声明一致。缺失 exact hash 时必须失败，不能 fallback 到 `latest`、同版本的另一 artifact 或“看起来兼容”的实现。
+
+Protocol 的具体发现形式和包命名在 Spec 阶段确定。Architecture 不建立第二套插件管理器；验证后的 executable implementation 仍通过 Cordis 被加载。
 
 ## 插件边界
 
@@ -183,6 +185,7 @@ flowchart LR
         MemberProtocols["Member Protocol implementations"]
         RepoProtocols["Repo Protocol implementations"]
         Journal["Durable Record ingress / journal"]
+        RuntimeDB["Runtime Record database"]
         ChainState["Chain-state / Block-confirmation adapter"]
         Providers["Asset / index / staging providers"]
         Views["Projection / adapter plugins"]
@@ -199,6 +202,7 @@ flowchart LR
     Cordis --> MemberProtocols
     Cordis --> RepoProtocols
     Cordis --> Journal
+    Cordis --> RuntimeDB
     Cordis --> ChainState
     Cordis --> Providers
     Cordis --> Views
@@ -212,7 +216,8 @@ flowchart LR
     RepoProtocols --> Protocol
     RepoProtocols --> Entity
     RepoProtocols --> Record
-    RepoProtocols --> Journal
+    RepoProtocols --> RuntimeDB
+    RuntimeDB --> Journal
     Views --> Journal
     Views --> ChainState
     ChainState --> Block
@@ -321,32 +326,42 @@ sequenceDiagram
     Protocol->>Stage: reconcile / clear runtime state
     Protocol-->>Consumer: Repository committed / accepted
 
-    Note over Journal,Chain: Later, outside Repository acceptance
-    Journal-->>Chain: Records become candidates for chain inclusion
-    Chain-->>Protocol: optional block-confirmed status
+    Note over Journal,Chain: Later, outside Repository acceptance and this MVP flow
+    Note over Journal,Chain: A future chain runtime may pack candidate Records and peers independently validate the resulting Block
+    Chain-->>Protocol: block-confirmed status only after accepted-chain evidence includes the Records
 ```
 
 Contribution 的协议语义由对应 Protocol 定义；其 implementation 由 Cordis 负责运行，不额外引入一个把状态机写死的 Repository Runner。Repository Runtime 需要维护一层领域感知的 Record database，用于保存已验证的 Record 关系、顺序/依赖和待打包集合，并作为后续关系验证与 Block packing 的运行时输入。Record ingress/journal、Runtime Record database 与 chain-state access 是三个不同职责：journal 保存 exact accepted Records；Runtime Record database 维护协议验证后的关系状态；chain state 回答已收录 Block 的链确证状态。Runtime Record database 不是第二条 blockchain，也不取代 Core Block / canonical-chain 语义。
 
 ## Contribution 状态
 
-当前区分以下状态：
+Repository execution 与 chain confirmation 是两个不同维度，不再串成一个把“本地打包”误当作“链确证”的单一状态机。
+
+Repository execution：
 
 ```mermaid
 stateDiagram-v2
     [*] --> STAGED
-    STAGED --> CONFIRMED: required domain confirmations satisfied
-    CONFIRMED --> COMMITTED: durable Record ingress + accepted Asset durable
-    COMMITTED --> PACKED: related Records included in a valid Block
+    STAGED --> DOMAIN_CONFIRMED: required domain confirmations satisfied
+    DOMAIN_CONFIRMED --> COMMITTED: durable Record ingress + accepted Asset durable
 ```
 
 `STAGED` 是临时运行时处理状态，不是已接受 contribution。
 
-`CONFIRMED` 表示 contribution 已满足适用协议要求的领域确认条件，但仍未达到 Repository acceptance。
+`DOMAIN_CONFIRMED` 表示 contribution 已满足适用 Protocol 要求的领域确认条件，但仍未达到 Repository acceptance。这个名称明确区别于链上的 Block confirmation。
 
-`COMMITTED` 是 Repository 的 durable acceptance 边界：所需 Records 已进入可跨重启恢复的 durable journal，accepted Asset 已可持久读取。此时相关 Records 可以仍处于 pending-chain，不能描述为已经获得 Block confirmation。
+`COMMITTED` 是 Repository 的 durable acceptance 边界：所需 Records 已进入可跨重启恢复的 durable journal，accepted Asset 已可持久读取。
 
-`PACKED` 表示相关 Records 已被有效 Block 收录并获得链确证。它属于后续链运行过程，不是 Repository 对 contribution 返回 accepted 的前置条件。
+Chain confirmation 另行表示：
+
+```text
+pending-chain
+    -> block-confirmed
+```
+
+`pending-chain` 表示 Repository 已接受但尚无 accepted-chain evidence。只有 chain-state / accepted Block evidence 表明相关 Records 已进入一个经过独立验证并被接受的 Block，才能标记为 `block-confirmed`。
+
+本地把 Records 放入 candidate Block、生成 Block 文件或完成打包动作本身都不构成这个状态跃迁。Block packing 是未来链运行过程中的生产步骤；peer validation / accepted-chain evidence 才决定链确证。
 
 ## 数据与投影
 
