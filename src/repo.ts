@@ -161,7 +161,6 @@ export class RepoEstablishmentService {
   private readonly ctx: Context
   readonly protocolHash: string
   private readonly establishments = new Map<string, string>()
-  private establishmentGate: Promise<void> = Promise.resolve()
 
   constructor(ctx: Context, protocolHash: string) {
     this.ctx = ctx
@@ -194,9 +193,12 @@ export class RepoEstablishmentService {
   }
 
   async establishRepo(value: unknown): Promise<RepoView> {
-    const validated = await this.validateEstablishment(value)
+    return this.ctx.recordJournal.runExclusive(async (journal) => {
+      // Member prerequisite validation, Repo singularity validation and durable
+      // publication share the journal mutation gate. Raw same-process journal
+      // acceptance therefore cannot interleave between check and publish.
+      const validated = await this.validateEstablishment(value)
 
-    return this.withEstablishmentGate(async () => {
       // Durable facts, not the replaceable in-memory index, decide whether the
       // Repo identity has already been established.
       await this.rebuild()
@@ -209,9 +211,9 @@ export class RepoEstablishmentService {
         )
       }
 
-      // Exact replay still goes through the journal so non-equivalent content
-      // under one RecordId cannot bypass journal conflict detection.
-      await this.ctx.recordJournal.accept(validated.record)
+      // Exact replay still goes through the journal session so non-equivalent
+      // content under one RecordId cannot bypass journal conflict detection.
+      await journal.accept(validated.record)
       this.establishments.set(validated.repoIdentity, validated.record.id)
 
       return repoView(validated.record, validated.repoIdentity)
@@ -241,23 +243,6 @@ export class RepoEstablishmentService {
     }
 
     return repoView(validated.record, repoIdentity)
-  }
-
-  private async withEstablishmentGate<T>(
-    operation: () => Promise<T>,
-  ): Promise<T> {
-    const previous = this.establishmentGate
-    let release!: () => void
-    this.establishmentGate = new Promise<void>((resolve) => {
-      release = resolve
-    })
-
-    await previous
-    try {
-      return await operation()
-    } finally {
-      release()
-    }
   }
 
   private isCandidate(value: JournalRecord): boolean {

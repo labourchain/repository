@@ -13,6 +13,7 @@ import {
   CORE_RECORD_PROTOCOL_SERVICE,
   MEMBER_PROTOCOL_REFERENCE,
   MEMBER_PROTOCOL_SERVICE,
+  MemberDeclarationError,
   MEMBERSHIP_PROTOCOL_REFERENCE,
   MEMBERSHIP_PROTOCOL_SERVICE,
   REPO_ESTABLISHMENT_PROTOCOL_REFERENCE,
@@ -100,7 +101,10 @@ function coreRecordProvider(ctx: Context) {
   ctx.provide(CORE_RECORD_PROTOCOL_SERVICE, coreRecordService)
 }
 
-function memberRecord(identity: string): CoreRecordValue {
+function memberRecord(
+  identity: string,
+  overrides: Partial<CoreRecordValue> = {},
+): CoreRecordValue {
   return {
     id: recordId('member-' + identity),
     protocol: MEMBER_PROTOCOL_REFERENCE,
@@ -109,6 +113,7 @@ function memberRecord(identity: string): CoreRecordValue {
     createdAt: '2026-09-19T00:00:00.000Z',
     signature: 'valid-signature',
     data: {},
+    ...overrides,
   }
 }
 
@@ -760,6 +765,45 @@ test('applyMembership converges to newer durable facts already present in the jo
         latestRecordId: newer.id,
         latestCreatedAt: newer.createdAt,
       },
+    )
+
+    await node.dispose()
+  })
+})
+
+test('membership acceptance fails closed on newly durable invalid Member history', async () => {
+  await withDirectory(async (directory) => {
+    const node = await createRepositoryNode({ plugins: composition(directory) })
+    await setupRepo(node)
+
+    // Prime the replaceable Member projection before a later durable fact makes
+    // Member history invalid.
+    assert.deepEqual(
+      await node.context[MEMBER_PROTOCOL_SERVICE].requireMember(MEMBER_KEY),
+      { identity: MEMBER_KEY },
+    )
+
+    await node.context.recordJournal.accept(
+      memberRecord(MEMBER_KEY, {
+        id: recordId('invalid-member-history'),
+        signature: 'invalid-signature',
+      }),
+    )
+
+    const membership = membershipRecord(
+      'membership-after-invalid-member-history',
+      'add',
+      MEMBER_KEY,
+      '2026-09-19T00:00:04.000Z',
+    )
+
+    await assert.rejects(
+      node.context[MEMBERSHIP_PROTOCOL_SERVICE].applyMembership(membership),
+      MemberDeclarationError,
+    )
+    await assert.rejects(
+      node.context.recordJournal.get(membership.id),
+      RecordJournalNotFoundError,
     )
 
     await node.dispose()

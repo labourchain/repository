@@ -156,9 +156,10 @@ export class MemberIdentityService {
       throw new MemberDeclarationError('Member identity is not a valid Core EntityPublicKey.', { cause })
     }
 
-    if (!this.members.has(validatedIdentity)) {
-      await this.rebuild()
-    }
+    // Durable Member facts are authoritative. Reconcile before answering even
+    // on a cache hit so newly durable invalid history cannot be hidden by the
+    // replaceable in-memory projection.
+    await this.rebuild()
 
     if (!this.members.has(validatedIdentity)) {
       throw new MemberNotFoundError(validatedIdentity)

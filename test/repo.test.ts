@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { setImmediate as delayImmediate } from 'node:timers/promises'
 import { test } from 'node:test'
 import { Context } from '@deepseek-ai/cordis'
 import { plugin as memberIdentityPlugin } from '../src/protocols/member.identity.ts'
@@ -352,6 +353,44 @@ test('a conflicting second establishment cannot replace the first operator sourc
         operator: MEMBER_KEY,
         establishmentRecordId: first.id,
       },
+    )
+
+    await node.dispose()
+  })
+})
+
+test('raw journal acceptance cannot interleave with Repo establishment check and publish', async () => {
+  await withDirectory(async (directory) => {
+    const node = await createRepositoryNode({ plugins: composition(directory) })
+    await declareMember(node)
+    await declareMember(node, OTHER_MEMBER_KEY)
+
+    const incoming = repoRecord('repo-gated-incoming')
+    const durableConflict = repoRecord(
+      'repo-gated-conflict',
+      REPO_KEY,
+      OTHER_MEMBER_KEY,
+    )
+
+    let pending: Promise<unknown> | undefined
+
+    await node.context.recordJournal.runExclusive(async (journal) => {
+      pending =
+        node.context[REPO_ESTABLISHMENT_PROTOCOL_SERVICE].establishRepo(incoming)
+
+      await delayImmediate()
+      await journal.accept(durableConflict)
+    })
+
+    assert.ok(pending)
+    await assert.rejects(pending, RepoAlreadyEstablishedError)
+    await assert.rejects(
+      node.context.recordJournal.get(incoming.id),
+      RecordJournalNotFoundError,
+    )
+    assert.deepEqual(
+      await node.context.recordJournal.get(durableConflict.id),
+      durableConflict,
     )
 
     await node.dispose()
