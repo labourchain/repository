@@ -17,6 +17,7 @@ import {
   MEMBERSHIP_PROTOCOL_SERVICE,
   REPO_ESTABLISHMENT_PROTOCOL_REFERENCE,
   REPO_ESTABLISHMENT_PROTOCOL_SERVICE,
+  RUNTIME_RECORD_DATABASE_SERVICE,
   BootstrapStartupError,
   MembershipAuthorizationError,
   MembershipHistoryError,
@@ -27,6 +28,7 @@ import {
   RecordJournalService,
   RepoNotFoundError,
   createRepositoryNode,
+  runtimeRecordDatabasePlugin,
   type CoreRecordProtocolService,
   type CoreRecordValue,
 } from '../src/index.ts'
@@ -172,6 +174,7 @@ function composition(directory: string) {
     },
     { plugin: coreEntityProvider },
     { plugin: coreRecordProvider },
+    { plugin: runtimeRecordDatabasePlugin },
     { plugin: RecordJournalService, config: { directory } },
   ]
 }
@@ -216,7 +219,7 @@ test('Membership Protocol artifact entry exports exactly one named plugin', asyn
     CORE_RECORD_PROTOCOL_SERVICE,
     MEMBER_PROTOCOL_SERVICE,
     REPO_ESTABLISHMENT_PROTOCOL_SERVICE,
-    'recordJournal',
+    RUNTIME_RECORD_DATABASE_SERVICE,
   ])
 })
 
@@ -232,6 +235,9 @@ test('Membership Protocol service follows the Cordis Plugin Fiber lifecycle', as
       recordFiber.await(),
       journalFiber.await(),
     ])
+
+    const databaseFiber = context.plugin(runtimeRecordDatabasePlugin)
+    await databaseFiber.await()
 
     const memberFiber = context.plugin(memberIdentityPlugin, {
       protocolHash: MEMBER_PROTOCOL_HASH,
@@ -430,7 +436,7 @@ test('exact accepted membership Record replay is idempotent', async () => {
   })
 })
 
-test('exact replay also returns the durable-derived current view', async () => {
+test('exact replay returns the current durable-derived membership view', async () => {
   await withDirectory(async (directory) => {
     const node = await createRepositoryNode({ plugins: composition(directory) })
     await setupRepo(node)
@@ -449,17 +455,7 @@ test('exact replay also returns the durable-derived current view', async () => {
     )
 
     await node.context[MEMBERSHIP_PROTOCOL_SERVICE].applyMembership(replayed)
-
-    const journal = node.context.recordJournal
-    const originalAccept = journal.accept.bind(journal)
-    let injected = false
-    journal.accept = async (record) => {
-      await originalAccept(record)
-      if (record.id === replayed.id && !injected) {
-        injected = true
-        await originalAccept(newer)
-      }
-    }
+    await node.context.recordJournal.accept(newer)
 
     assert.deepEqual(
       await node.context[MEMBERSHIP_PROTOCOL_SERVICE].applyMembership(replayed),
@@ -734,7 +730,7 @@ test('membership reads refresh from durable journal facts', async () => {
   })
 })
 
-test('applyMembership returns the durable-derived view after accept', async () => {
+test('applyMembership converges to newer durable facts already present in the journal', async () => {
   await withDirectory(async (directory) => {
     const node = await createRepositoryNode({ plugins: composition(directory) })
     await setupRepo(node)
@@ -752,14 +748,7 @@ test('applyMembership returns the durable-derived view after accept', async () =
       '2026-09-19T00:00:03.000Z',
     )
 
-    const journal = node.context.recordJournal
-    const originalAccept = journal.accept.bind(journal)
-    journal.accept = async (record) => {
-      await originalAccept(record)
-      if (record.id === incoming.id) {
-        await originalAccept(newer)
-      }
-    }
+    await node.context.recordJournal.accept(newer)
 
     assert.deepEqual(
       await node.context[MEMBERSHIP_PROTOCOL_SERVICE].applyMembership(incoming),
@@ -879,6 +868,7 @@ test('Host must supply the exact Membership ProtocolHash', async () => {
           },
           { plugin: coreEntityProvider },
           { plugin: coreRecordProvider },
+          { plugin: runtimeRecordDatabasePlugin },
           { plugin: RecordJournalService, config: { directory } },
         ],
       }),
