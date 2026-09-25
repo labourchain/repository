@@ -90,7 +90,7 @@ Cordis plugins 不按照 CRUD 操作或单个 Requirement 机械拆分。
 
 拆分主要服从协议边界、版本边界和生命周期。一起升级、一起加载、一起失效且没有独立运行价值的紧密协议可以由同一个 Cordis plugin 实现；能够被其他产品独立复用的协议应避免与 Repository 产品运行时绑定。
 
-Member、Repo、Asset 和 Asset-Record relation 都应首先按各自协议边界提供可组合能力。LabourFlow 等上层产品可以只加载所需协议，不应为了使用同 identity 的 Member + Repo 能力而加载完整 Repository 产品运行时。
+Member、Repo、Asset 和 contribution relation 都应首先按各自协议边界提供可组合能力。LabourFlow 等上层产品可以只加载所需协议，不应为了使用同 identity 的 Member + Repo 能力而加载完整 Repository 产品运行时。
 
 Contribution history 属于事实的 view / projection。它可以由插件提供查询、索引或缓存能力，但不需要为了概念完整性固定建立一个 History Protocol。
 
@@ -165,9 +165,9 @@ Peer validator
 
 Peer validation 不依赖生产节点之前使用了什么内存对象、snapshot 或执行路径，而只依赖 Block 实际提交的数据及其绑定的验证语义。当前 LabourChain 不要求像通用智能合约平台那样建立一套加密虚拟机或把所有 Repository 执行过程复制到链上；需要重放的是对应 Protocol 对 Block 内容及关系的确定性验证。
 
-Block 内的 Records 可以按照适用 Protocol 建立一个或多个有逻辑的生产关系结构。劳动与 Asset 的输入/输出关系自然形成 tree / forest，必要时可表现为更一般的依赖图；Block validation 必须确认这些关系在 Header 所提交的 Protocol composition 下自洽。Membership 等非生产因果事实不因此被强行塞入同一棵生产树，也不重新引入 `previous` 链。
+Block 内的 Records 可以按照适用 Protocol 建立一个或多个有逻辑的生产关系结构。劳动与 Asset 的输入/输出关系自然形成 tree / forest，必要时可表现为更一般的依赖图；Block validation 必须确认这些关系在 Header 所提交的 Protocol composition 下自洽。Repo ownership、decision operator 等非生产因果事实不因此被强行塞入同一棵生产树，也不重新引入 `previous` 链。
 
-当前 Repository MVP 和 Story #6 只建立支持未来打包所需的 Runtime 边界，不实现完整 Block packer、Protocol-composition Header 编码、peer validator、节点同步或共识。
+当前 Repository MVP 只建立支持未来打包所需的 Runtime 边界，不实现完整 Block packer、Protocol-composition Header 编码、peer validator、节点同步或共识。
 
 ## Repository 与其他 LabourChain 组件
 
@@ -223,13 +223,13 @@ flowchart LR
     ChainState --> Block
 ```
 
-Repository 不重新定义 Core 已有的 Protocol、Record、Entity identity、signature 或 Block 语义。Member、Repo、Asset、membership、confirmation、Repo establishment 和 contribution relation 等领域语义由各自适用的上层 Protocol 定义。
+Repository 不重新定义 Core 已有的 Protocol、Record、Entity identity、signature 或 Block 语义。Member、Repo、Asset、confirmation、Repo establishment、Repo decision 与 contribution relation 等领域语义由各自适用的上层 Protocol 定义。
 
-Member 与 Repo 都是同一类组合原则：先有 Core Entity identity，再通过协议获得领域语义。一个 Entity identity/keypair 可以同时满足 Member 与 Repo 协议；这种组合不产生第二个 identity，也不自动产生所有权或私人财产语义。
+Member 与 Repo 都是同一类组合原则：先有 Core Entity identity，再通过协议获得领域语义。一个 Entity identity/keypair 可以同时满足 Member 与 Repo 协议；这种组合不产生第二个 identity。Repo establishment 所表达的 ownership 只针对 Repo identity 的建立、控制与责任来源，不自动扩展为 Asset 或劳动成果的私人财产权。
 
 LabourFlow 可以在同 identity Member + Repo 协议组合之上提供面向个人的产品体验，但它不需要创建一个嵌套 `PersonalRepo` entity，也不改变底层 Repo 协议。
 
-## Repo establishment 数据流
+## Repo establishment、ownership 与操作留痕
 
 Repo 是以 Core `EntityPublicKey` 为身份锚点的协议组合，不继承或扩展 Core `Entity` 对象。
 
@@ -243,13 +243,17 @@ Record.createdBy
 
 Repo establishment Protocol interpretation:
 Record.createdBy
-= initial Repo operator
+= initial Repo owner
 
 Record.data.repo
 = Repo EntityPublicKey
 ```
 
-`Record.createdBy` 本身不普遍等于 operator；是 Repo establishment Protocol 为这一类 Record 赋予 initial operator 语义。因此 operator 不需要在 Repo payload 和 Runtime provider 中再建立第二个规范来源。Core `Entity.introducedBy` 也不用于表达 operator、ownership 或 membership。
+`Record.createdBy` 本身不普遍等于 owner；是 Repo establishment Protocol 为这一类 Record 赋予初始 Repo ownership 语义。这里的 ownership 只描述 Repo identity 的建立、控制与责任来源，不表示 owner 拥有 Repo 中的 Asset 或劳动成果。Core `Entity.introducedBy` 也不用于表达 ownership、operator 或组织成员关系。
+
+Repo 后续采取需要链上留痕的决定时，决定 Record 由 Repo identity 的 private key 签名，并在该 Protocol 的签名 payload / data 中标注实际 `operator: EntityPublicKey`。operator 是单次行为的责任留痕，不是持久角色、membership、ACL 或组织授权证明。谁可以操作 Repo key、owner 如何变更、多人如何治理属于后续组织治理层。
+
+劳动者与 Repo 不建立额外链上 membership。产品可以从 accepted contributions 派生 contributor/member 视图，也可以在本地软件中维护人员分组、标签和筛选条件；这些运行数据不参与链级 validity。
 
 一个 establishment Record 可以处于两个不同的确认层级：
 
@@ -293,10 +297,10 @@ sequenceDiagram
         Repo->>Chain: lookup RecordId inclusion
         Chain-->>Repo: pending or block-confirmed
     end
-    Repo-->>Member: Repo + derived operator/status
+    Repo-->>Member: Repo + derived owner/status
 ```
 
-Runtime Repo index 只是加速 lookup 的可替换数据。initial operator 来自 establishment Protocol 对 establishment Record `createdBy` 的解释。缺失或陈旧的 index 不能创造第二个 operator；index 可以通过 durable journal，以及在可用时通过 chain state 重新对账。
+Runtime Repo index 只是加速 lookup 的可替换数据。initial owner 来自 establishment Protocol 对 establishment Record `createdBy` 的解释。缺失或陈旧的 index 不能创造第二个 owner；index 可以通过 durable journal，以及在可用时通过 chain state 重新对账。
 
 ## Contribution 数据流
 
@@ -316,9 +320,9 @@ sequenceDiagram
 
     Consumer->>Cordis: Asset + Record + relations
     Cordis->>Protocol: execute applicable protocol semantics
-    Protocol->>Protocol: check Member membership and validity
+    Protocol->>Protocol: validate labourer, Asset and contribution relations
     Protocol->>Stage: stage contribution
-    Protocol->>Protocol: verify required Member and Repo confirmations
+    Protocol->>Protocol: verify required labour-subject and Repo confirmations; retain Repo operator trace
     Protocol->>Journal: durably accept resulting Records
     Journal-->>Protocol: accepted/pending-chain
     Protocol->>Assets: finalize durable accepted Asset
