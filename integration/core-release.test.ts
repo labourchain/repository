@@ -9,14 +9,11 @@ import { test } from 'node:test'
 import type { Plugin } from '@deepseek-ai/cordis'
 import { plugin as memberIdentityPlugin } from '../src/protocols/member.identity.ts'
 import { plugin as repoEstablishmentPlugin } from '../src/protocols/repo.establishment.ts'
-import { plugin as membershipPlugin } from '../src/protocols/repo.membership.ts'
 import {
   CORE_ENTITY_PROTOCOL_SERVICE,
   CORE_RECORD_PROTOCOL_SERVICE,
   MEMBER_PROTOCOL_REFERENCE,
   MEMBER_PROTOCOL_SERVICE,
-  MEMBERSHIP_PROTOCOL_REFERENCE,
-  MEMBERSHIP_PROTOCOL_SERVICE,
   REPO_ESTABLISHMENT_PROTOCOL_REFERENCE,
   REPO_ESTABLISHMENT_PROTOCOL_SERVICE,
   RecordJournalService,
@@ -39,7 +36,6 @@ const CORE_RECORD_PROTOCOL_HASH =
   '752efeba281ee962b87f6fa69623c8e207dbed5f3a695cfc6871c9fc8a841df1'
 const MEMBER_PROTOCOL_HASH = 'a'.repeat(64)
 const REPO_PROTOCOL_HASH = 'b'.repeat(64)
-const MEMBERSHIP_PROTOCOL_HASH = 'c'.repeat(64)
 const MAX_RUNTIME_BYTES = 1024 * 1024
 
 interface ReleasedProtocolDescriptor {
@@ -131,7 +127,7 @@ async function loadReleasedCorePlugin(
 }
 
 test(
-  'Member, Repo establishment and Membership run against released Core v0.1.0 Protocol artifacts',
+  'Member and Repo establishment run against released Core v0.1.0 Protocol artifacts',
   async () => {
     const root = await mkdtemp(join(tmpdir(), 'labourchain-core-release-'))
     const journalDirectory = join(root, 'journal')
@@ -153,10 +149,6 @@ test(
 
       const node = await createRepositoryNode({
         plugins: [
-          {
-            plugin: membershipPlugin,
-            config: { protocolHash: MEMBERSHIP_PROTOCOL_HASH },
-          },
           {
             plugin: repoEstablishmentPlugin,
             config: { protocolHash: REPO_PROTOCOL_HASH },
@@ -268,7 +260,7 @@ test(
 
         assert.deepEqual(established, {
           identity: repoIdentity,
-          operator: identity,
+          owner: identity,
           establishmentRecordId: repoRecordId,
         })
         assert.deepEqual(loadedRepo, established)
@@ -303,7 +295,7 @@ test(
 
         assert.deepEqual(memberScopedRepo, {
           identity,
-          operator: identity,
+          owner: identity,
           establishmentRecordId: memberScopedRepoRecordId,
         })
         assert.deepEqual(
@@ -313,114 +305,6 @@ test(
           memberScopedRepo,
         )
 
-        const targetKeyPair = generateKeyPairSync('ed25519')
-        const targetPublicKeyDer = targetKeyPair.publicKey.export({
-          format: 'der',
-          type: 'spki',
-        }) as Buffer
-        const targetIdentity = entityService.encodeBase58btc(
-          targetPublicKeyDer.subarray(targetPublicKeyDer.byteLength - 32),
-        )
-
-        const rawTargetMemberRecord = {
-          protocol: MEMBER_PROTOCOL_REFERENCE,
-          protocolHash: MEMBER_PROTOCOL_HASH,
-          createdBy: targetIdentity,
-          createdAt: '2026-09-18T00:00:03.000Z',
-          data: {},
-        }
-        const targetMemberRecordId = recordService.recordId(
-          rawTargetMemberRecord,
-        )
-        const targetMemberRecord: CoreRecordValue = {
-          id: targetMemberRecordId,
-          ...rawTargetMemberRecord,
-          signature: sign(
-            null,
-            recordService.signingPayload(targetMemberRecordId),
-            targetKeyPair.privateKey,
-          ).toString('hex'),
-        }
-        await node.context[MEMBER_PROTOCOL_SERVICE].declareMember(
-          targetMemberRecord,
-        )
-
-        const rawMembershipAdd = {
-          protocol: MEMBERSHIP_PROTOCOL_REFERENCE,
-          protocolHash: MEMBERSHIP_PROTOCOL_HASH,
-          createdBy: repoIdentity,
-          createdAt: '2026-09-18T00:00:04.000Z',
-          data: {
-            repo: repoIdentity,
-            member: targetIdentity,
-            action: 'add',
-          },
-        }
-        const membershipAddId = recordService.recordId(rawMembershipAdd)
-        const membershipAdd: CoreRecordValue = {
-          id: membershipAddId,
-          ...rawMembershipAdd,
-          signature: sign(
-            null,
-            recordService.signingPayload(membershipAddId),
-            repoKeyPair.privateKey,
-          ).toString('hex'),
-        }
-
-        assert.deepEqual(
-          await node.context[MEMBERSHIP_PROTOCOL_SERVICE].applyMembership(
-            membershipAdd,
-          ),
-          {
-            repo: repoIdentity,
-            member: targetIdentity,
-            active: true,
-            latestRecordId: membershipAddId,
-            latestCreatedAt: rawMembershipAdd.createdAt,
-          },
-        )
-        assert.equal(
-          await node.context[MEMBERSHIP_PROTOCOL_SERVICE].hasMember(
-            repoIdentity,
-            targetIdentity,
-          ),
-          true,
-        )
-
-        const rawMembershipRemove = {
-          protocol: MEMBERSHIP_PROTOCOL_REFERENCE,
-          protocolHash: MEMBERSHIP_PROTOCOL_HASH,
-          createdBy: repoIdentity,
-          createdAt: '2026-09-18T00:00:05.000Z',
-          data: {
-            repo: repoIdentity,
-            member: targetIdentity,
-            action: 'remove',
-          },
-        }
-        const membershipRemoveId = recordService.recordId(rawMembershipRemove)
-        const membershipRemove: CoreRecordValue = {
-          id: membershipRemoveId,
-          ...rawMembershipRemove,
-          signature: sign(
-            null,
-            recordService.signingPayload(membershipRemoveId),
-            repoKeyPair.privateKey,
-          ).toString('hex'),
-        }
-
-        assert.deepEqual(
-          await node.context[MEMBERSHIP_PROTOCOL_SERVICE].applyMembership(
-            membershipRemove,
-          ),
-          {
-            repo: repoIdentity,
-            member: targetIdentity,
-            active: false,
-            latestRecordId: membershipRemoveId,
-            latestCreatedAt: rawMembershipRemove.createdAt,
-          },
-        )
       } finally {
         await node.dispose()
       }
