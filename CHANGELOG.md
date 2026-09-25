@@ -17,4 +17,4 @@ All notable user-visible changes to this project will be documented here.
 ### Changed
 
 - Aligned Repository requirements and the MVP Spec with the current concept model: Repo stores Assets, contribution carries the related worker-produced Record, and Repo-side Record history is a derived projection rather than canonical Repository storage.
-- Added Repository establishment, operator-managed membership and Personal Repo requirements while keeping public/common usage accounting and private-proof mechanisms outside the current MVP.
+- Added Repository establishment and personal Repo composition requirements; later design review removed chain-level Repo membership, distinguished Repo ownership from per-decision operator trace, and kept organization governance outside the current MVP.
