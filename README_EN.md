@@ -24,7 +24,7 @@ Main entry points:
 - [`specs/repository-mvp.md`](./specs/repository-mvp.md): MVP umbrella Spec for capability composition, shared invariants, and completion criteria;
 - [`specs/`](./specs/): capability Specs split by stable functional boundary.
 
-The current capability Specs cover bootstrap, Repo, membership, Protocol resolution, contribution, Asset storage, and contribution history.
+The current capability Specs cover bootstrap, Repo, Protocol resolution, contribution, Asset storage, and contribution history. Contributor/member grouping is a product or local-software view rather than an on-chain membership capability.
 
 If Concepts, Requirements, Architecture, Spec, or implementation diverge, correct the mismatch at the appropriate upstream layer instead of silently choosing an interpretation in code.
 
@@ -108,4 +108,4 @@ The current checks mainly protect the Bootstrap runtime, Cordis lifecycle, and p
 
 The current package remains `private: true`.
 
-Bootstrap and the durable Record journal are complete. Draft PR #29 implements `member.identity` and `repo.establishment@0.1.0` and runs a trusted compatibility smoke against the released Core v0.1.0 `core.entity` / `core.record` artifacts. Membership, Asset, contribution, recovery, and history follow in later Stories.
+Bootstrap, the durable Record journal, `member.identity`, and `repo.establishment@0.1.0` are complete. Exact Protocol resolution, Asset, contribution, recovery, and history remain; chain-level Repo membership has been removed from the MVP.
