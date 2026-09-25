@@ -1,7 +1,7 @@
 # Repo Specification
 
 - **Status:** Draft
-- **Scope:** Repo establishment, stable identity, operator relationship and loading
+- **Scope:** Repo establishment, stable identity, ownership, decision-operator trace and loading
 - **Requirements:** [`../docs/requirements.md`](../docs/requirements.md)
 - **Architecture:** [`../docs/architecture.md`](../docs/architecture.md)
 - **Umbrella:** [`repository-mvp.md`](./repository-mvp.md)
@@ -23,13 +23,13 @@ core.entity / EntityPublicKey
 Repo identity
     ├─ repo protocol
     ├─ asset-related protocols
-    ├─ membership / contribution protocols
+    ├─ contribution protocols
     └─ other protocols...
 ```
 
 Identity/key-pair generation and secret-key custody are Runtime/signer concerns. This capability validates and consumes a Repo identity; it does not define a second key-management system.
 
-Core `Entity.introducedBy` is not the Repo operator relation. It must not be interpreted as ownership, membership, or Repository authorization.
+Core `Entity.introducedBy` is not the Repo ownership or operator-trace relation. It must not be interpreted as Repository ownership, organization membership, or authorization.
 
 ## Member dependency
 
@@ -77,15 +77,15 @@ Record.createdBy
 
 Repo establishment protocol interpretation:
 Record.createdBy
-= initial MVP operator
+= initial Repo owner
 
 Record.data.repo
 = stable Repo EntityPublicKey
 ```
 
-`Record.createdBy` does not universally mean operator. The Repo establishment Protocol assigns that domain meaning for this Record type.
+`Record.createdBy` does not universally mean owner. The Repo establishment Protocol assigns that domain meaning for this Record type.
 
-The operator is not duplicated inside `Record.data`. The establishment Record is the domain source for the initial operator relationship.
+The owner is not duplicated inside `Record.data`. The establishment Record is the domain source for the initial Repo ownership relationship. Repo ownership here means control / responsibility for the Repo identity; it does not imply ownership of Assets or labour results stored by the Repo.
 
 This Spec does not define the generic historical Protocol loader/resolver. Story #5 only consumes the Host-mounted exact `repo.establishment@0.1.0` implementation and its verified ProtocolHash.
 
@@ -98,10 +98,10 @@ Repo establishment must:
 - require the establishing identity to satisfy the Member capability;
 - accept or obtain a valid Core `EntityPublicKey` for the Repo;
 - validate an establishment Record whose `createdBy` is the establishing Member and whose payload names the Repo identity;
-- interpret that Member as the single initial MVP operator under Repo establishment Protocol semantics;
+- interpret that Member as the initial Repo owner under Repo establishment Protocol semantics;
 - durably accept the establishment Record into the configured Record ingress/journal before reporting the Repo established;
 - make the established Repo loadable again by its stable identity after restart;
-- fail on a conflicting already-accepted or already-chain-confirmed establishment of the same Repo identity rather than silently replacing its operator;
+- fail on a conflicting already-accepted or already-chain-confirmed establishment of the same Repo identity rather than silently replacing its owner;
 - persist only the Runtime index/state required for efficient lookup in addition to the durable establishment Record itself.
 
 Exact TypeScript operation names are not fixed. Behavior is equivalent to:
@@ -129,19 +129,29 @@ Such a Repo may temporarily gather Records/Assets that have not entered a collec
 
 LabourFlow may build a personal product experience on top of this generic composition, but the underlying Repo semantics remain the same.
 
-## Operator
+## Ownership and operator trace
 
-The initial operator is the Member recorded as `createdBy` on the Repo establishment Record under the establishment Protocol semantics.
+The initial Repo owner is the Member recorded as `createdBy` on the Repo establishment Record under the establishment Protocol semantics.
 
-Only this initial operator relationship exists in the MVP. There is no separate mutable `operator` field or provider-owned operator row that can override the establishment Record.
+Only this initial ownership source is defined in the MVP. There is no provider-owned mutable owner row that can override the establishment Record. Owner transfer, multi-owner control, organization authorization and governance are deferred until an organization/governance requirement exists.
 
-This Spec does not introduce owner, admin, maintainer, editor, viewer or other role hierarchies.
+Repo-authored decision facts are a separate concern. When an applicable Protocol represents a Repo decision, the Record is signed by the Repo identity and its signed Protocol data must identify the actual `operator: EntityPublicKey`. The operator field records who performed that specific Repo action; it does not itself prove an organization role, delegation chain or political authority.
 
-Changing operator semantics or transfer behavior is outside the MVP unless later added to Requirements.
+Repository therefore preserves the distinction:
+
+```text
+owner
+= establishment-derived control / responsibility source for the Repo identity
+
+operator
+= actor declared inside one Repo-signed decision fact
+```
+
+Technology records these actions and signatures. It does not attempt to derive complete organization governance from possession of the Repo private key.
 
 ## Record status boundary
 
-The same establishment Record can have different runtime/chain statuses without changing its identity or operator meaning:
+The same establishment Record can have different runtime/chain statuses without changing its identity or ownership meaning:
 
 ```text
 accepted / pending-chain
@@ -178,7 +188,7 @@ Repository must not satisfy these dependencies by introducing a domain-owned can
 
 ## Persistence and Runtime index
 
-Repo identity and operator relationship must survive ordinary application restart in a usable deployment because the exact establishment Record is durably retained.
+Repo identity and ownership relationship must survive ordinary application restart in a usable deployment because the exact establishment Record is durably retained.
 
 Runtime may persist a replaceable lookup index equivalent to:
 
@@ -188,7 +198,7 @@ Repo EntityPublicKey -> establishment RecordId
 
 The index may additionally cache a derived Repo view or chain-confirmation status for efficient loading, but those derived values must be repairable/rebuildable from the durable journal and, when available, chain state.
 
-Provider-native paths, database IDs, row keys or collection identifiers must not become the Repo identity or operator source.
+Provider-native paths, database IDs, row keys or collection identifiers must not become the Repo identity or owner source.
 
 An in-memory implementation may be used for isolated tests but does not satisfy the usable-deployment persistence contract.
 
@@ -196,7 +206,7 @@ An in-memory implementation may be used for isolated tests but does not satisfy 
 
 For the MVP, one Repo identity has one accepted establishment Record.
 
-A second attempt to establish the same Repo identity must not silently create a second operator or replace the first accepted establishment. Conflict checks must consider durable accepted/pending state and any available block-confirmed state; a stale or missing lookup index cannot authorize a duplicate establishment.
+A second attempt to establish the same Repo identity must not silently create a second owner or replace the first accepted establishment. Conflict checks must consider durable accepted/pending state and any available block-confirmed state; a stale or missing lookup index cannot authorize a duplicate establishment.
 
 Cross-node concurrent establishment, fork/reorg arbitration and generic Entity admission are outside this Story unless the later chain/network model introduces explicit requirements for them.
 
@@ -207,10 +217,10 @@ This Spec does not define:
 - generic Entity registration/admission;
 - Repo key generation or secret-key custody;
 - `member.profile` schema/UX;
-- ownership or private-property semantics;
-- operator transfer;
+- Asset/labour private-property semantics;
+- owner transfer / multi-owner governance;
 - Block packing or chain selection;
-- Repo member add/remove behavior;
+- chain-level Repo membership / organization governance;
 - Asset contribution;
 - Asset storage format;
 - Project or Board organization;
@@ -237,14 +247,14 @@ Tests must demonstrate that:
 
 - a valid Member can establish a Repo whose identity is a Core `EntityPublicKey`;
 - a generic/non-Member Entity identity cannot establish a Repo through the human Member path;
-- the establishment Record's `createdBy` is interpreted by the Repo establishment Protocol as the single initial MVP operator;
+- the establishment Record's `createdBy` is interpreted by the Repo establishment Protocol as the initial Repo owner;
 - the exact establishment Record is durably accepted before establishment succeeds;
 - the same Repo can be loaded again by stable identity after restart;
-- Repo identity and operator can be recovered from the durable Record journal even if the lookup index is rebuilt;
+- Repo identity and owner can be recovered from the durable Record journal even if the lookup index is rebuilt;
 - a conflicting second establishment of the same Repo identity is rejected;
 - stale/missing Runtime index state cannot replace the establishment Record as the domain source;
 - provider-native storage identifiers do not replace Repo identity;
-- `Entity.introducedBy` is not used as the operator relation;
+- `Entity.introducedBy` is not used as the ownership or operator-trace relation;
 - the same Entity identity can compose both Member and Repo protocols without creating a second keypair;
-- same-identity Member/Repo composition does not imply ownership/private-property semantics;
+- same-identity Member/Repo composition does not imply Asset/labour private-property semantics;
 - accepted/pending-chain and block-confirmed status are not conflated.
