@@ -100,7 +100,7 @@ This Spec does not define:
 - Core Entity registration/admission;
 - proof that a self-declared Member is biologically or legally human;
 - profile UX or a complete `member.profile` schema;
-- Repo membership mutation;
+- Repo contributor grouping, organization membership or governance;
 - private-property ownership;
 - key generation or secret-key custody;
 - generic ACL or social-network features.
