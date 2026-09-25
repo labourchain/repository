@@ -15,8 +15,7 @@ The Specs are engineering projections of the current Requirements and Architectu
 | --- | --- |
 | [`bootstrap.md`](./bootstrap.md) | executable bootstrap and Cordis runtime integration |
 | [`member.md`](./member.md) | human Member identity capability over Core Entity identity |
-| [`repo.md`](./repo.md) | Repo establishment, stable identity, operator and loading |
-| [`membership.md`](./membership.md) | Repo-signed contribution membership maintained by the Repo operator |
+| [`repo.md`](./repo.md) | Repo establishment, stable identity, ownership, operator trace and loading |
 | [`protocol-resolution.md`](./protocol-resolution.md) | exact ProtocolHash / verified artifact resolution |
 | [`contribution.md`](./contribution.md) | Asset contribution, confirmation, Repository commit, staging and recovery |
 | [`asset-storage.md`](./asset-storage.md) | durable preservation and retrieval of accepted Assets |
@@ -32,7 +31,6 @@ A usable Repository MVP is formed by a configured Cordis runtime that satisfies 
 start Repository node
   -> recognize/load human Member identity
   -> establish or load Repo
-  -> manage contribution membership
   -> resolve exact ProtocolHash / verified implementations
   -> receive Asset + Member-produced Record + relations
   -> validate required Protocol semantics
@@ -62,7 +60,15 @@ Member and Repo do not create separate identity namespaces. Both are protocol co
 
 `Member` is the program/protocol term for a human participant. `Worker` remains a conceptual labour-subject term where useful and must not be confused with runtime/process worker types.
 
-A Member may compose Repo capability on the same Entity identity/keypair. This composition does not itself define ownership, private-property status or economic rights.
+A Member may compose Repo capability on the same Entity identity/keypair. Repo establishment may identify that Member as the Repo owner, but this does not itself define ownership of Assets, labour results, private-property status or economic rights.
+
+### Repo contributors are a derived/product view
+
+Labourer and Repo remain independent identities. The MVP does not create a `repo.membership` fact or require membership as contribution eligibility.
+
+Repo-accepted contributions are the durable relationship between them. A product may derive contributor/member lists from contribution history, and may store groups, tags or filters as local software data. These organization views are not chain validity inputs.
+
+Repo decisions that are represented on chain are signed by the Repo identity and record the actual operator in signed Protocol data. Organization authorization and governance remain outside the Repository MVP.
 
 ### Historical Protocol semantics are exact
 
@@ -79,13 +85,13 @@ Before Block confirmation, a node may replace, add or discard candidate Records.
 
 When Block packing is implemented, each Block Header must commit the Repo Protocol composition used for that Block together with exact hashes that bind the corresponding Protocol implementations / artifacts. Peer validation must resolve those exact implementations, recompute the committed hashes, and validate the actual Block contents and their Protocol-defined relationships independently of the producer's Runtime state.
 
-Records in one Block may form one or more Protocol-defined production trees / forests or other explicit dependency structures. The validator must validate those relationships as part of Block validity. This does not turn Membership into a predecessor chain and does not require every fact type to participate in one global DAG.
+Records in one Block may form one or more Protocol-defined production trees / forests or other explicit dependency structures. The validator must validate those relationships as part of Block validity. Repo ownership and decision-operator facts are not production-causality edges and do not require every fact type to participate in one global DAG.
 
 The MVP does not require a general smart-contract VM, trusted execution environment, full Block packer, peer validator, synchronization or consensus implementation. It only preserves the Runtime and Protocol boundaries those later capabilities will consume.
 
 ### Labour Records remain labour facts
 
-A Record describing labour is produced/signed by the Member acting as labour subject, with stable identity/signature semantics supplied by Core. Other Protocol facts may assign authorship to another Entity identity; for example, `repo.membership` is signed by the Repo identity. Repository does not turn either kind of Record into a Repository-owned domain object or maintain a canonical `repo.records[]` collection.
+A Record describing labour is produced/signed by the Member acting as labour subject, with stable identity/signature semantics supplied by Core. Other Protocol facts may assign authorship to another Entity identity; Repo decision facts are signed by the Repo identity and retain their actual operator in signed Protocol data. Repository does not turn either kind of Record into a Repository-owned domain object or maintain a canonical `repo.records[]` collection.
 
 ### Durable Record ingress is not Block confirmation
 
@@ -186,18 +192,13 @@ repo
   -> uses Core EntityPublicKey + Member capability + establishment Record
   -> requires establishment actor to be a Member
   -> persists accepted establishment Record through durable ingress
-  -> derives initial operator from establishment Protocol interpretation of Record.createdBy
-
-membership
-  -> relates Members to Repo contribution eligibility
-  -> records Repo-signed add/remove facts
-  -> leaves the human operator-to-Repo signing mechanism to Runtime/key custody
+  -> derives initial owner from establishment Protocol interpretation of Record.createdBy
 
 protocol-resolution
   -> resolves exact historical Protocol implementations
 
 contribution
-  -> uses membership + protocol resolution + durable Record ingress
+  -> uses protocol resolution + durable Record ingress
   -> reaches Repository COMMITTED before Block packing
   -> requires durable Asset retrieval
 
@@ -226,7 +227,7 @@ Implementation must:
 - keep concrete database, filesystem and transport choices behind Runtime/plugin boundaries;
 - avoid process-global mutable Repository state;
 - acquire and dispose plugin-owned resources through Cordis lifecycle ownership;
-- avoid prematurely introducing ownership/property-right semantics, complex ACL, search, synchronization, consensus, settlement or private-proof systems.
+- keep Repo ownership limited to Repo identity control/responsibility and avoid prematurely introducing Asset/property-right semantics, organization governance, complex ACL, search, synchronization, consensus, settlement or private-proof systems.
 
 Exact TypeScript names, package names, metadata field names, database schemas, HTTP routes and UI are not fixed by the MVP Specs unless a later accepted Requirement or Architecture decision requires them.
 
@@ -237,16 +238,15 @@ In addition to the acceptance tests defined by each capability Spec, the MVP int
 1. a Repository node can start with its configured Cordis plugins;
 2. a Core Entity identity can satisfy the Member capability without receiving a second Member ID;
 3. a valid Member can establish a Repo from an exact establishment Record and reload it after restart;
-4. the same Entity identity may compose Member + Repo capability without creating a second keypair or ownership semantics;
-5. the operator can maintain persistent membership through Repo-signed membership facts;
-6. a Member contribution resolves and verifies the exact required ProtocolHash / implementation artifacts;
-7. valid confirmations, durable Record ingress and durable Asset retrieval produce Repository `COMMITTED` / accepted state;
-8. the accepted Asset remains retrievable after restart;
-9. an interrupted contribution recovers without false acceptance or duplicate durable Record acceptance;
-10. a Repository-committed contribution appears in contribution history as pending-chain before Block inclusion;
-11. when chain-state access reports Block inclusion, the same history entry can be represented as block-confirmed without changing its Repository acceptance identity;
-12. Project and Board concepts are not required for the Repository MVP flow;
-13. plugin activation/disposal does not leak or duplicate owned resources.
+4. the same Entity identity may compose Member + Repo capability without creating a second keypair or implying Asset/labour property rights;
+5. a labour / Asset contribution resolves and verifies the exact required ProtocolHash / implementation artifacts;
+6. valid confirmations, durable Record ingress and durable Asset retrieval produce Repository `COMMITTED` / accepted state;
+7. the accepted Asset remains retrievable after restart;
+8. an interrupted contribution recovers without false acceptance or duplicate durable Record acceptance;
+9. a Repository-committed contribution appears in contribution history as pending-chain before Block inclusion;
+10. when chain-state access reports Block inclusion, the same history entry can be represented as block-confirmed without changing its Repository acceptance identity;
+11. Project and Board concepts are not required for the Repository MVP flow;
+12. plugin activation/disposal does not leak or duplicate owned resources.
 
 An in-memory-only path may be used for isolated unit or contract tests but does not by itself satisfy the usable Repository MVP because restart and recovery behavior are part of the product requirements.
 
@@ -258,10 +258,10 @@ The Spec set does not require:
 
 - a complete `member.profile` schema or profile product UX;
 - a separate Personal Repo entity/keypair;
-- private-property ownership semantics;
+- Asset/labour private-property ownership semantics;
 - Project or Board planning, analysis or presentation;
 - public/common usage accounting or revenue distribution;
-- general Private Repo permission systems;
+- general Private Repo permission systems or chain-level Repo membership/governance;
 - zero-knowledge proofs;
 - advanced ACL or role hierarchies;
 - advanced search, full-text indexing or large-scale query infrastructure;
