@@ -72,7 +72,7 @@ test('Runtime Record database exposes only whole-value namespace replacement', a
     await assert.rejects(
       node.context.runtimeRecordDatabase.runExclusive(async (database) => {
         assert.equal('getState' in database, false)
-        database.replaceState('membership', Object.freeze({ value: 'discard' }))
+        database.replaceState('test-state', Object.freeze({ value: 'discard' }))
         throw new Error('abort')
       }),
       /abort/,
@@ -81,7 +81,7 @@ test('Runtime Record database exposes only whole-value namespace replacement', a
     let recovered = false
     await node.context.runtimeRecordDatabase.runExclusive(async (database) => {
       assert.equal('getState' in database, false)
-      database.replaceState('membership', Object.freeze({ value: 'stable' }))
+      database.replaceState('test-state', Object.freeze({ value: 'stable' }))
       recovered = true
     })
     assert.equal(recovered, true)
