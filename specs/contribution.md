@@ -16,15 +16,38 @@ Repository participates in Repo-side confirmation of the related labour. It does
 
 A contribution may become accepted only if:
 
-- the contributor is a current Repo member;
 - every required human-readable Protocol reference and exact `ProtocolHash` can be resolved and verified;
 - the Asset, Record, Patch and contribution relations that apply to this contribution are valid under those exact Protocol semantics;
 - required Member / labour-subject confirmation is satisfied;
-- required Repo-side confirmation is satisfied;
+- required Repo-side confirmation is satisfied; when that confirmation is a Repo-authored decision, the Repo-signed Protocol data identifies the actual `operator: EntityPublicKey`;
 - the configured durable Record ingress/journal is available;
 - the accepted Asset can be made durably retrievable.
 
-Membership behavior is defined in [`membership.md`](./membership.md). Exact historical Protocol resolution is defined in [`protocol-resolution.md`](./protocol-resolution.md).
+Labourer and Repo are independent identities. Repository does not require a chain-level membership relation between them. Exact historical Protocol resolution is defined in [`protocol-resolution.md`](./protocol-resolution.md).
+
+## Labourer / Repo relationship and operator trace
+
+Labourer and Repo do not acquire a separate chain membership relation merely because a contribution is submitted or accepted.
+
+```text
+Labourer / Member identity
+    -> produces/signs labour facts
+
+Repo identity
+    -> decides whether to accept the contribution
+```
+
+The durable relationship between them is the accepted contribution itself. Contributor/member lists, groups, tags and filters are product views or local software data and are not Repository chain validity inputs.
+
+When a Protocol expresses the Repo-side acceptance or another Repo decision as a Repo-authored Record:
+
+```text
+Record.createdBy = Repo EntityPublicKey
+Record.signature = Repo identity signature
+Record.data.operator = actual operator EntityPublicKey
+```
+
+`operator` is action attribution recorded by the Repo-signed fact. This Spec does not interpret it as proof of an organization role, delegation or governance authority.
 
 ## Execution and chain status
 
@@ -154,7 +177,6 @@ Repository does not implement Block packing, peer validation, consensus or synch
 
 Consumers must be able to distinguish at least:
 
-- contributor is not a Repo member;
 - required exact ProtocolHash / verified implementation unavailable;
 - Asset, Record, Patch or relation rejected by the applicable Protocol;
 - required Member / labour-subject or Repo confirmation absent or rejected;
@@ -168,8 +190,7 @@ Consumers must be able to distinguish at least:
 
 Tests must demonstrate that:
 
-- a valid member contribution can reach Repository `COMMITTED` / accepted state;
-- a non-member contribution cannot become accepted;
+- a valid labour / Asset contribution can reach Repository `COMMITTED` / accepted state;
 - invalid Asset, Record, Patch or relation data is rejected before Repository acceptance;
 - missing required domain confirmation prevents acceptance;
 - missing exact ProtocolHash / verified implementation prevents acceptance;
