@@ -229,7 +229,7 @@ test('a valid Member establishes and loads a Repo from the exact Record', async 
 
     assert.deepEqual(established, {
       identity: REPO_KEY,
-      operator: MEMBER_KEY,
+      owner: MEMBER_KEY,
       establishmentRecordId: record.id,
     })
     assert.deepEqual(loaded, established)
@@ -239,7 +239,7 @@ test('a valid Member establishes and loads a Repo from the exact Record', async 
   })
 })
 
-test('Repo identity and initial operator rebuild from durable facts after restart', async () => {
+test('Repo identity and initial owner rebuild from durable facts after restart', async () => {
   await withDirectory(async (directory) => {
     const first = await createRepositoryNode({ plugins: composition(directory) })
     await declareMember(first)
@@ -253,7 +253,7 @@ test('Repo identity and initial operator rebuild from durable facts after restar
       await second.context[REPO_ESTABLISHMENT_PROTOCOL_SERVICE].loadRepo(REPO_KEY),
       {
         identity: REPO_KEY,
-        operator: MEMBER_KEY,
+        owner: MEMBER_KEY,
         establishmentRecordId: record.id,
       },
     )
@@ -292,7 +292,7 @@ test('the same Entity identity can compose Member and Repo capability', async ()
       await node.context[REPO_ESTABLISHMENT_PROTOCOL_SERVICE].establishRepo(record),
       {
         identity: MEMBER_KEY,
-        operator: MEMBER_KEY,
+        owner: MEMBER_KEY,
         establishmentRecordId: record.id,
       },
     )
@@ -322,7 +322,7 @@ test('exact establishment replay is idempotent', async () => {
   })
 })
 
-test('a conflicting second establishment cannot replace the first operator source', async () => {
+test('a conflicting second establishment cannot replace the first owner source', async () => {
   await withDirectory(async (directory) => {
     const node = await createRepositoryNode({ plugins: composition(directory) })
     await declareMember(node)
@@ -350,7 +350,7 @@ test('a conflicting second establishment cannot replace the first operator sourc
       await node.context[REPO_ESTABLISHMENT_PROTOCOL_SERVICE].loadRepo(REPO_KEY),
       {
         identity: REPO_KEY,
-        operator: MEMBER_KEY,
+        owner: MEMBER_KEY,
         establishmentRecordId: first.id,
       },
     )
