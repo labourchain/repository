@@ -39,7 +39,7 @@ Entity K
 
 同 identity 的 Repo 能力可暂时承载尚未进入集体 Repo 的 Record / Asset 关系与成果。这种承载关系不等于私人财产关系；Asset 与某个 Member-scoped Repo 关联或存放其中，不自动产生所有权、排他权、转让权或收益权。
 
-一个 Member 加入其他 Repo 时，Repo membership 是 Member 与 Repo 之间的关系，不会创建另一种人类主体类型，也不会改变 Member 的 Entity identity。
+Member 与其他 Repo 不建立额外的链上 membership 身份关系。Repo 是否采纳某次由该 Member 产生的劳动 / Asset contribution，才是两者之间需要长期留痕的事实。产品层可以根据贡献历史把人员展示为 contributor / member，并使用本地软件数据做分组或筛选；这些视图不会改变 Member 的 Entity identity。
 
 ## 劳动主体边界
 
