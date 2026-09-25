@@ -12,11 +12,11 @@ core.entity / EntityPublicKey
 Repo identity
     ├─ repo protocol
     ├─ asset-related protocols
-    ├─ membership / contribution protocols
+    ├─ contribution protocols
     └─ other protocols...
 ```
 
-Repo 用于保存劳动成果，并维护与仓库有关的劳动者关系。Repo 不把 Record 作为另一类仓库内容保存；与 Repo 有关的劳动历史由相关 LabourChain facts 重新构建。
+Repo 用于保存劳动成果，并留下其采纳了哪些劳动贡献的可验证事实。Repo 不把 Record 作为另一类仓库内容保存；与 Repo 有关的劳动历史由相关 LabourChain facts 重新构建。劳动者与 Repo 之间不额外建立链上 membership 状态。
 
 ```text
 Member performs labour
@@ -28,11 +28,15 @@ Asset
 Repo
 ```
 
-## establishment 与 operator
+## establishment、ownership 与 operator
 
-一个有效 Member 可以 establishment 一个 Repo。普通集体 Repo 使用独立的 Repo Entity identity；establishment 记录建立该 Repo identity 与发起 Member 之间的初始 operator 关系。
+一个有效 Member 可以 establishment 一个 Repo。普通集体 Repo 使用独立的 Repo Entity identity；establishment 记录建立该 Repo identity 的初始 owner。
 
-每个 Repo 有一个 operator，用于维护哪些 Members 可以向该 Repo contribution。Repo membership 是 Member 与 Repo 的关系，不创建新的 Member identity。
+这里的 Repo ownership 表示谁建立并承担该 Repo identity 的控制 / 责任来源，不表示该主体拥有 Repo 中的 Asset、劳动成果或相应私人财产权。Asset 的生产、使用、收益和其他权利关系仍由各自事实与协议表达。
+
+Repo 之后作出需要链上留痕的决定时，由 Repo identity 的 private key 对相应 Record 签名，并在该 Repo decision 的签名内容中标注实际 operator。`operator` 用于回答“这次 Repo 行为是谁操作的”，不是长期角色、成员资格或组织授权证明。谁有资格代表组织操作 Repo、如何授权、复核或更换 owner/operator 属于后续组织治理问题；Repository 技术层只保留事实和责任痕迹。
+
+劳动者与 Repo 本身相互独立。两者真正需要链上表达的关系是 Repo 是否采纳某次劳动 / Asset contribution。产品可以把曾经或持续有贡献的人展示为 contributor / member，也可以按人员建立分组和筛选条件，但这些组织视图在 MVP 中属于软件数据，不形成 `repo.membership` 链上事实。
 
 Member 也可以在自己的同一个 Entity identity / keypair 上组合 Repo 协议能力：
 
