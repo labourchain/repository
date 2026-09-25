@@ -22,7 +22,7 @@ Requirements、Architecture 与 MVP Specs 已完成当前轮次的重新投影�
 - [`specs/repository-mvp.md`](./specs/repository-mvp.md)：MVP umbrella spec，维护能力组合、共享不变量与完成边界；
 - [`specs/`](./specs/)：按稳定功能边界拆分的能力 Specs。
 
-当前能力 Specs 包括 bootstrap、Repo、membership、Protocol resolution、contribution、Asset storage 和 contribution history。
+当前能力 Specs 包括 bootstrap、Repo、Protocol resolution、contribution、Asset storage 和 contribution history。Repo contributor/member 分组属于产品视图或本地软件数据，不建立链上 membership capability。
 
 如果 Concepts、Requirements、Architecture、Spec 或实现出现冲突，应先在对应上游层显式讨论和修订，而不是让实现静默选择一种解释。
 
@@ -110,4 +110,4 @@ pnpm run package:check
 
 当前 package 保持 `private: true`。
 
-Bootstrap runtime 与 durable Record journal 已完成。Draft PR #29 已实现 `member.identity` 与 `repo.establishment@0.1.0`，并通过真实 Core v0.1.0 `core.entity` / `core.record` artifact 的 trusted compatibility smoke；membership、Asset、contribution、recovery 与 history 仍按后续 Stories 推进。
+Bootstrap runtime、durable Record journal、`member.identity` 与 `repo.establishment@0.1.0` 已完成。当前继续推进 exact Protocol resolution、Asset、contribution、recovery 与 history；链上 Repo membership 已从 MVP 移除。
