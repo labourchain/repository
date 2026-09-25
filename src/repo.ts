@@ -23,7 +23,7 @@ export interface RepoEstablishmentMountConfig {
 
 export interface RepoView {
   readonly identity: string
-  readonly operator: string
+  readonly owner: string
   readonly establishmentRecordId: string
 }
 
@@ -146,7 +146,7 @@ function requireRepoPayload(value: unknown): unknown {
 function repoView(record: CoreRecordValue, identity: string): RepoView {
   return Object.freeze({
     identity,
-    operator: record.createdBy,
+    owner: record.createdBy,
     establishmentRecordId: record.id,
   })
 }
