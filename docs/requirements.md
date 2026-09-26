@@ -27,17 +27,17 @@ Member 不建立第二套 identity。一个 Member 以 Core `EntityPublicKey` �
 
 同一个 Member Entity identity / keypair 可以同时组合 Repo 协议能力，用于暂时承载尚未进入集体 Repo 的 Record / Asset 关系与劳动成果。这种 Member-scoped Repo 不自动产生私人财产、排他权、转让权或收益权语义。
 
-## Repo 建立、ownership 与操作留痕
+## Repo 建立与操作留痕
 
-一个有效 Member 可以作为 owner 发起 Repo 建立。Repo 本身同样以 Core Entity identity 为身份锚点，并通过 Repo 及其他协议组合形成完整仓库能力。
+一个有效 Member 可以创建 Repo。Repo 本身同样以 Core Entity identity 为身份锚点，并通过 Repo 及其他协议组合形成完整仓库能力。
 
-Repo establishment 必须由 Repo identity 自己签名，从而证明建立事实确实由该 Repo key 授权；签名数据中的 `owner: EntityPublicKey` 指向初始 owner，且该 owner 必须满足 Member capability。集体 Repo 可以使用与 owner 不同的 Entity identity；Member-scoped Repo 也可以让 Repo identity 与 owner 使用同一 Entity identity/keypair。
+Repo establishment 只表达一个创建事实：创建者以自己的 Member Entity identity 作为 `Record.createdBy` 并以个人私钥签名；`Record.data.publicKey` 声明被创建的 Repo EntityPublicKey。这里的 `createdBy` 只保留创建来源/provenance，不推导 Repo 的所有权、永久控制权或治理权。
 
-Repo ownership 只描述 Repo identity 的建立、控制与责任来源，不表示 owner 自动拥有 Repo 中的 Asset、劳动成果、排他权、转让权或收益权。
+Member-scoped Repo 可以让创建者和 Repo 使用同一个 Entity identity/keypair；集体 Repo 也可以创建一个独立的 Repo Entity identity。两种情况都不自动产生 Asset、劳动成果、排他权、转让权或收益权语义。
 
-Repo 后续采取需要链上留痕的决定时，使用 Repo private key 对相应 Record 签名，并在该 decision fact 的签名内容中标注 `operator: EntityPublicKey`。operator 只用于记录这次决定实际由谁操作，不建立长期 operator 角色、ACL 或组织授权证明。owner 转移、多人治理、授权和复核规则属于后续组织治理问题。
+Repo 后续采取需要链上留痕的决定时，才使用 Repo private key 对相应 Record 签名，并在该 decision fact 的签名内容中标注 `operator: EntityPublicKey`。operator 只用于记录这次 Repo 行为由谁实际操作，不建立长期 operator 角色、ACL 或组织授权证明。授权、复核和组织治理属于后续组织层问题。
 
-Repo identity 和 ownership 在正常应用重启后必须能够从 durable facts 恢复。
+Repo identity 和创建来源在正常应用重启后必须能够从 durable facts 恢复。
 
 ## Repo 与劳动者关系
 
@@ -112,7 +112,7 @@ Block packing 与 peer validation 后续实现时必须满足：
 
 已经接受的 Asset 必须能够持久保存，并在正常应用重启后再次读取。
 
-Member / Repo identity、Repo ownership 以及已接受 contribution 所需的 Repository 状态，在正常应用重启后必须能够恢复。Repo contributor 分组、标签和筛选条件属于产品软件数据，不构成链上恢复前提。
+Member / Repo identity、Repo creation provenance 以及已接受 contribution 所需的 Repository 状态，在正常应用重启后必须能够恢复。Repo contributor 分组、标签和筛选条件属于产品软件数据，不构成链上恢复前提。
 
 应用重启或运行时故障不得把尚未成功进入 Repository committed state 的 contribution 错误地暴露为已接受状态，也不得丢失已经 Repository committed、正在等待链收录的事实。
 
