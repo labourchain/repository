@@ -30,9 +30,9 @@ Repo
 
 ## establishment、ownership 与 operator
 
-一个有效 Member 可以 establishment 一个 Repo。普通集体 Repo 使用独立的 Repo Entity identity；establishment 记录建立该 Repo identity 的初始 owner。
+一个有效 Member 可以作为初始 owner 建立 Repo。普通集体 Repo 使用独立的 Repo Entity identity；establishment Record 由 Repo identity 自己签名，并在 `data.owner` 中记录初始 owner。
 
-这里的 Repo ownership 表示谁建立并承担该 Repo identity 的控制 / 责任来源，不表示该主体拥有 Repo 中的 Asset、劳动成果或相应私人财产权。Asset 的生产、使用、收益和其他权利关系仍由各自事实与协议表达。
+这里的 Repo ownership 表示 Repo 自己签署并留下的控制 / 责任来源：`Record.createdBy = Repo EntityPublicKey`，`Record.data.owner = Member EntityPublicKey`。它不表示该 owner 拥有 Repo 中的 Asset、劳动成果或相应私人财产权。Asset 的生产、使用、收益和其他权利关系仍由各自事实与协议表达。
 
 Repo 之后作出需要链上留痕的决定时，由 Repo identity 的 private key 对相应 Record 签名，并在该 Repo decision 的签名内容中标注实际 operator。`operator` 用于回答“这次 Repo 行为是谁操作的”，不是长期角色、成员资格或组织授权证明。谁有资格代表组织操作 Repo、如何授权、复核或更换 owner/operator 属于后续组织治理问题；Repository 技术层只保留事实和责任痕迹。
 
