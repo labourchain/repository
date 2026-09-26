@@ -129,9 +129,10 @@ accepted Record journal
     -> not itself Block confirmation
 
 Runtime Record database
-    -> protocol-validated Record relationships, ordering/dependencies and pending packing state
-    -> correctness input for Repository validation, tracing and later Block packing
-    -> rebuildable/reconcilable from durable Records + exact Protocol semantics
+    -> serialized Repository Record ingress boundary
+    -> delegates exact Record durability to the journal
+    -> concrete Protocol-owned relationship / ordering / pending-packing state is added only when a real consumer requires it
+    -> any such state remains rebuildable/reconcilable from durable Records + exact Protocol semantics
     -> not itself canonical-chain or Block confirmation
 
 staging
@@ -139,10 +140,10 @@ staging
 
 index/cache/projection
     -> derived query/display acceleration
-    -> rebuildable from Runtime Record database and other durable sources
+    -> rebuildable from durable facts, concrete Protocol-owned relation state when present, and other durable sources
 ```
 
-The Runtime Record database is not merely a query cache: Repository validation and packing may depend on its reconciled relationship state. Persistence alone still does not turn Runtime database, staging, index/cache/projection, or journal state into chain-confirmed facts.
+The Runtime Record database is not a query cache, but #31 deliberately exposes only the serialized ingress boundary. The first concrete consumer, currently #9 Contribution, may add only the relationship state it actually needs. Persistence alone does not turn Runtime database, staging, index/cache/projection, or journal state into chain-confirmed facts.
 
 
 Repo state evolution uses Record + Patch facts. Runtime Snapshot is a materialized cache/projection derived from those facts under exact Protocol semantics: it may accelerate recovery and reads, may be discarded and rebuilt, and must not be written back as a substitute for the Record + Patch history or treated as an independent chain fact.
