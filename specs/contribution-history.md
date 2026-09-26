@@ -45,7 +45,7 @@ The history view derives from distinct Runtime and chain evidence:
 durable Record journal
     -> Repository-accepted Record + Patch facts
 
-Runtime Record database / contribution correlation
+Contribution relation state / correlation, once defined by #9
     -> Protocol-validated relationships needed to reconstruct the Repo contribution view
     -> rebuildable from durable facts + exact Protocol semantics
 
@@ -54,7 +54,7 @@ chain-state / accepted-Block access
     -> block-confirmed status and chain position
 ```
 
-The journal alone is not interpreted as a generic ordered history database: relation meaning comes from the exact Protocol semantics and the Runtime relationship projection rebuilt from those facts.
+The journal alone is not interpreted as a generic ordered history database: relation meaning comes from the exact Protocol semantics and, once #9 defines it, the concrete contribution-relation projection rebuilt from those facts.
 
 Runtime plugins may persist indexes, caches, projections or Snapshots that make history efficient to query. These derived data must:
 
