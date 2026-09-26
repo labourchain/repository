@@ -19,7 +19,7 @@ import {
   RecordJournalService,
   RepoAlreadyEstablishedError,
   RepoEstablishmentError,
-  RepoOwnerMemberError,
+  RepoEstablishingMemberError,
   RepoNotFoundError,
   RepoProtocolConfigError,
   createRepositoryNode,
@@ -102,17 +102,17 @@ function memberRecord(
 function repoRecord(
   id: string,
   repoIdentity = REPO_KEY,
-  owner = MEMBER_KEY,
+  createdBy = MEMBER_KEY,
   overrides: Partial<CoreRecordValue> = {},
 ): CoreRecordValue {
   return {
     id,
     protocol: REPO_ESTABLISHMENT_PROTOCOL_REFERENCE,
     protocolHash: REPO_PROTOCOL_HASH,
-    createdBy: repoIdentity,
+    createdBy,
     createdAt: '2026-09-19T00:00:01.000Z',
     signature: 'valid-signature',
-    data: { owner },
+    data: { publicKey: repoIdentity },
     ...overrides,
   }
 }
@@ -214,7 +214,7 @@ test('Repo Protocol service follows the Cordis Plugin Fiber lifecycle', async ()
   })
 })
 
-test('a Repo self-authenticates establishment with a valid Member owner', async () => {
+test('a valid Member creates and loads a Repo identity fact', async () => {
   await withDirectory(async (directory) => {
     const node = await createRepositoryNode({ plugins: composition(directory) })
     await declareMember(node)
@@ -229,7 +229,7 @@ test('a Repo self-authenticates establishment with a valid Member owner', async 
 
     assert.deepEqual(established, {
       identity: REPO_KEY,
-      owner: MEMBER_KEY,
+      createdBy: MEMBER_KEY,
       establishmentRecordId: record.id,
     })
     assert.deepEqual(loaded, established)
@@ -239,7 +239,7 @@ test('a Repo self-authenticates establishment with a valid Member owner', async 
   })
 })
 
-test('Repo identity and initial owner rebuild from durable facts after restart', async () => {
+test('Repo identity and creator rebuild from durable facts after restart', async () => {
   await withDirectory(async (directory) => {
     const first = await createRepositoryNode({ plugins: composition(directory) })
     await declareMember(first)
@@ -253,7 +253,7 @@ test('Repo identity and initial owner rebuild from durable facts after restart',
       await second.context[REPO_ESTABLISHMENT_PROTOCOL_SERVICE].loadRepo(REPO_KEY),
       {
         identity: REPO_KEY,
-        owner: MEMBER_KEY,
+        createdBy: MEMBER_KEY,
         establishmentRecordId: record.id,
       },
     )
@@ -262,7 +262,7 @@ test('Repo identity and initial owner rebuild from durable facts after restart',
   })
 })
 
-test('a Repo cannot establish with an owner that is not a Member', async () => {
+test('a generic Entity that is not a Member cannot create a Repo', async () => {
   await withDirectory(async (directory) => {
     const node = await createRepositoryNode({ plugins: composition(directory) })
 
@@ -270,7 +270,7 @@ test('a Repo cannot establish with an owner that is not a Member', async () => {
       node.context[REPO_ESTABLISHMENT_PROTOCOL_SERVICE].establishRepo(
         repoRecord('repo-non-member', REPO_KEY, NON_MEMBER_KEY),
       ),
-      RepoOwnerMemberError,
+      RepoEstablishingMemberError,
     )
 
     await assert.rejects(
@@ -292,7 +292,7 @@ test('the same Entity identity can compose Member and Repo capability', async ()
       await node.context[REPO_ESTABLISHMENT_PROTOCOL_SERVICE].establishRepo(record),
       {
         identity: MEMBER_KEY,
-        owner: MEMBER_KEY,
+        createdBy: MEMBER_KEY,
         establishmentRecordId: record.id,
       },
     )
@@ -322,7 +322,7 @@ test('exact establishment replay is idempotent', async () => {
   })
 })
 
-test('a conflicting second establishment cannot replace the first owner source', async () => {
+test('a conflicting second establishment cannot replace the first creation source', async () => {
   await withDirectory(async (directory) => {
     const node = await createRepositoryNode({ plugins: composition(directory) })
     await declareMember(node)
@@ -350,7 +350,7 @@ test('a conflicting second establishment cannot replace the first owner source',
       await node.context[REPO_ESTABLISHMENT_PROTOCOL_SERVICE].loadRepo(REPO_KEY),
       {
         identity: REPO_KEY,
-        owner: MEMBER_KEY,
+        createdBy: MEMBER_KEY,
         establishmentRecordId: first.id,
       },
     )
@@ -498,14 +498,16 @@ test('Repo establishment fails closed for wrong Protocol, hash, signature, paylo
     await assert.rejects(
       service.establishRepo(
         repoRecord('wrong-payload', REPO_KEY, MEMBER_KEY, {
-          data: { owner: MEMBER_KEY, repo: REPO_KEY },
+          data: { createdBy: MEMBER_KEY, repo: REPO_KEY },
         }),
       ),
       RepoEstablishmentError,
     )
     await assert.rejects(
       service.establishRepo(
-        repoRecord('bad-repo-key', 'not-an-entity-key', MEMBER_KEY),
+        repoRecord('bad-repo-key', REPO_KEY, MEMBER_KEY, {
+          data: { publicKey: 'not-an-entity-key' },
+        }),
       ),
       RepoEstablishmentError,
     )
