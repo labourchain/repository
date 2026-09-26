@@ -498,7 +498,7 @@ test('Repo establishment fails closed for wrong Protocol, hash, signature, paylo
     await assert.rejects(
       service.establishRepo(
         repoRecord('wrong-payload', REPO_KEY, MEMBER_KEY, {
-          data: { createdBy: MEMBER_KEY, repo: REPO_KEY },
+          data: { publicKey: REPO_KEY, extra: MEMBER_KEY },
         }),
       ),
       RepoEstablishmentError,
