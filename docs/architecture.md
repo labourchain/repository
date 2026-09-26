@@ -237,9 +237,9 @@ LabourFlow 可以在同 identity Member + Repo 协议组合之上提供面向个
 
 Repo 是以 Core `EntityPublicKey` 为身份锚点的协议组合，不继承或扩展 Core `Entity` 对象。
 
-Repo establishment 的发起方必须是一个已经满足 Member 协议的 Entity identity。集体 Repo 可以使用另一个独立的 Repo Entity identity；Member-scoped Repo 也允许 Member 与 Repo 使用同一个 identity/keypair。
+Repo establishment 的初始 owner 必须是一个已经满足 Member 协议的 Entity identity。集体 Repo 可以使用与 owner 不同的 Repo Entity identity；Member-scoped Repo 也允许 owner 与 Repo 使用同一个 identity/keypair。
 
-MVP 的 Repo establishment 使用一个 establishment Record 表达最小事实：
+MVP 的 Repo establishment 使用一个由 Repo identity 自己签名的 establishment Record 表达最小事实：
 
 ```text
 Record.createdBy
