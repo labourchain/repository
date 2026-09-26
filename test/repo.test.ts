@@ -19,7 +19,7 @@ import {
   RecordJournalService,
   RepoAlreadyEstablishedError,
   RepoEstablishmentError,
-  RepoEstablishingMemberError,
+  RepoOwnerMemberError,
   RepoNotFoundError,
   RepoProtocolConfigError,
   createRepositoryNode,
@@ -102,17 +102,17 @@ function memberRecord(
 function repoRecord(
   id: string,
   repoIdentity = REPO_KEY,
-  createdBy = MEMBER_KEY,
+  owner = MEMBER_KEY,
   overrides: Partial<CoreRecordValue> = {},
 ): CoreRecordValue {
   return {
     id,
     protocol: REPO_ESTABLISHMENT_PROTOCOL_REFERENCE,
     protocolHash: REPO_PROTOCOL_HASH,
-    createdBy,
+    createdBy: repoIdentity,
     createdAt: '2026-09-19T00:00:01.000Z',
     signature: 'valid-signature',
-    data: { repo: repoIdentity },
+    data: { owner },
     ...overrides,
   }
 }
@@ -262,7 +262,7 @@ test('Repo identity and initial owner rebuild from durable facts after restart',
   })
 })
 
-test('a generic Entity that is not a Member cannot establish a Repo', async () => {
+test('a Repo cannot establish with an owner that is not a Member', async () => {
   await withDirectory(async (directory) => {
     const node = await createRepositoryNode({ plugins: composition(directory) })
 
@@ -270,7 +270,7 @@ test('a generic Entity that is not a Member cannot establish a Repo', async () =
       node.context[REPO_ESTABLISHMENT_PROTOCOL_SERVICE].establishRepo(
         repoRecord('repo-non-member', REPO_KEY, NON_MEMBER_KEY),
       ),
-      RepoEstablishingMemberError,
+      RepoOwnerMemberError,
     )
 
     await assert.rejects(
@@ -498,16 +498,14 @@ test('Repo establishment fails closed for wrong Protocol, hash, signature, paylo
     await assert.rejects(
       service.establishRepo(
         repoRecord('wrong-payload', REPO_KEY, MEMBER_KEY, {
-          data: { repo: REPO_KEY, owner: MEMBER_KEY },
+          data: { owner: MEMBER_KEY, repo: REPO_KEY },
         }),
       ),
       RepoEstablishmentError,
     )
     await assert.rejects(
       service.establishRepo(
-        repoRecord('bad-repo-key', REPO_KEY, MEMBER_KEY, {
-          data: { repo: 'not-an-entity-key' },
-        }),
+        repoRecord('bad-repo-key', 'not-an-entity-key', MEMBER_KEY),
       ),
       RepoEstablishmentError,
     )
