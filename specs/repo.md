@@ -1,7 +1,7 @@
 # Repo Specification
 
 - **Status:** Draft
-- **Scope:** Repo establishment, stable identity, ownership, decision-operator trace and loading
+- **Scope:** Repo establishment, stable identity, creation provenance, decision-operator trace and loading
 - **Requirements:** [`../docs/requirements.md`](../docs/requirements.md)
 - **Architecture:** [`../docs/architecture.md`](../docs/architecture.md)
 - **Umbrella:** [`repository-mvp.md`](./repository-mvp.md)
@@ -242,10 +242,10 @@ Tests must demonstrate that:
 
 - a valid Member can establish a Repo whose identity is a Core `EntityPublicKey`;
 - a generic/non-Member Entity identity cannot establish a Repo through the human Member path;
-- the establishment Record's `createdBy` is the Repo identity and its signature verifies with that identity;
+- the establishment Record's `createdBy` is the creator Member identity and its signature verifies with that identity;
 - the exact establishment Record is durably accepted before establishment succeeds;
 - the same Repo can be loaded again by stable identity after restart;
-- Repo identity and the `data.owner` Member can be recovered from the durable Record journal even if the lookup index is rebuilt;
+- Repo identity from `data.publicKey` and creator provenance from `Record.createdBy` can be recovered from the durable Record journal even if the lookup index is rebuilt;
 - a conflicting second establishment of the same Repo identity is rejected;
 - stale/missing Runtime index state cannot replace the establishment Record as the domain source;
 - provider-native storage identifiers do not replace Repo identity;
