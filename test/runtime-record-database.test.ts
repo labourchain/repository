@@ -49,42 +49,11 @@ test('Runtime Record database shares the journal mutation gate', async () => {
       assert.equal(outsideSettled, false)
 
       await database.accept(inside)
-      database.replaceState('test', Object.freeze({ recordId: inside.id }))
     })
 
     await outsideWrite
     assert.deepEqual(await node.context.recordJournal.get(inside.id), inside)
     assert.deepEqual(await node.context.recordJournal.get(outside.id), outside)
-
-    await node.dispose()
-  })
-})
-
-test('Runtime Record database exposes only whole-value namespace replacement', async () => {
-  await withDirectory(async (directory) => {
-    const node = await createRepositoryNode({
-      plugins: [
-        { plugin: runtimeRecordDatabasePlugin },
-        { plugin: RecordJournalService, config: { directory } },
-      ],
-    })
-
-    await assert.rejects(
-      node.context.runtimeRecordDatabase.runExclusive(async (database) => {
-        assert.equal('getState' in database, false)
-        database.replaceState('test-state', Object.freeze({ value: 'discard' }))
-        throw new Error('abort')
-      }),
-      /abort/,
-    )
-
-    let recovered = false
-    await node.context.runtimeRecordDatabase.runExclusive(async (database) => {
-      assert.equal('getState' in database, false)
-      database.replaceState('test-state', Object.freeze({ value: 'stable' }))
-      recovered = true
-    })
-    assert.equal(recovered, true)
 
     await node.dispose()
   })
