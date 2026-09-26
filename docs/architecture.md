@@ -169,7 +169,7 @@ Peer validator
 
 Peer validation 不依赖生产节点之前使用了什么内存对象、snapshot 或执行路径，而只依赖 Block 实际提交的数据及其绑定的验证语义。当前 LabourChain 不要求像通用智能合约平台那样建立一套加密虚拟机或把所有 Repository 执行过程复制到链上；需要重放的是对应 Protocol 对 Block 内容及关系的确定性验证。
 
-Block 内的 Records 可以按照适用 Protocol 建立一个或多个有逻辑的生产关系结构。劳动与 Asset 的输入/输出关系自然形成 tree / forest，必要时可表现为更一般的依赖图；L1 validation 必须使用 Records 直接引用的 exact Protocol semantics 重建并验证这些关系。Repo ownership、decision operator 等非生产因果事实不因此被强行塞入同一棵生产树，也不重新引入 `previous` 链。
+Block 内的 Records 可以按照适用 Protocol 建立一个或多个有逻辑的生产关系结构。劳动与 Asset 的输入/输出关系自然形成 tree / forest，必要时可表现为更一般的依赖图；L1 validation 必须使用 Records 直接引用的 exact Protocol semantics 重建并验证这些关系。Repo creation provenance、decision operator 等非生产因果事实不因此被强行塞入同一棵生产树，也不重新引入 `previous` 链。
 
 当前 Repository MVP 只建立支持未来打包所需的 Runtime 边界，不实现完整 Block packer、`vroot` Core contract、peer validator、节点同步或共识。
 
@@ -229,28 +229,30 @@ flowchart LR
 
 Repository 不重新定义 Core 已有的 Protocol、Record、Entity identity、signature 或 Block 语义。Member、Repo、Asset、confirmation、Repo establishment、Repo decision 与 contribution relation 等领域语义由各自适用的上层 Protocol 定义。
 
-Member 与 Repo 都是同一类组合原则：先有 Core Entity identity，再通过协议获得领域语义。一个 Entity identity/keypair 可以同时满足 Member 与 Repo 协议；这种组合不产生第二个 identity。Repo establishment 所表达的 ownership 只针对 Repo identity 的建立、控制与责任来源，不自动扩展为 Asset 或劳动成果的私人财产权。
+Member 与 Repo 都是同一类组合原则：先有 Core Entity identity，再通过协议获得领域语义。一个 Entity identity/keypair 可以同时满足 Member 与 Repo 协议；这种组合不产生第二个 identity。Repo establishment 只保留创建事实与创建来源，不定义 Repo ownership，也不自动扩展为 Asset 或劳动成果的私人财产权。
 
 LabourFlow 可以在同 identity Member + Repo 协议组合之上提供面向个人的产品体验，但它不需要创建一个嵌套 `PersonalRepo` entity，也不改变底层 Repo 协议。
 
-## Repo establishment、ownership 与操作留痕
+## Repo establishment 与操作留痕
 
 Repo 是以 Core `EntityPublicKey` 为身份锚点的协议组合，不继承或扩展 Core `Entity` 对象。
 
-Repo establishment 的初始 owner 必须是一个已经满足 Member 协议的 Entity identity。集体 Repo 可以使用与 owner 不同的 Repo Entity identity；Member-scoped Repo 也允许 owner 与 Repo 使用同一个 identity/keypair。
+Repo establishment 的创建者必须是一个已经满足 Member 协议的 Entity identity。集体 Repo 可以创建另一个独立的 Repo Entity identity；Member-scoped Repo 也允许创建者与 Repo 使用同一个 identity/keypair。
 
-MVP 的 Repo establishment 使用一个由 Repo identity 自己签名的 establishment Record 表达最小事实：
+MVP 的 Repo establishment 使用一个由创建者个人签名的 Record 表达最小事实：
 
 ```text
 Record.createdBy
-= Repo EntityPublicKey
-= signature authority for establishment
+= creator Member EntityPublicKey
 
-Record.data.owner
-= initial owner Member EntityPublicKey
+Record.signature
+= creator personal signature
+
+Record.data.publicKey
+= created Repo EntityPublicKey
 ```
 
-Repo establishment 由 Repo key 自签，因此建立事实能够证明对应 Repo identity 的 key participation；初始 owner 来自该 Repo-signed Record 的 `data.owner`。这里的 ownership 只描述 Repo identity 的建立、控制与责任来源，不表示 owner 拥有 Repo 中的 Asset 或劳动成果。Core `Entity.introducedBy` 也不用于表达 ownership、operator 或组织成员关系。
+这与 Core Entity fact 的责任分离保持一致：`Record.createdBy / signature` 表示谁确认了创建事实，`Record.data.publicKey` 表示这条事实声明的 Repo identity。创建关系只用于 provenance，不解释为 ownership、永久控制权、membership 或治理授权。Core `Entity.introducedBy` 同样不用于推导这些政治/组织语义。
 
 Repo 后续采取需要链上留痕的决定时，决定 Record 由 Repo identity 的 private key 签名，并在该 Protocol 的签名 payload / data 中标注实际 `operator: EntityPublicKey`。operator 是单次行为的责任留痕，不是持久角色、membership、ACL 或组织授权证明。谁可以操作 Repo key、owner 如何变更、多人如何治理属于后续组织治理层。
 
@@ -272,7 +274,7 @@ block-confirmed
 
 ```mermaid
 sequenceDiagram
-    participant Owner as Owner Member / Client
+    participant Creator as Creator Member / Client
     participant Cordis as Cordis
     participant MemberProtocol as Member Protocol capability
     participant Repo as Repo Protocol capability
@@ -280,16 +282,16 @@ sequenceDiagram
     participant Index as Runtime Repo index
     participant Chain as Chain-state adapter
 
-    Owner->>Cordis: submit Repo-signed establishment
-    Cordis->>MemberProtocol: require owner Member
-    MemberProtocol-->>Cordis: valid owner identity
+    Creator->>Cordis: submit creator-signed establishment
+    Cordis->>MemberProtocol: require creator Member
+    MemberProtocol-->>Cordis: valid creator identity
     Cordis->>Repo: validate establishment Record
     Repo->>Journal: durably accept establishment Record
     Journal-->>Repo: accepted RecordId
     Repo->>Index: index Repo identity -> RecordId
-    Repo-->>Owner: Repo established
+    Repo-->>Creator: Repo established
 
-    Owner->>Cordis: load Repo identity
+    Creator->>Cordis: load Repo identity
     Cordis->>Repo: resolve Repo
     Repo->>Index: lookup RecordId
     Repo->>Journal: read accepted establishment Record
@@ -298,10 +300,10 @@ sequenceDiagram
         Repo->>Chain: lookup RecordId inclusion
         Chain-->>Repo: pending or block-confirmed
     end
-    Repo-->>Owner: Repo + owner/status
+    Repo-->>Creator: Repo + createdBy/status
 ```
 
-Runtime Repo index 只是加速 lookup 的可替换数据。initial owner 来自 Repo-signed establishment Record 的 `data.owner`。缺失或陈旧的 index 不能创造第二个 owner；index 可以通过 durable journal，以及在可用时通过 chain state 重新对账。
+Runtime Repo index 只是加速 lookup 的可替换数据。Repo identity 来自 establishment Record 的 `data.publicKey`，创建来源来自该 Record 的 `createdBy`。缺失或陈旧的 index 不能创造第二条创建事实；index 可以通过 durable journal，以及在可用时通过 chain state 重新对账。
 
 ## Contribution 数据流
 
