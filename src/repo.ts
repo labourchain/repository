@@ -48,16 +48,15 @@ export class RepoEstablishmentError extends RepoError {
   }
 }
 
-export class RepoEstablishingMemberError extends RepoError {
+export class RepoOwnerMemberError extends RepoError {
   readonly identity: string
 
   constructor(identity: string, options?: ErrorOptions) {
     super(
-      'Repo establishment author does not satisfy the Member capability: ' +
-        identity,
+      'Repo owner does not satisfy the Member capability: ' + identity,
       options,
     )
-    this.name = 'RepoEstablishingMemberError'
+    this.name = 'RepoOwnerMemberError'
     this.identity = identity
   }
 }
@@ -108,45 +107,48 @@ function requireProtocolHash(config: RepoEstablishmentMountConfig): string {
   return config.protocolHash
 }
 
-function requireRepoPayload(value: unknown): unknown {
+function requireOwnerPayload(value: unknown): unknown {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new RepoEstablishmentError(
-      'repo.establishment data must be a plain object containing only repo.',
+      'repo.establishment data must be a plain object containing only owner.',
     )
   }
 
   const prototype = Object.getPrototypeOf(value)
   if (prototype !== Object.prototype && prototype !== null) {
     throw new RepoEstablishmentError(
-      'repo.establishment data must be a plain object containing only repo.',
+      'repo.establishment data must be a plain object containing only owner.',
     )
   }
 
   const keys = Reflect.ownKeys(value)
   if (
     keys.length !== 1 ||
-    keys[0] !== 'repo' ||
-    !Object.prototype.propertyIsEnumerable.call(value, 'repo')
+    keys[0] !== 'owner' ||
+    !Object.prototype.propertyIsEnumerable.call(value, 'owner')
   ) {
     throw new RepoEstablishmentError(
-      'repo.establishment data must contain exactly one enumerable repo field.',
+      'repo.establishment data must contain exactly one enumerable owner field.',
     )
   }
 
-  const descriptor = Object.getOwnPropertyDescriptor(value, 'repo')
+  const descriptor = Object.getOwnPropertyDescriptor(value, 'owner')
   if (!descriptor || !('value' in descriptor)) {
     throw new RepoEstablishmentError(
-      'repo.establishment data.repo must be an enumerable data property.',
+      'repo.establishment data.owner must be an enumerable data property.',
     )
   }
 
   return descriptor.value
 }
 
-function repoView(record: CoreRecordValue, identity: string): RepoView {
+function repoView(
+  record: CoreRecordValue,
+  owner: string,
+): RepoView {
   return Object.freeze({
-    identity,
-    owner: record.createdBy,
+    identity: record.createdBy,
+    owner,
     establishmentRecordId: record.id,
   })
 }
@@ -216,7 +218,7 @@ export class RepoEstablishmentService {
       await journal.accept(validated.record)
       this.establishments.set(validated.repoIdentity, validated.record.id)
 
-      return repoView(validated.record, validated.repoIdentity)
+      return repoView(validated.record, validated.owner)
     })
   }
 
@@ -242,7 +244,7 @@ export class RepoEstablishmentService {
       )
     }
 
-    return repoView(validated.record, repoIdentity)
+    return repoView(validated.record, validated.owner)
   }
 
   private isCandidate(value: JournalRecord): boolean {
@@ -270,7 +272,7 @@ export class RepoEstablishmentService {
 
   private async validateEstablishment(
     value: unknown,
-  ): Promise<{ record: CoreRecordValue; repoIdentity: string }> {
+  ): Promise<{ record: CoreRecordValue; repoIdentity: string; owner: string }> {
     let record: CoreRecordValue
     try {
       record = this.ctx[CORE_RECORD_PROTOCOL_SERVICE].validateRecord(value)
@@ -310,19 +312,30 @@ export class RepoEstablishmentService {
       )
     }
 
-    const payloadRepo = requireRepoPayload(record.data)
-    const repoIdentity = this.validateRepoIdentity(payloadRepo)
+    const repoIdentity = this.validateRepoIdentity(record.createdBy)
+    const ownerValue = requireOwnerPayload(record.data)
+    let owner: string
+    try {
+      owner = this.ctx[CORE_ENTITY_PROTOCOL_SERVICE].validateEntityPublicKey(
+        ownerValue,
+      )
+    } catch (cause) {
+      throw new RepoEstablishmentError(
+        'Repo owner is not a valid Core EntityPublicKey.',
+        { cause },
+      )
+    }
 
     try {
-      await this.ctx[MEMBER_PROTOCOL_SERVICE].requireMember(record.createdBy)
+      await this.ctx[MEMBER_PROTOCOL_SERVICE].requireMember(owner)
     } catch (cause) {
       if (cause instanceof MemberNotFoundError) {
-        throw new RepoEstablishingMemberError(record.createdBy, { cause })
+        throw new RepoOwnerMemberError(owner, { cause })
       }
       throw cause
     }
 
-    return { record, repoIdentity }
+    return { record, repoIdentity, owner }
   }
 }
 
