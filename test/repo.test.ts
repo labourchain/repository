@@ -214,7 +214,7 @@ test('Repo Protocol service follows the Cordis Plugin Fiber lifecycle', async ()
   })
 })
 
-test('a valid Member establishes and loads a Repo from the exact Record', async () => {
+test('a Repo self-authenticates establishment with a valid Member owner', async () => {
   await withDirectory(async (directory) => {
     const node = await createRepositoryNode({ plugins: composition(directory) })
     await declareMember(node)
