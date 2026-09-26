@@ -233,15 +233,15 @@ test(
         const rawRepoRecord = {
           protocol: REPO_ESTABLISHMENT_PROTOCOL_REFERENCE,
           protocolHash: REPO_PROTOCOL_HASH,
-          createdBy: repoIdentity,
+          createdBy: identity,
           createdAt: '2026-09-18T00:00:01.000Z',
-          data: { owner: identity },
+          data: { publicKey: repoIdentity },
         }
         const repoRecordId = recordService.recordId(rawRepoRecord)
         const repoSignature = sign(
           null,
           recordService.signingPayload(repoRecordId),
-          repoKeyPair.privateKey,
+          privateKey,
         ).toString('hex')
         const repoRecord: CoreRecordValue = {
           id: repoRecordId,
@@ -260,7 +260,7 @@ test(
 
         assert.deepEqual(established, {
           identity: repoIdentity,
-          owner: identity,
+          createdBy: identity,
           establishmentRecordId: repoRecordId,
         })
         assert.deepEqual(loadedRepo, established)
@@ -274,7 +274,7 @@ test(
           protocolHash: REPO_PROTOCOL_HASH,
           createdBy: identity,
           createdAt: '2026-09-18T00:00:02.000Z',
-          data: { owner: identity },
+          data: { createdBy: identity },
         }
         const memberScopedRepoRecordId = recordService.recordId(
           rawMemberScopedRepoRecord,
@@ -295,7 +295,7 @@ test(
 
         assert.deepEqual(memberScopedRepo, {
           identity,
-          owner: identity,
+          createdBy: identity,
           establishmentRecordId: memberScopedRepoRecordId,
         })
         assert.deepEqual(
