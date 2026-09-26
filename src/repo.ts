@@ -196,7 +196,7 @@ export class RepoEstablishmentService {
 
   async establishRepo(value: unknown): Promise<RepoView> {
     return this.ctx.recordJournal.runExclusive(async (journal) => {
-      // Member prerequisite validation, Repo singularity validation and durable
+      // Owner-Member validation, Repo singularity validation and durable
       // publication share the journal mutation gate. Raw same-process journal
       // acceptance therefore cannot interleave between check and publish.
       const validated = await this.validateEstablishment(value)
