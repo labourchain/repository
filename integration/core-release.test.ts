@@ -274,7 +274,7 @@ test(
           protocolHash: REPO_PROTOCOL_HASH,
           createdBy: identity,
           createdAt: '2026-09-18T00:00:02.000Z',
-          data: { createdBy: identity },
+          data: { publicKey: identity },
         }
         const memberScopedRepoRecordId = recordService.recordId(
           rawMemberScopedRepoRecord,
