@@ -29,9 +29,9 @@ Member 不建立第二套 identity。一个 Member 以 Core `EntityPublicKey` �
 
 ## Repo 建立、ownership 与操作留痕
 
-一个有效 Member 可以建立 Repo。Repo 本身同样以 Core Entity identity 为身份锚点，并通过 Repo 及其他协议组合形成完整仓库能力。
+一个有效 Member 可以作为 owner 发起 Repo 建立。Repo 本身同样以 Core Entity identity 为身份锚点，并通过 Repo 及其他协议组合形成完整仓库能力。
 
-集体 Repo 可以使用与 establishing Member 不同的 Entity identity。establishment 必须能够明确关联 establishing Member 与 Repo identity，并把 establishing Member 留作该 Repo 的初始 owner。
+Repo establishment 必须由 Repo identity 自己签名，从而证明建立事实确实由该 Repo key 授权；签名数据中的 `owner: EntityPublicKey` 指向初始 owner，且该 owner 必须满足 Member capability。集体 Repo 可以使用与 owner 不同的 Entity identity；Member-scoped Repo 也可以让 Repo identity 与 owner 使用同一 Entity identity/keypair。
 
 Repo ownership 只描述 Repo identity 的建立、控制与责任来源，不表示 owner 自动拥有 Repo 中的 Asset、劳动成果、排他权、转让权或收益权。
 
@@ -98,15 +98,15 @@ Repository 的正常运行路径负责尽早检查 Protocol 语义、维护关�
 
 Block packing 与 peer validation 后续实现时必须满足：
 
-- Block Header 记录打包时 Repo 实际采用的 Protocol composition，并提交能够精确绑定对应 Protocol implementations / artifacts 的 hashes；
-- 验证节点能够根据 Header 获取或解析 exact Protocol implementations，重新计算对应 hashes，而不是使用本地 `latest` 猜测历史语义；
+- 下一版 Core Block Header 使用 `vroot` 提交由 Block Records 直接引用的 `(protocol, protocolHash)` 唯一集合；`vroot` 由 Records 确定性提取、去重、排序、JCS 编码并 DoubleSHA256 得到，不另设 ValidationManifest；
+- 验证节点从 Block 实际 Records 取得 exact `ProtocolHash`，核对 `vroot` 后解析并验证对应 Protocol implementations，而不是使用本地 `latest` 猜测历史语义；
 - 验证节点针对 Block 中实际包含的 Records 重新执行 Record、signature、Protocol 及关系验证，不信任生产节点的本地 validation 结果；
 - Block 内相关 Records 按各自 Protocol 形成的生产关系 tree / forest 或其他明确依赖关系必须能够被重建并验证为自洽；
 - 只有完成这些独立验证并接受 Block 后，相关事实才获得该链上的确证状态。
 
 在 Block 被接受之前，Repository 可以继续修改其本地 candidate set：替换、追加或放弃待打包事实都属于 Runtime 行为。一个具体的签名 Record 仍受其 RecordId 与 signature 约束；如果修改了该 Record 的签名覆盖内容，修改后的值必须重新满足对应的 RecordId / signature 规则，不能沿用原 Record 身份冒充同一事实。
 
-当前 MVP 不要求实现通用加密 VM、智能合约虚拟机或可信执行环境来证明 Repo Runtime 按某一固定过程运行。链级验证针对最终 Block 内容及其声明的 Protocol composition。
+当前 MVP 不要求实现通用加密 VM、智能合约虚拟机或可信执行环境来证明 Repo Runtime 按某一固定过程运行。链级验证针对最终 Block 内容、由其 Records 派生并由 Header `vroot` 承诺的验证语义根，以及这些 Records 在 exact Protocol semantics 下的关系。
 
 ## 持久性与恢复
 
