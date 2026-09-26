@@ -110,10 +110,10 @@ Durable Record ingress / journal
     -> 不宣称这些 Records 已经被链确证
 
 Runtime Record database
-    -> 在同一 Repository Runtime 写入边界内执行适用 Protocol 的关系验证
-    -> 维护已验证 Record 的关系、顺序/依赖和 pending packing state
-    -> 为后续关系验证、追溯与 Block packing 提供运行状态
-    -> 可由 durable Records + exact Protocol semantics 重建/对账
+    -> 提供同一 Repository Runtime 的 serialized Record ingress boundary
+    -> 复用 journal 的 exact Record durability
+    -> 具体关系、顺序/依赖和 pending packing state 由首个实际 Protocol consumer 定义
+    -> 不预设通用关系 schema、查询语言或状态容器
     -> 不是 canonical chain state
 
 Chain-state / Block-confirmation access
@@ -122,7 +122,7 @@ Chain-state / Block-confirmation access
     -> 用于状态升级、对账和 projection rebuild
 ```
 
-三者可以由同一个未来 node/runtime 实现，也可以作为不同 Cordis providers 组合；Architecture 不锁定 package、数据库或网络实现。当前 Runtime Record database 只需要一个最小共享写入边界和按 Protocol 隔离的关系状态，不预设通用 DAG schema、SQL 模型或 packer API。
+三者可以由同一个未来 node/runtime 实现，也可以作为不同 Cordis providers 组合；Architecture 不锁定 package、数据库或网络实现。当前 Runtime Record database 只实现最小共享写入边界；待 #9 出现第一个具体 contribution relation consumer 时，再按实际需要定义最小关系状态，不预设通用 DAG schema、SQL 模型、namespace state framework 或 packer API。
 
 Repository 领域插件消费这些运行能力，但不通过 `repo.records[]` 或第二套链来替代 Core Block / canonical-chain 语义。
 
@@ -147,27 +147,31 @@ candidate set before Block confirmation
 
 因此 Repository 的本地 validation 主要服务于正常节点的运行自洽、恢复、关系维护和打包准备。它可以尽早拒绝明显非法的事实，但 peer node 不信任生产节点已经执行过这些检查，也不把 Runtime database、journal、snapshot 或本地 plugin 执行结果作为链级证明。
 
-当 Block packing 能力实现后，每个 Block 的 Header 必须提交该 Block 打包时 Repository 实际采用的 Protocol composition，并包含能够精确绑定这些 Protocol implementations / artifacts 的 hashes。具体 Header 字段和 manifest 编码留给 Block/packing Spec；Architecture 固定的是验证原则：
+当下一版 Core Block packing 能力实现后，Header 只增加由 Records 自身确定性派生的 `vroot`。Block 不保存第二份 ValidationManifest，也不在 Header 重复列出 Runtime plugin / Protocol composition：
 
 ```text
-Block
-├─ Header
-│  └─ Repo Protocol composition + exact hashes
-└─ Records
-       ↓
+Block.records[]
+    -> extract (protocol, protocolHash)
+    -> reject same protocol / different hash ambiguity
+    -> deduplicate
+    -> canonical sort
+    -> JCS
+    -> DoubleSHA256
+    -> Header.vroot
+
 Peer validator
-├─ 取得 Header 声明的 exact Protocol implementations
-├─ 重新计算并核对对应 hashes
-├─ 独立验证 Block 中实际包含的 Records
-├─ 按这些 Protocol 解释并验证 Record 关系
-└─ 验证通过后才接受该 Block
+    -> L0: recompute recordsRoot + vroot and verify Block signature
+    -> L1: read exact ProtocolHash values from actual Records
+    -> resolve / verify exact Protocol implementations and dependencies
+    -> independently validate Record semantics and Protocol-defined relations
+    -> accept Block only after validation succeeds
 ```
 
 Peer validation 不依赖生产节点之前使用了什么内存对象、snapshot 或执行路径，而只依赖 Block 实际提交的数据及其绑定的验证语义。当前 LabourChain 不要求像通用智能合约平台那样建立一套加密虚拟机或把所有 Repository 执行过程复制到链上；需要重放的是对应 Protocol 对 Block 内容及关系的确定性验证。
 
-Block 内的 Records 可以按照适用 Protocol 建立一个或多个有逻辑的生产关系结构。劳动与 Asset 的输入/输出关系自然形成 tree / forest，必要时可表现为更一般的依赖图；Block validation 必须确认这些关系在 Header 所提交的 Protocol composition 下自洽。Repo ownership、decision operator 等非生产因果事实不因此被强行塞入同一棵生产树，也不重新引入 `previous` 链。
+Block 内的 Records 可以按照适用 Protocol 建立一个或多个有逻辑的生产关系结构。劳动与 Asset 的输入/输出关系自然形成 tree / forest，必要时可表现为更一般的依赖图；L1 validation 必须使用 Records 直接引用的 exact Protocol semantics 重建并验证这些关系。Repo ownership、decision operator 等非生产因果事实不因此被强行塞入同一棵生产树，也不重新引入 `previous` 链。
 
-当前 Repository MVP 只建立支持未来打包所需的 Runtime 边界，不实现完整 Block packer、Protocol-composition Header 编码、peer validator、节点同步或共识。
+当前 Repository MVP 只建立支持未来打包所需的 Runtime 边界，不实现完整 Block packer、`vroot` Core contract、peer validator、节点同步或共识。
 
 ## Repository 与其他 LabourChain 组件
 
@@ -239,17 +243,14 @@ MVP 的 Repo establishment 使用一个 establishment Record 表达最小事实�
 
 ```text
 Record.createdBy
-= establishing Member identity
-
-Repo establishment Protocol interpretation:
-Record.createdBy
-= initial Repo owner
-
-Record.data.repo
 = Repo EntityPublicKey
+= signature authority for establishment
+
+Record.data.owner
+= initial owner Member EntityPublicKey
 ```
 
-`Record.createdBy` 本身不普遍等于 owner；是 Repo establishment Protocol 为这一类 Record 赋予初始 Repo ownership 语义。这里的 ownership 只描述 Repo identity 的建立、控制与责任来源，不表示 owner 拥有 Repo 中的 Asset 或劳动成果。Core `Entity.introducedBy` 也不用于表达 ownership、operator 或组织成员关系。
+Repo establishment 由 Repo key 自签，因此建立事实能够证明对应 Repo identity 的 key participation；初始 owner 来自该 Repo-signed Record 的 `data.owner`。这里的 ownership 只描述 Repo identity 的建立、控制与责任来源，不表示 owner 拥有 Repo 中的 Asset 或劳动成果。Core `Entity.introducedBy` 也不用于表达 ownership、operator 或组织成员关系。
 
 Repo 后续采取需要链上留痕的决定时，决定 Record 由 Repo identity 的 private key 签名，并在该 Protocol 的签名 payload / data 中标注实际 `operator: EntityPublicKey`。operator 是单次行为的责任留痕，不是持久角色、membership、ACL 或组织授权证明。谁可以操作 Repo key、owner 如何变更、多人如何治理属于后续组织治理层。
 
@@ -271,7 +272,7 @@ block-confirmed
 
 ```mermaid
 sequenceDiagram
-    participant Member as Member / Client
+    participant Owner as Owner Member / Client
     participant Cordis as Cordis
     participant MemberProtocol as Member Protocol capability
     participant Repo as Repo Protocol capability
@@ -279,16 +280,16 @@ sequenceDiagram
     participant Index as Runtime Repo index
     participant Chain as Chain-state adapter
 
-    Member->>Cordis: establish Repo
-    Cordis->>MemberProtocol: require establishing Member
-    MemberProtocol-->>Cordis: valid Member identity
+    Owner->>Cordis: submit Repo-signed establishment
+    Cordis->>MemberProtocol: require owner Member
+    MemberProtocol-->>Cordis: valid owner identity
     Cordis->>Repo: validate establishment Record
     Repo->>Journal: durably accept establishment Record
     Journal-->>Repo: accepted RecordId
     Repo->>Index: index Repo identity -> RecordId
-    Repo-->>Member: Repo established
+    Repo-->>Owner: Repo established
 
-    Member->>Cordis: load Repo identity
+    Owner->>Cordis: load Repo identity
     Cordis->>Repo: resolve Repo
     Repo->>Index: lookup RecordId
     Repo->>Journal: read accepted establishment Record
@@ -297,10 +298,10 @@ sequenceDiagram
         Repo->>Chain: lookup RecordId inclusion
         Chain-->>Repo: pending or block-confirmed
     end
-    Repo-->>Member: Repo + derived owner/status
+    Repo-->>Owner: Repo + owner/status
 ```
 
-Runtime Repo index 只是加速 lookup 的可替换数据。initial owner 来自 establishment Protocol 对 establishment Record `createdBy` 的解释。缺失或陈旧的 index 不能创造第二个 owner；index 可以通过 durable journal，以及在可用时通过 chain state 重新对账。
+Runtime Repo index 只是加速 lookup 的可替换数据。initial owner 来自 Repo-signed establishment Record 的 `data.owner`。缺失或陈旧的 index 不能创造第二个 owner；index 可以通过 durable journal，以及在可用时通过 chain state 重新对账。
 
 ## Contribution 数据流
 
@@ -335,7 +336,7 @@ sequenceDiagram
     Chain-->>Protocol: block-confirmed status only after accepted-chain evidence includes the Records
 ```
 
-Contribution 的协议语义由对应 Protocol 定义；其 implementation 由 Cordis 负责运行，不额外引入一个把状态机写死的 Repository Runner。Repository Runtime 需要维护一层领域感知的 Record database，用于保存已验证的 Record 关系、顺序/依赖和待打包集合，并作为后续关系验证与 Block packing 的运行时输入。Record ingress/journal、Runtime Record database 与 chain-state access 是三个不同职责：journal 保存 exact accepted Records；Runtime Record database 维护协议验证后的关系状态；chain state 回答已收录 Block 的链确证状态。Runtime Record database 不是第二条 blockchain，也不取代 Core Block / canonical-chain 语义。
+Contribution 的协议语义由对应 Protocol 定义；其 implementation 由 Cordis 负责运行，不额外引入一个把状态机写死的 Repository Runner。Record ingress/journal、Runtime Record database 与 chain-state access 是三个不同职责：journal 保存 exact accepted Records；当前 Runtime Record database 提供共享 serialized ingress boundary；#9 出现首个具体 relation consumer 后，再由相应 Protocol 定义实际需要维护的关系、顺序/依赖和待打包状态；chain state 回答已收录 Block 的链确证状态。Runtime Record database 不是第二条 blockchain，也不取代 Core Block / canonical-chain 语义。
 
 ## Contribution 状态
 
