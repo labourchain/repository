@@ -23,7 +23,7 @@ export interface RepoEstablishmentMountConfig {
 
 export interface RepoView {
   readonly identity: string
-  readonly owner: string
+  readonly createdBy: string
   readonly establishmentRecordId: string
 }
 
@@ -48,15 +48,15 @@ export class RepoEstablishmentError extends RepoError {
   }
 }
 
-export class RepoOwnerMemberError extends RepoError {
+export class RepoEstablishingMemberError extends RepoError {
   readonly identity: string
 
   constructor(identity: string, options?: ErrorOptions) {
     super(
-      'Repo owner does not satisfy the Member capability: ' + identity,
+      'Repo establishment author does not satisfy the Member capability: ' + identity,
       options,
     )
-    this.name = 'RepoOwnerMemberError'
+    this.name = 'RepoEstablishingMemberError'
     this.identity = identity
   }
 }
@@ -107,48 +107,45 @@ function requireProtocolHash(config: RepoEstablishmentMountConfig): string {
   return config.protocolHash
 }
 
-function requireOwnerPayload(value: unknown): unknown {
+function requireRepoIdentityPayload(value: unknown): unknown {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new RepoEstablishmentError(
-      'repo.establishment data must be a plain object containing only owner.',
+      'repo.establishment data must be a plain object containing only publicKey.',
     )
   }
 
   const prototype = Object.getPrototypeOf(value)
   if (prototype !== Object.prototype && prototype !== null) {
     throw new RepoEstablishmentError(
-      'repo.establishment data must be a plain object containing only owner.',
+      'repo.establishment data must be a plain object containing only publicKey.',
     )
   }
 
   const keys = Reflect.ownKeys(value)
   if (
     keys.length !== 1 ||
-    keys[0] !== 'owner' ||
-    !Object.prototype.propertyIsEnumerable.call(value, 'owner')
+    keys[0] !== 'publicKey' ||
+    !Object.prototype.propertyIsEnumerable.call(value, 'publicKey')
   ) {
     throw new RepoEstablishmentError(
-      'repo.establishment data must contain exactly one enumerable owner field.',
+      'repo.establishment data must contain exactly one enumerable publicKey field.',
     )
   }
 
-  const descriptor = Object.getOwnPropertyDescriptor(value, 'owner')
+  const descriptor = Object.getOwnPropertyDescriptor(value, 'publicKey')
   if (!descriptor || !('value' in descriptor)) {
     throw new RepoEstablishmentError(
-      'repo.establishment data.owner must be an enumerable data property.',
+      'repo.establishment data.publicKey must be an enumerable data property.',
     )
   }
 
   return descriptor.value
 }
 
-function repoView(
-  record: CoreRecordValue,
-  owner: string,
-): RepoView {
+function repoView(record: CoreRecordValue, identity: string): RepoView {
   return Object.freeze({
-    identity: record.createdBy,
-    owner,
+    identity,
+    createdBy: record.createdBy,
     establishmentRecordId: record.id,
   })
 }
@@ -196,7 +193,7 @@ export class RepoEstablishmentService {
 
   async establishRepo(value: unknown): Promise<RepoView> {
     return this.ctx.recordJournal.runExclusive(async (journal) => {
-      // Owner-Member validation, Repo singularity validation and durable
+      // Creator-Member validation, Repo singularity validation and durable
       // publication share the journal mutation gate. Raw same-process journal
       // acceptance therefore cannot interleave between check and publish.
       const validated = await this.validateEstablishment(value)
@@ -218,7 +215,7 @@ export class RepoEstablishmentService {
       await journal.accept(validated.record)
       this.establishments.set(validated.repoIdentity, validated.record.id)
 
-      return repoView(validated.record, validated.owner)
+      return repoView(validated.record, validated.repoIdentity)
     })
   }
 
@@ -244,7 +241,7 @@ export class RepoEstablishmentService {
       )
     }
 
-    return repoView(validated.record, validated.owner)
+    return repoView(validated.record, validated.repoIdentity)
   }
 
   private isCandidate(value: JournalRecord): boolean {
@@ -272,7 +269,7 @@ export class RepoEstablishmentService {
 
   private async validateEstablishment(
     value: unknown,
-  ): Promise<{ record: CoreRecordValue; repoIdentity: string; owner: string }> {
+  ): Promise<{ record: CoreRecordValue; repoIdentity: string }> {
     let record: CoreRecordValue
     try {
       record = this.ctx[CORE_RECORD_PROTOCOL_SERVICE].validateRecord(value)
@@ -312,30 +309,19 @@ export class RepoEstablishmentService {
       )
     }
 
-    const repoIdentity = this.validateRepoIdentity(record.createdBy)
-    const ownerValue = requireOwnerPayload(record.data)
-    let owner: string
-    try {
-      owner = this.ctx[CORE_ENTITY_PROTOCOL_SERVICE].validateEntityPublicKey(
-        ownerValue,
-      )
-    } catch (cause) {
-      throw new RepoEstablishmentError(
-        'Repo owner is not a valid Core EntityPublicKey.',
-        { cause },
-      )
-    }
+    const payloadPublicKey = requireRepoIdentityPayload(record.data)
+    const repoIdentity = this.validateRepoIdentity(payloadPublicKey)
 
     try {
-      await this.ctx[MEMBER_PROTOCOL_SERVICE].requireMember(owner)
+      await this.ctx[MEMBER_PROTOCOL_SERVICE].requireMember(record.createdBy)
     } catch (cause) {
       if (cause instanceof MemberNotFoundError) {
-        throw new RepoOwnerMemberError(owner, { cause })
+        throw new RepoEstablishingMemberError(record.createdBy, { cause })
       }
       throw cause
     }
 
-    return { record, repoIdentity, owner }
+    return { record, repoIdentity }
   }
 }
 
