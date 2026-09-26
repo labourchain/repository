@@ -15,7 +15,7 @@ The Specs are engineering projections of the current Requirements and Architectu
 | --- | --- |
 | [`bootstrap.md`](./bootstrap.md) | executable bootstrap and Cordis runtime integration |
 | [`member.md`](./member.md) | human Member identity capability over Core Entity identity |
-| [`repo.md`](./repo.md) | Repo establishment, stable identity, ownership, operator trace and loading |
+| [`repo.md`](./repo.md) | Repo establishment, stable identity, creation provenance, operator trace and loading |
 | [`protocol-resolution.md`](./protocol-resolution.md) | exact ProtocolHash / verified artifact resolution |
 | [`contribution.md`](./contribution.md) | Asset contribution, confirmation, Repository commit, staging and recovery |
 | [`asset-storage.md`](./asset-storage.md) | durable preservation and retrieval of accepted Assets |
@@ -60,7 +60,7 @@ Member and Repo do not create separate identity namespaces. Both are protocol co
 
 `Member` is the program/protocol term for a human participant. `Worker` remains a conceptual labour-subject term where useful and must not be confused with runtime/process worker types.
 
-A Member may compose Repo capability on the same Entity identity/keypair. Repo establishment may identify that Member as the Repo owner, but this does not itself define ownership of Assets, labour results, private-property status or economic rights.
+A Member may compose Repo capability on the same Entity identity/keypair. Repo establishment records who created the Repo identity fact, but this does not define ownership of the Repo, Assets, labour results, private-property status or economic rights.
 
 ### Repo contributors are a derived/product view
 
@@ -85,7 +85,7 @@ Before Block confirmation, a node may replace, add or discard candidate Records.
 
 When the next Core Block contract is implemented, the Header carries a `vroot` deterministically derived from the Block Records' direct `(protocol, protocolHash)` references. There is no separate ValidationManifest or Header-level plugin list. Peer validation recomputes `vroot` from the actual Records, then L1 resolves those exact ProtocolHashes and validates the Records and their Protocol-defined relationships independently of the producer's Runtime state.
 
-Records in one Block may form one or more Protocol-defined production trees / forests or other explicit dependency structures. The validator must validate those relationships as part of Block validity. Repo ownership and decision-operator facts are not production-causality edges and do not require every fact type to participate in one global DAG.
+Records in one Block may form one or more Protocol-defined production trees / forests or other explicit dependency structures. The validator must validate those relationships as part of Block validity. Repo creation-provenance and decision-operator facts are not production-causality edges and do not require every fact type to participate in one global DAG.
 
 The MVP does not require a general smart-contract VM, trusted execution environment, full Block packer, peer validator, synchronization or consensus implementation. It only preserves the Runtime and Protocol boundaries those later capabilities will consume.
 
@@ -191,10 +191,10 @@ chain-state / Block-confirmation access
 
 repo
   -> uses Core EntityPublicKey + Member capability + establishment Record
-  -> requires the Repo identity to sign its own establishment Record
-  -> requires Record.data.owner to be a Member
+  -> requires Record.createdBy to be a Member creator
+  -> requires Record.data.publicKey to be the Repo identity being created
   -> persists accepted establishment Record through durable ingress
-  -> derives initial owner from the signed Record.data.owner
+  -> retains creator provenance from Record.createdBy
 
 protocol-resolution
   -> resolves exact historical Protocol implementations
@@ -229,7 +229,7 @@ Implementation must:
 - keep concrete database, filesystem and transport choices behind Runtime/plugin boundaries;
 - avoid process-global mutable Repository state;
 - acquire and dispose plugin-owned resources through Cordis lifecycle ownership;
-- keep Repo ownership limited to Repo identity control/responsibility and avoid prematurely introducing Asset/property-right semantics, organization governance, complex ACL, search, synchronization, consensus, settlement or private-proof systems.
+- do not infer Repo ownership from establishment; avoid prematurely introducing property-right semantics, organization governance, complex ACL, search, synchronization, consensus, settlement or private-proof systems.
 
 Exact TypeScript names, package names, metadata field names, database schemas, HTTP routes and UI are not fixed by the MVP Specs unless a later accepted Requirement or Architecture decision requires them.
 
@@ -239,7 +239,7 @@ In addition to the acceptance tests defined by each capability Spec, the MVP int
 
 1. a Repository node can start with its configured Cordis plugins;
 2. a Core Entity identity can satisfy the Member capability without receiving a second Member ID;
-3. a valid Member can establish a Repo from an exact establishment Record and reload it after restart;
+3. a valid Member can create a Repo identity fact from an exact establishment Record and reload that Repo after restart;
 4. the same Entity identity may compose Member + Repo capability without creating a second keypair or implying Asset/labour property rights;
 5. a labour / Asset contribution resolves and verifies the exact required ProtocolHash / implementation artifacts;
 6. valid confirmations, durable Record ingress and durable Asset retrieval produce Repository `COMMITTED` / accepted state;
