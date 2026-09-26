@@ -10,7 +10,7 @@ Repository MVP 包括：
 
 - 最小 Member 协议能力，用于识别人类参与者；
 - Repo 的建立、身份和重新加载；
-- Repo ownership 与 Repo decision operator 留痕；
+- Repo creation provenance 与 Repo decision operator 留痕；
 - Asset contribution；
 - Repo 侧劳动确证；
 - 已接受 Asset 的持久保存与读取；
