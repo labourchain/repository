@@ -99,9 +99,9 @@ Block production and peer validation are later chain steps. A `COMMITTED` contri
 
 Repository validation is the normal producer path for forming a coherent pending state. It is useful for early rejection, recovery, relation maintenance and future Block packing, but it is not a chain-level proof that other nodes must trust.
 
-A future peer validator must validate the actual Records in a candidate Block against the exact Protocol composition committed by that Block. It must not rely on the producer's earlier Repository validation result or Runtime Snapshot.
+A future peer validator must recompute the Block's Record-derived `vroot`, resolve exact ProtocolHashes from the actual Records, and validate those Records under the resulting exact semantics. It must not rely on the producer's earlier Repository validation result or Runtime Snapshot.
 
-This Story therefore keeps the Runtime Record database coherent for normal operation without trying to turn Repository into a trusted execution environment or general smart-contract VM.
+The Runtime Record database currently supplies only the shared serialized ingress boundary. This Story may add the first concrete Protocol-owned relation state when its actual contribution model requires it; it must not pre-invent a generic state framework or turn Repository into a trusted execution environment.
 
 ## Durable Record ingress
 
@@ -157,7 +157,7 @@ The implementation must satisfy these invariants:
 - if the Records are durable but Asset finalization was incomplete, recovery can finish/reconcile Asset persistence before exposing `COMMITTED`;
 - if the Asset is durable but required Record acceptance failed, recovery does not invent `COMMITTED`;
 - retrying recovery does not create duplicate singular confirmations or duplicate accepted Asset finalization;
-- Runtime relationship state and Snapshot/cache state may be rebuilt from durable facts and exact Protocol semantics rather than treated as independent acceptance truth;
+- any concrete Runtime relationship state introduced by the contribution implementation and any Snapshot/cache state remain rebuildable from durable facts and exact Protocol semantics rather than independent acceptance truth;
 - staging cleanup may occur after commit, but cleanup failure does not make a committed contribution appear uncommitted;
 - later accepted Block inclusion can upgrade/display chain-confirmation status without changing the Repository acceptance fact.
 
@@ -169,7 +169,7 @@ This Spec does not require a particular database transaction model, staging sche
 
 Core supplies deterministic Protocol, Entity, Record and Block primitives. Protocol-defined Repository validity and confirmation semantics come from exact verified LabourChain Protocol implementations plus Core primitives.
 
-Durable pre-pack Record acceptance comes from a Runtime/composition Record journal and relationship validation state comes from the Repository Runtime Record database. Chain inclusion status, when needed, comes from a chain-state / accepted-Block capability. These responsibilities may later share one node-runtime implementation, but their semantics remain distinct.
+Durable pre-pack Record acceptance comes from a Runtime/composition Record journal. The Repository Runtime Record database provides the shared serialized ingress boundary; concrete relation state is introduced only by the Protocol consumer that needs it. Chain inclusion status, when needed, comes from a chain-state / accepted-Block capability. These responsibilities may later share one node-runtime implementation, but their semantics remain distinct.
 
 Repository does not implement Block packing, peer validation, consensus or synchronization in this Story.
 
