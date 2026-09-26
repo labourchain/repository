@@ -33,18 +33,18 @@ Core `Entity.introducedBy` is not the Repo ownership or operator-trace relation.
 
 ## Member dependency
 
-A Repo establishment actor must satisfy the Member capability defined in [`member.md`](./member.md).
+The initial Repo owner must satisfy the Member capability defined in [`member.md`](./member.md).
 
 `Member` is the human-participant protocol/implementation term. `Worker` may still describe the labour subject conceptually, but Repo APIs must not accept a generic runtime/process worker merely because of naming overlap.
 
-Repo establishment therefore depends on two distinct identities/capabilities:
+Repo establishment therefore relates two distinct identities/capabilities:
 
 ```text
-establishing Member
+owner
     = Entity identity satisfying Member protocol
 
 Repo
-    = Entity identity receiving Repo protocol semantics
+    = Entity identity that signs its own establishment Record
 ```
 
 For a collective Repo these identities may differ. For a Member-scoped Repo they may be the same Entity identity/keypair.
@@ -65,40 +65,37 @@ The minimum establishment payload is equivalent to:
 
 ```ts
 interface RepoEstablishment {
-  repo: EntityPublicKey
+  owner: EntityPublicKey
 }
 ```
 
-The enclosing Record supplies the actor source:
+The enclosing Record supplies and proves the Repo identity:
 
 ```text
 Record.createdBy
-= establishing Member identity
-
-Repo establishment protocol interpretation:
-Record.createdBy
-= initial Repo owner
-
-Record.data.repo
 = stable Repo EntityPublicKey
+= signature authority for establishment
+
+Record.data.owner
+= initial Repo owner Member EntityPublicKey
 ```
 
-`Record.createdBy` does not universally mean owner. The Repo establishment Protocol assigns that domain meaning for this Record type.
+The establishment Record is signed by the Repo identity itself. This proves participation of the Repo key in the establishment fact without introducing a second Repo identity field in the payload.
 
-The owner is not duplicated inside `Record.data`. The establishment Record is the domain source for the initial Repo ownership relationship. Repo ownership here means control / responsibility for the Repo identity; it does not imply ownership of Assets or labour results stored by the Repo.
+The Repo-signed establishment Record is the domain source for the initial Repo ownership relationship. Repo ownership here means control / responsibility for the Repo identity; it does not imply ownership of Assets or labour results stored by the Repo.
 
 This Spec does not define the generic historical Protocol loader/resolver. Story #5 only consumes the Host-mounted exact `repo.establishment@0.1.0` implementation and its verified ProtocolHash.
 
 ## Establishment
 
-Any valid Member may establish a Repo.
+Any valid Member may be designated as the initial owner of a Repo.
 
 Repo establishment must:
 
-- require the establishing identity to satisfy the Member capability;
-- accept or obtain a valid Core `EntityPublicKey` for the Repo;
-- validate an establishment Record whose `createdBy` is the establishing Member and whose payload names the Repo identity;
-- interpret that Member as the initial Repo owner under Repo establishment Protocol semantics;
+- require `Record.data.owner` to identify an Entity satisfying the Member capability;
+- require `Record.createdBy` to be a valid Core `EntityPublicKey` for the Repo;
+- verify the establishment Record signature against that Repo identity;
+- interpret the signed `data.owner` value as the initial Repo owner under Repo establishment Protocol semantics;
 - durably accept the establishment Record into the configured Record ingress/journal before reporting the Repo established;
 - make the established Repo loadable again by its stable identity after restart;
 - fail on a conflicting already-accepted or already-chain-confirmed establishment of the same Repo identity rather than silently replacing its owner;
@@ -111,7 +108,7 @@ establishRepo(establishmentRecord)
 loadRepo(repoIdentity)
 ```
 
-A higher-level caller/signer may construct and sign the establishment Record from a Member identity and Repo identity. Signing UX, secret-key custody and key generation are outside this capability.
+A higher-level caller may construct the establishment Record after obtaining/generating the Repo identity and selecting an owner Member. The establishment Record itself must be signed by the Repo private key. Signing UX, secret-key custody and key generation are outside this capability.
 
 ## Same-identity Member Repo
 
@@ -131,7 +128,7 @@ LabourFlow may build a personal product experience on top of this generic compos
 
 ## Ownership and operator trace
 
-The initial Repo owner is the Member recorded as `createdBy` on the Repo establishment Record under the establishment Protocol semantics.
+The initial Repo owner is the Member recorded as `data.owner` on the Repo-signed establishment Record under the establishment Protocol semantics.
 
 Only this initial ownership source is defined in the MVP. There is no provider-owned mutable owner row that can override the establishment Record. Owner transfer, multi-owner control, organization authorization and governance are deferred until an organization/governance requirement exists.
 
@@ -247,10 +244,10 @@ Tests must demonstrate that:
 
 - a valid Member can establish a Repo whose identity is a Core `EntityPublicKey`;
 - a generic/non-Member Entity identity cannot establish a Repo through the human Member path;
-- the establishment Record's `createdBy` is interpreted by the Repo establishment Protocol as the initial Repo owner;
+- the establishment Record's `createdBy` is the Repo identity and its signature verifies with that identity;
 - the exact establishment Record is durably accepted before establishment succeeds;
 - the same Repo can be loaded again by stable identity after restart;
-- Repo identity and owner can be recovered from the durable Record journal even if the lookup index is rebuilt;
+- Repo identity and the `data.owner` Member can be recovered from the durable Record journal even if the lookup index is rebuilt;
 - a conflicting second establishment of the same Repo identity is rejected;
 - stale/missing Runtime index state cannot replace the establishment Record as the domain source;
 - provider-native storage identifiers do not replace Repo identity;
