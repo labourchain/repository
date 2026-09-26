@@ -83,7 +83,7 @@ Repository Runtime is the normal production path for validating, relating, retai
 
 Before Block confirmation, a node may replace, add or discard candidate Records. A specific signed Record remains bound by its RecordId and signature; changing signed content requires a value that independently satisfies the corresponding Record identity and signature rules.
 
-When Block packing is implemented, each Block Header must commit the Repo Protocol composition used for that Block together with exact hashes that bind the corresponding Protocol implementations / artifacts. Peer validation must resolve those exact implementations, recompute the committed hashes, and validate the actual Block contents and their Protocol-defined relationships independently of the producer's Runtime state.
+When the next Core Block contract is implemented, the Header carries a `vroot` deterministically derived from the Block Records' direct `(protocol, protocolHash)` references. There is no separate ValidationManifest or Header-level plugin list. Peer validation recomputes `vroot` from the actual Records, then L1 resolves those exact ProtocolHashes and validates the Records and their Protocol-defined relationships independently of the producer's Runtime state.
 
 Records in one Block may form one or more Protocol-defined production trees / forests or other explicit dependency structures. The validator must validate those relationships as part of Block validity. Repo ownership and decision-operator facts are not production-causality edges and do not require every fact type to participate in one global DAG.
 
@@ -181,8 +181,8 @@ durable Record ingress / journal
 Runtime Record database
   -> Runtime/composition dependency
   -> serializes validated Repository Record ingress in one node
-  -> maintains Protocol-owned relationship state for validation and later packing
   -> delegates exact Record durability to the journal
+  -> does not define generic relationship state before the first concrete consumer
 
 chain-state / Block-confirmation access
   -> Runtime/composition dependency
@@ -190,9 +190,10 @@ chain-state / Block-confirmation access
 
 repo
   -> uses Core EntityPublicKey + Member capability + establishment Record
-  -> requires establishment actor to be a Member
+  -> requires the Repo identity to sign its own establishment Record
+  -> requires Record.data.owner to be a Member
   -> persists accepted establishment Record through durable ingress
-  -> derives initial owner from establishment Protocol interpretation of Record.createdBy
+  -> derives initial owner from the signed Record.data.owner
 
 protocol-resolution
   -> resolves exact historical Protocol implementations
@@ -219,8 +220,8 @@ Implementation must:
 - reuse Core Protocol, Entity, Record, signature and Block semantics rather than duplicating them;
 - treat Member and Repo as protocol-composed identities, not fixed provider-owned object schemas;
 - persist exact accepted Records through an explicit Runtime/composition dependency rather than a Repository-domain `records[]` model;
-- maintain protocol-validated Record relationships and pending packing state in a Repository Runtime database capability, without turning that database into a second blockchain or canonical-chain authority;
-- treat Repository Runtime validation as the normal producer path rather than a chain trust root; peer validation of a future Block must independently verify the Block's actual Records against the exact Protocol composition and hashes committed by that Block;
+- use the Repository Runtime database as the serialized ingress boundary; concrete Protocol-owned relationship / pending-packing state is added only when a real consumer such as #9 requires it, without turning that runtime state into a second blockchain or canonical-chain authority;
+- treat Repository Runtime validation as the normal producer path rather than a chain trust root; peer validation of a future Block must recompute the Record-derived `vroot`, resolve exact ProtocolHashes from the actual Records, and independently validate their semantics and relations;
 - keep Repo fact evolution in Record + Patch history while treating Snapshot only as rebuildable Runtime materialization;
 - distinguish durable pending-chain acceptance from actual Block confirmation;
 - fail closed when required durable ingress, Core primitive or exact ProtocolHash / verified implementation is unavailable;
