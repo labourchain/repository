@@ -100,7 +100,7 @@ This Spec does not define:
 - Core Entity registration/admission;
 - proof that a self-declared Member is biologically or legally human;
 - profile UX or a complete `member.profile` schema;
-- Repo membership mutation;
+- Repo contributor grouping, organization membership or governance;
 - private-property ownership;
 - key generation or secret-key custody;
 - generic ACL or social-network features.
@@ -119,4 +119,4 @@ Tests must demonstrate that:
 - profile data is not required to identify the Member itself;
 - the same Entity identity can compose Member and Repo capabilities;
 - same-identity Member/Repo composition does not create ownership/private-property semantics;
-- Repo establishment can require and validate the establishing Member capability without duplicating Core identity rules.
+- Repo establishment can require and validate the `data.owner` Member capability while the Repo identity signs its own establishment Record, without duplicating Core identity rules.

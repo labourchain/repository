@@ -142,10 +142,17 @@ export class MemberIdentityService {
   }
 
   async declareMember(record: unknown): Promise<MemberView> {
-    const validated = this.validateDeclaration(record)
-    await this.ctx.recordJournal.accept(validated)
-    this.members.add(validated.createdBy)
-    return memberView(validated.createdBy)
+    return this.ctx.recordJournal.runExclusive(async (journal) => {
+      // Existing durable Member facts, validation of the incoming declaration
+      // and publication share one mutation boundary. A raw same-process journal
+      // write therefore cannot make Member history invalid between reconcile
+      // and durable acceptance.
+      const validated = this.validateDeclaration(record)
+      await this.rebuild()
+      await journal.accept(validated)
+      this.members.add(validated.createdBy)
+      return memberView(validated.createdBy)
+    })
   }
 
   async requireMember(identity: unknown): Promise<MemberView> {
@@ -156,9 +163,10 @@ export class MemberIdentityService {
       throw new MemberDeclarationError('Member identity is not a valid Core EntityPublicKey.', { cause })
     }
 
-    if (!this.members.has(validatedIdentity)) {
-      await this.rebuild()
-    }
+    // Durable Member facts are authoritative. Reconcile before answering even
+    // on a cache hit so newly durable invalid history cannot be hidden by the
+    // replaceable in-memory projection.
+    await this.rebuild()
 
     if (!this.members.has(validatedIdentity)) {
       throw new MemberNotFoundError(validatedIdentity)

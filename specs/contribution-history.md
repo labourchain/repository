@@ -39,23 +39,30 @@ getRecord(record)
 
 solely to support history queries.
 
-The history view derives from two explicit Runtime/chain sources:
+The history view derives from distinct Runtime and chain evidence:
 
 ```text
 durable Record journal
-    -> Repository accepted / pending-chain exact Records
+    -> Repository-accepted Record + Patch facts
 
-chain-state / Block-confirmation adapter
-    -> RecordId inclusion in accepted Blocks
+Contribution relation state / correlation, once defined by #9
+    -> Protocol-validated relationships needed to reconstruct the Repo contribution view
+    -> rebuildable from durable facts + exact Protocol semantics
+
+chain-state / accepted-Block access
+    -> RecordId inclusion in independently accepted Blocks
     -> block-confirmed status and chain position
 ```
 
-Runtime plugins may persist indexes, caches or projections that make history efficient to query. These derived data must:
+The journal alone is not interpreted as a generic ordered history database: relation meaning comes from the exact Protocol semantics and, once #9 defines it, the concrete contribution-relation projection rebuilt from those facts.
 
-- remain distinguishable from the durable journal and Block-confirmation evidence;
-- be repairable or rebuildable from the journal plus available chain state;
+Runtime plugins may persist indexes, caches, projections or Snapshots that make history efficient to query. These derived data must:
+
+- remain distinguishable from the durable Record + Patch facts and Block-confirmation evidence;
+- be repairable or rebuildable from accepted facts plus exact Protocol semantics and available chain state;
 - not silently alter the meaning of Records, Assets, confirmations or relations;
-- not become authoritative merely because they are persisted.
+- not become authoritative merely because they are persisted;
+- never be emitted back into Record history merely to preserve the current materialized view.
 
 ## Query behavior
 
@@ -73,7 +80,7 @@ The exact presentation shape is not fixed, but it must preserve enough identity/
 
 A crash after Repository commit but before projection update must not permanently omit that contribution from history.
 
-The pending/accepted portion of the projection must be repairable from the durable Record journal and contribution correlation/index data.
+The pending/accepted portion of the projection must be repairable from durable Record + Patch facts and the Protocol-defined contribution relationships. Runtime Record-database state and Snapshots may accelerate this reconstruction but are replaceable.
 
 When chain-state access is available, Block-confirmation status must be reconcilable from actual Block inclusion rather than from a stale local flag.
 
@@ -83,7 +90,7 @@ Projection update failure must not roll back or reinterpret an already Repositor
 
 History projection, indexing and query capabilities are normal Cordis plugins or services. Repository does not require a dedicated History Protocol merely because a history view exists.
 
-If the history implementation consumes Protocol-defined facts, historical interpretation must obey [`protocol-resolution.md`](./protocol-resolution.md).
+If the history implementation consumes Protocol-defined facts, historical interpretation must obey [`protocol-resolution.md`](./protocol-resolution.md): the exact `ProtocolHash` / verified artifact governs semantics, not a locally selected `latest` implementation.
 
 ## Failure model
 
@@ -106,7 +113,7 @@ Tests must demonstrate that:
 - a Block-confirmed contribution is distinguishable from pending-chain;
 - missing chain-state access does not cause a pending contribution to be reported as confirmed;
 - history does not require or expose a canonical Repository `records[]` store;
-- persisted projection data remains identifiable as derived data;
+- persisted projection / Snapshot data remains identifiable as derived and rebuildable data;
 - a crash after Repository commit but before projection update can be repaired from durable Runtime state;
 - Block-confirmation status can be reconciled from actual chain state when available;
 - rebuilding or reconciliation does not create duplicate logical history entries;

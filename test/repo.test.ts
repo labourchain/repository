@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { setImmediate as delayImmediate } from 'node:timers/promises'
 import { test } from 'node:test'
 import { Context } from '@deepseek-ai/cordis'
 import { plugin as memberIdentityPlugin } from '../src/protocols/member.identity.ts'
@@ -18,7 +19,7 @@ import {
   RecordJournalService,
   RepoAlreadyEstablishedError,
   RepoEstablishmentError,
-  RepoEstablishingMemberError,
+  RepoOwnerMemberError,
   RepoNotFoundError,
   RepoProtocolConfigError,
   createRepositoryNode,
@@ -101,17 +102,17 @@ function memberRecord(
 function repoRecord(
   id: string,
   repoIdentity = REPO_KEY,
-  createdBy = MEMBER_KEY,
+  owner = MEMBER_KEY,
   overrides: Partial<CoreRecordValue> = {},
 ): CoreRecordValue {
   return {
     id,
     protocol: REPO_ESTABLISHMENT_PROTOCOL_REFERENCE,
     protocolHash: REPO_PROTOCOL_HASH,
-    createdBy,
+    createdBy: repoIdentity,
     createdAt: '2026-09-19T00:00:01.000Z',
     signature: 'valid-signature',
-    data: { repo: repoIdentity },
+    data: { owner },
     ...overrides,
   }
 }
@@ -213,7 +214,7 @@ test('Repo Protocol service follows the Cordis Plugin Fiber lifecycle', async ()
   })
 })
 
-test('a valid Member establishes and loads a Repo from the exact Record', async () => {
+test('a Repo self-authenticates establishment with a valid Member owner', async () => {
   await withDirectory(async (directory) => {
     const node = await createRepositoryNode({ plugins: composition(directory) })
     await declareMember(node)
@@ -228,7 +229,7 @@ test('a valid Member establishes and loads a Repo from the exact Record', async 
 
     assert.deepEqual(established, {
       identity: REPO_KEY,
-      operator: MEMBER_KEY,
+      owner: MEMBER_KEY,
       establishmentRecordId: record.id,
     })
     assert.deepEqual(loaded, established)
@@ -238,7 +239,7 @@ test('a valid Member establishes and loads a Repo from the exact Record', async 
   })
 })
 
-test('Repo identity and initial operator rebuild from durable facts after restart', async () => {
+test('Repo identity and initial owner rebuild from durable facts after restart', async () => {
   await withDirectory(async (directory) => {
     const first = await createRepositoryNode({ plugins: composition(directory) })
     await declareMember(first)
@@ -252,7 +253,7 @@ test('Repo identity and initial operator rebuild from durable facts after restar
       await second.context[REPO_ESTABLISHMENT_PROTOCOL_SERVICE].loadRepo(REPO_KEY),
       {
         identity: REPO_KEY,
-        operator: MEMBER_KEY,
+        owner: MEMBER_KEY,
         establishmentRecordId: record.id,
       },
     )
@@ -261,7 +262,7 @@ test('Repo identity and initial operator rebuild from durable facts after restar
   })
 })
 
-test('a generic Entity that is not a Member cannot establish a Repo', async () => {
+test('a Repo cannot establish with an owner that is not a Member', async () => {
   await withDirectory(async (directory) => {
     const node = await createRepositoryNode({ plugins: composition(directory) })
 
@@ -269,7 +270,7 @@ test('a generic Entity that is not a Member cannot establish a Repo', async () =
       node.context[REPO_ESTABLISHMENT_PROTOCOL_SERVICE].establishRepo(
         repoRecord('repo-non-member', REPO_KEY, NON_MEMBER_KEY),
       ),
-      RepoEstablishingMemberError,
+      RepoOwnerMemberError,
     )
 
     await assert.rejects(
@@ -291,7 +292,7 @@ test('the same Entity identity can compose Member and Repo capability', async ()
       await node.context[REPO_ESTABLISHMENT_PROTOCOL_SERVICE].establishRepo(record),
       {
         identity: MEMBER_KEY,
-        operator: MEMBER_KEY,
+        owner: MEMBER_KEY,
         establishmentRecordId: record.id,
       },
     )
@@ -321,7 +322,7 @@ test('exact establishment replay is idempotent', async () => {
   })
 })
 
-test('a conflicting second establishment cannot replace the first operator source', async () => {
+test('a conflicting second establishment cannot replace the first owner source', async () => {
   await withDirectory(async (directory) => {
     const node = await createRepositoryNode({ plugins: composition(directory) })
     await declareMember(node)
@@ -349,9 +350,47 @@ test('a conflicting second establishment cannot replace the first operator sourc
       await node.context[REPO_ESTABLISHMENT_PROTOCOL_SERVICE].loadRepo(REPO_KEY),
       {
         identity: REPO_KEY,
-        operator: MEMBER_KEY,
+        owner: MEMBER_KEY,
         establishmentRecordId: first.id,
       },
+    )
+
+    await node.dispose()
+  })
+})
+
+test('raw journal acceptance cannot interleave with Repo establishment check and publish', async () => {
+  await withDirectory(async (directory) => {
+    const node = await createRepositoryNode({ plugins: composition(directory) })
+    await declareMember(node)
+    await declareMember(node, OTHER_MEMBER_KEY)
+
+    const incoming = repoRecord('repo-gated-incoming')
+    const durableConflict = repoRecord(
+      'repo-gated-conflict',
+      REPO_KEY,
+      OTHER_MEMBER_KEY,
+    )
+
+    let pending: Promise<unknown> | undefined
+
+    await node.context.recordJournal.runExclusive(async (journal) => {
+      pending =
+        node.context[REPO_ESTABLISHMENT_PROTOCOL_SERVICE].establishRepo(incoming)
+
+      await delayImmediate()
+      await journal.accept(durableConflict)
+    })
+
+    assert.ok(pending)
+    await assert.rejects(pending, RepoAlreadyEstablishedError)
+    await assert.rejects(
+      node.context.recordJournal.get(incoming.id),
+      RecordJournalNotFoundError,
+    )
+    assert.deepEqual(
+      await node.context.recordJournal.get(durableConflict.id),
+      durableConflict,
     )
 
     await node.dispose()
@@ -459,16 +498,14 @@ test('Repo establishment fails closed for wrong Protocol, hash, signature, paylo
     await assert.rejects(
       service.establishRepo(
         repoRecord('wrong-payload', REPO_KEY, MEMBER_KEY, {
-          data: { repo: REPO_KEY, owner: MEMBER_KEY },
+          data: { owner: MEMBER_KEY, repo: REPO_KEY },
         }),
       ),
       RepoEstablishmentError,
     )
     await assert.rejects(
       service.establishRepo(
-        repoRecord('bad-repo-key', REPO_KEY, MEMBER_KEY, {
-          data: { repo: 'not-an-entity-key' },
-        }),
+        repoRecord('bad-repo-key', 'not-an-entity-key', MEMBER_KEY),
       ),
       RepoEstablishmentError,
     )
