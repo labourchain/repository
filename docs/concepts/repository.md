@@ -28,13 +28,13 @@ Asset
 Repo
 ```
 
-## establishment、ownership 与 operator
+## establishment 与 operator
 
-一个有效 Member 可以作为初始 owner 建立 Repo。普通集体 Repo 使用独立的 Repo Entity identity；establishment Record 由 Repo identity 自己签名，并在 `data.owner` 中记录初始 owner。
+一个有效 Member 可以建立 Repo。普通集体 Repo 可以使用独立的 Repo Entity identity；establishment Record 由创建者以个人 Entity identity 签名，`Record.data.publicKey` 只声明被创建的 Repo EntityPublicKey。
 
-这里的 Repo ownership 表示 Repo 自己签署并留下的控制 / 责任来源：`Record.createdBy = Repo EntityPublicKey`，`Record.data.owner = Member EntityPublicKey`。它不表示该 owner 拥有 Repo 中的 Asset、劳动成果或相应私人财产权。Asset 的生产、使用、收益和其他权利关系仍由各自事实与协议表达。
+这里的 `Record.createdBy` 只是创建来源。Repository 不从 establishment 推导 owner/ownership，也不由技术层自动决定谁拥有 Repo 中的 Asset、劳动成果或相应私人财产权。Asset 的生产、使用、收益和其他权利关系仍由各自事实与协议表达。
 
-Repo 之后作出需要链上留痕的决定时，由 Repo identity 的 private key 对相应 Record 签名，并在该 Repo decision 的签名内容中标注实际 operator。`operator` 用于回答“这次 Repo 行为是谁操作的”，不是长期角色、成员资格或组织授权证明。谁有资格代表组织操作 Repo、如何授权、复核或更换 owner/operator 属于后续组织治理问题；Repository 技术层只保留事实和责任痕迹。
+Repo 之后作出需要链上留痕的决定时，由 Repo identity 的 private key 对相应 Record 签名，并在该 Repo decision 的签名内容中标注实际 operator。`operator` 用于回答“这次 Repo 行为是谁操作的”，不是长期角色、成员资格或组织授权证明。谁有资格代表组织操作 Repo、如何授权或复核 operator 属于后续组织治理问题；Repository 技术层只保留事实和责任痕迹。
 
 劳动者与 Repo 本身相互独立。两者真正需要链上表达的关系是 Repo 是否采纳某次劳动 / Asset contribution。产品可以把曾经或持续有贡献的人展示为 contributor / member，也可以按人员建立分组和筛选条件，但这些组织视图在 MVP 中属于软件数据，不形成 `repo.membership` 链上事实。
 
