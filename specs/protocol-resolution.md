@@ -70,13 +70,15 @@ Coexistence is a resolution requirement, not permission to create a second plugi
 
 A collision or ambiguous runtime mapping in which one exact ProtocolHash could resolve to more than one non-equivalent implementation must fail closed.
 
-## Block composition relationship
+## Block validation relationship
 
 Future Block validation will use the same exact-resolution primitive at a larger scope.
 
-A Block Header is expected to commit the Repo Protocol composition used for that Block together with exact hashes that bind those implementations / artifacts. A peer validator can then resolve and verify that exact composition before replaying the Protocol-defined validation of the Block's Records and relationships.
+The next Core Block contract uses `Header.vroot`, derived deterministically from the actual Block Records' direct `(protocol, protocolHash)` references. The Header does not carry a separate Protocol-composition manifest.
 
-This Spec supplies the exact Protocol resolution boundary required by that design. It does **not** define the Block Header manifest encoding, Block packer, peer validator, chain synchronization or consensus.
+A peer validator first recomputes and verifies `vroot` from the Records. L1 validation then uses those Records' exact `ProtocolHash` values as the roots for descriptor/artifact and dependency resolution before replaying Protocol-defined validation of the Records and relationships.
+
+This Spec supplies that exact Protocol resolution primitive. It does **not** define `vroot` derivation, the Block packer, peer validator, chain synchronization or consensus.
 
 ## Cordis integration
 
