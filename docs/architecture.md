@@ -227,7 +227,7 @@ flowchart LR
     ChainState --> Block
 ```
 
-Repository 不重新定义 Core 已有的 Protocol、Record、Entity identity、signature 或 Block 语义。Member、Repo、Asset、confirmation、Repo establishment、Repo decision 与 contribution relation 等领域语义由各自适用的上层 Protocol 定义。
+Repository 不重新定义 Core 已有的 Protocol、Record、Entity identity、signature 或 Block 语义。Core Record 只是通用签名事实容器；劳动记录由上层 labour Protocol 把 `labourRecord` 作为 `Record.data` 解释。Member、Repo、Asset、confirmation、Repo establishment、Repo decision 与 contribution relation 等领域语义同样由各自适用的上层 Protocol 定义。
 
 Member 与 Repo 都是同一类组合原则：先有 Core Entity identity，再通过协议获得领域语义。一个 Entity identity/keypair 可以同时满足 Member 与 Repo 协议；这种组合不产生第二个 identity。Repo establishment 只保留创建事实与创建来源，不定义 Repo ownership，也不自动扩展为 Asset 或劳动成果的私人财产权。
 
