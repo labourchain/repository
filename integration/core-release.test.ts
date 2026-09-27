@@ -185,9 +185,6 @@ test(
         )
 
         assert.equal(entityService.validateEntityPublicKey(identity), identity)
-        assert.deepEqual(entityService.validateEntity({ publicKey: repoIdentity }), {
-          publicKey: repoIdentity,
-        })
 
         const rawRecord = {
           protocol: MEMBER_PROTOCOL_REFERENCE,
@@ -232,6 +229,9 @@ test(
         const repoIdentity = entityService.encodeBase58btc(
           repoPublicKeyDer.subarray(repoPublicKeyDer.byteLength - 32),
         )
+        assert.deepEqual(entityService.validateEntity({ publicKey: repoIdentity }), {
+          publicKey: repoIdentity,
+        })
 
         const rawRepoRecord = {
           protocol: REPO_ESTABLISHMENT_PROTOCOL_REFERENCE,
