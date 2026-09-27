@@ -254,7 +254,7 @@ Record.data.publicKey
 
 这与 Core Entity fact 的责任分离保持一致：`Record.createdBy / signature` 表示谁确认了创建事实，`Record.data.publicKey` 表示这条事实声明的 Repo identity。创建关系只用于 provenance，不解释为 ownership、永久控制权、membership 或治理授权。Core `Entity.introducedBy` 同样不用于推导这些政治/组织语义。
 
-Repo 后续采取需要链上留痕的决定时，决定 Record 由 Repo identity 的 private key 签名，并在该 Protocol 的签名 payload / data 中标注实际 `operator: EntityPublicKey`。operator 是单次行为的责任留痕，不是持久角色、membership、ACL 或组织授权证明。谁可以操作 Repo key、owner 如何变更、多人如何治理属于后续组织治理层。
+Repo 后续采取需要链上留痕的决定时，决定 Record 由 Repo identity 的 private key 签名，并在该 Protocol 的签名 payload / data 中标注实际 `operator: EntityPublicKey`。operator 是单次行为的责任留痕，不是持久角色、membership、ACL 或组织授权证明。谁可以操作 Repo key、如何授权、复核或进行多人治理属于后续组织治理层。
 
 劳动者与 Repo 不建立额外链上 membership。产品可以从 accepted contributions 派生 contributor/member 视图，也可以在本地软件中维护人员分组、标签和筛选条件；这些运行数据不参与链级 validity。
 
@@ -383,9 +383,10 @@ Repository 不以领域 service-owned state 复制链确证事实。
    - 不是 Block confirmation
 
 2. Runtime Record database
-   - 维护通过适用 Protocol 验证后的 Record 关系、顺序/依赖与 pending packing state
-   - Repository 的关系验证、追溯和后续 Block packing 消费这一层
-   - 可以从 durable Records + exact Protocol semantics 重建/对账，但运行时不是纯查询缓存
+   - 当前只提供 Repository 的 serialized Record ingress boundary
+   - 复用 durable Record journal 的 exact Record durability
+   - 不预设通用关系 schema、顺序/依赖容器或 pending-packing state
+   - #9 等首个真实 Protocol consumer 出现后，再按实际需要增加最小 relation state
    - 不自行赋予 Block confirmation，也不是 canonical-chain 数据库
 
 3. staging
@@ -401,7 +402,7 @@ Runtime 还可以保存：
 
 - Asset payload 或其他协议允许的持久内容；
 - Repo identity -> establishment RecordId 等领域关系索引；
-- 用于验证与打包的 Record relationship / dependency indexes；
+- 在未来具体 Protocol consumer 需要时新增的最小 Record relationship / dependency indexes；
 - Asset 查询索引；
 - contribution history projection；
 - cache 和其他可重建运行数据。
