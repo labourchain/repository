@@ -107,41 +107,6 @@ function requireProtocolHash(config: RepoEstablishmentMountConfig): string {
   return config.protocolHash
 }
 
-function requireRepoIdentityPayload(value: unknown): unknown {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    throw new RepoEstablishmentError(
-      'repo.establishment data must be a plain object containing only publicKey.',
-    )
-  }
-
-  const prototype = Object.getPrototypeOf(value)
-  if (prototype !== Object.prototype && prototype !== null) {
-    throw new RepoEstablishmentError(
-      'repo.establishment data must be a plain object containing only publicKey.',
-    )
-  }
-
-  const keys = Reflect.ownKeys(value)
-  if (
-    keys.length !== 1 ||
-    keys[0] !== 'publicKey' ||
-    !Object.prototype.propertyIsEnumerable.call(value, 'publicKey')
-  ) {
-    throw new RepoEstablishmentError(
-      'repo.establishment data must contain exactly one enumerable publicKey field.',
-    )
-  }
-
-  const descriptor = Object.getOwnPropertyDescriptor(value, 'publicKey')
-  if (!descriptor || !('value' in descriptor)) {
-    throw new RepoEstablishmentError(
-      'repo.establishment data.publicKey must be an enumerable data property.',
-    )
-  }
-
-  return descriptor.value
-}
-
 function repoView(record: CoreRecordValue, identity: string): RepoView {
   return Object.freeze({
     identity,
@@ -309,8 +274,16 @@ export class RepoEstablishmentService {
       )
     }
 
-    const payloadPublicKey = requireRepoIdentityPayload(record.data)
-    const repoIdentity = this.validateRepoIdentity(payloadPublicKey)
+    let repoIdentity: string
+    try {
+      repoIdentity =
+        this.ctx[CORE_ENTITY_PROTOCOL_SERVICE].validateEntity(record.data).publicKey
+    } catch (cause) {
+      throw new RepoEstablishmentError(
+        'repo.establishment data must be valid Core Entity data.',
+        { cause },
+      )
+    }
 
     try {
       await this.ctx[MEMBER_PROTOCOL_SERVICE].requireMember(record.createdBy)
