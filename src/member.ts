@@ -11,8 +11,14 @@ export const CORE_RECORD_PROTOCOL_SERVICE = 'protocol:core.record@0.1.0' as cons
 
 const DIGEST_RE = /^[0-9a-f]{64}$/u
 
+export interface CoreEntityValue {
+  readonly publicKey: string
+  readonly introducedBy?: string
+}
+
 export interface CoreEntityProtocolService {
   validateEntityPublicKey(value: unknown): string
+  validateEntity(value: unknown): CoreEntityValue
 }
 
 export interface CoreRecordValue extends JournalRecord {
