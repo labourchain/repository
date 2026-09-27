@@ -2,7 +2,7 @@
 
 Member 是 LabourChain 中对人类参与者的协议与实现层描述。Member 不建立新的身份系统；它以 Core `EntityPublicKey` 为唯一身份锚点，通过适用协议组合获得人类参与者的领域语义。
 
-`Worker` 保留为概念层的“劳动主体”描述，用于讨论谁实施了劳动、谁产生了 Record 或 Asset。由于 worker 在计算机系统中也广泛表示从机、子进程和运行时 worker，程序接口和协议中使用 `Member` 指代人类成员，避免混淆。
+`Worker` 保留为概念层的“劳动主体”描述，用于讨论谁实施了劳动、谁产生了 labour Record 或 Asset。由于 worker 在计算机系统中也广泛表示从机、子进程和运行时 worker，程序接口和协议中使用 `Member` 指代人类成员，避免混淆。
 
 ## 协议组合
 
@@ -23,9 +23,9 @@ Member 可以继续组合其他协议，而不要求把全部能力固定进一�
 
 ## 与 Record / Asset 的关系
 
-在人类劳动场景中，Member 承担 Worker 的劳动主体角色，并以自己的 Entity identity 产生或签署相应的劳动事实。劳动历史来自与该 identity 相关的 Records，不依赖某个 Repo 内部保存一份个人 `records[]`。
+在人类劳动场景中，Member 承担 Worker 的劳动主体角色，并以自己的 Entity identity 产生或签署承载 labourRecord 的 Records。劳动历史来自与该 identity 相关且被 labour Protocol 识别为劳动事实的 Records，不依赖某个 Repo 内部保存一份个人 `records[]`。
 
-劳动可以形成、修改或维护 Asset，也可以只形成 Record 而没有独立 Asset。
+劳动可以形成、修改或维护 Asset，也可以只形成 labourRecord 而没有独立 Asset。
 
 ## 与 Repo 的关系
 
@@ -39,7 +39,7 @@ Entity K
 
 同 identity 的 Repo 能力可暂时承载尚未进入集体 Repo 的 Record / Asset 关系与成果。这种承载关系不等于私人财产关系；Asset 与某个 Member-scoped Repo 关联或存放其中，不自动产生所有权、排他权、转让权或收益权。
 
-一个 Member 加入其他 Repo 时，Repo membership 是 Member 与 Repo 之间的关系，不会创建另一种人类主体类型，也不会改变 Member 的 Entity identity。
+Member 与其他 Repo 不建立额外的链上 membership 身份关系。Repo 是否采纳某次由该 Member 产生的劳动 / Asset contribution，才是两者之间需要长期留痕的事实。产品层可以根据贡献历史把人员展示为 contributor / member，并使用本地软件数据做分组或筛选；这些视图不会改变 Member 的 Entity identity。
 
 ## 劳动主体边界
 

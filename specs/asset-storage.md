@@ -1,6 +1,6 @@
 # Asset Storage Specification
 
-- **Status:** Draft
+- **Status:** Provisional / blocked by Asset design
 - **Scope:** durable preservation and retrieval of accepted Repo Assets
 - **Requirements:** [`../docs/requirements.md`](../docs/requirements.md)
 - **Architecture:** [`../docs/architecture.md`](../docs/architecture.md)
@@ -10,9 +10,11 @@
 
 Repository preserves Assets accepted through committed Repo contributions and makes them retrievable by stable LabourChain identity or reference.
 
-This Spec defines Repository storage behavior, not the canonical Asset protocol schema.
+This Spec records the intended Repository storage boundary, but it is **not yet implementation authority**. The minimum Asset Protocol, stable Asset identity/reference, payload shape, and integrity relationship have not been accepted yet. Story #8 therefore remains in design.
 
-## Storage contract
+This Spec must be re-projected after the Asset model is accepted before implementation starts. Repository storage must not invent Asset identity or semantics merely to satisfy this provisional contract.
+
+## Provisional storage contract
 
 A usable deployment must durably preserve the Asset data required for later retrieval.
 
@@ -28,9 +30,9 @@ Exact API names and provider interfaces remain implementation choices.
 
 Only Assets belonging to accepted committed contributions may appear in the accepted Asset view.
 
-## Identity
+## Identity — not yet frozen
 
-Asset lookup must use stable LabourChain identity or reference semantics.
+Asset lookup will eventually use stable LabourChain identity/reference semantics, but that identity/reference is not yet defined by the accepted Asset model.
 
 Provider-native paths, filenames, row IDs, database keys or collection names must not replace canonical Asset identity.
 
@@ -50,7 +52,7 @@ Asset storage participates in the acceptance contract defined in [`contribution.
 
 A contribution must not be reported as accepted until its committed Asset can be durably retrieved.
 
-If Core commit has already succeeded but Asset finalization is interrupted, recovery must be able to converge to a retrievable accepted Asset rather than treating the canonical commit as nonexistent.
+If the required Records have already crossed the durable Repository ingress boundary but Asset finalization is interrupted, recovery must be able to converge to a retrievable accepted Asset before exposing Repository `COMMITTED`. No local persistence step is described as a Core or canonical-chain commit.
 
 ## Listing and lookup
 
@@ -63,6 +65,9 @@ Repository must support:
 Advanced search, pagination, full-text indexing and large-scale query infrastructure are outside the MVP.
 
 Internal indexes may be used, but they are Runtime data and do not become canonical facts.
+
+
+A provider may also cache a materialized current Asset/Repo view for retrieval efficiency. Such a Snapshot remains Runtime materialization: it may be discarded and rebuilt from the relevant accepted Record + Patch facts under exact Protocol semantics and must not replace that fact history.
 
 ## Boundaries
 
@@ -86,9 +91,9 @@ Consumers must be able to distinguish at least:
 - identity conflict according to applicable Protocol semantics;
 - provider unavailable or corrupted state detected during retrieval.
 
-## Acceptance tests
+## Future acceptance tests
 
-Tests must demonstrate that:
+Once the Asset model is accepted and this Spec is re-projected, tests are expected to demonstrate that:
 
 - an accepted Asset can be retrieved by stable LabourChain identity/reference;
 - a missing Asset returns explicit not-found behavior;

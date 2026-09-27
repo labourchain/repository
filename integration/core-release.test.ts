@@ -18,6 +18,7 @@ import {
   REPO_ESTABLISHMENT_PROTOCOL_SERVICE,
   RecordJournalService,
   createRepositoryNode,
+  runtimeRecordDatabasePlugin,
   type CoreEntityProtocolService,
   type CoreRecordProtocolService,
   type CoreRecordValue,
@@ -126,7 +127,7 @@ async function loadReleasedCorePlugin(
 }
 
 test(
-  'Member and Repo establishment run against released Core v0.1.0 Cordis Protocol artifacts',
+  'Member and Repo establishment run against released Core v0.1.0 Protocol artifacts',
   async () => {
     const root = await mkdtemp(join(tmpdir(), 'labourchain-core-release-'))
     const journalDirectory = join(root, 'journal')
@@ -158,6 +159,7 @@ test(
           },
           { plugin: coreEntityPlugin },
           { plugin: coreRecordPlugin },
+          { plugin: runtimeRecordDatabasePlugin },
           {
             plugin: RecordJournalService,
             config: { directory: journalDirectory },
@@ -227,13 +229,16 @@ test(
         const repoIdentity = entityService.encodeBase58btc(
           repoPublicKeyDer.subarray(repoPublicKeyDer.byteLength - 32),
         )
+        assert.deepEqual(entityService.validateEntity({ publicKey: repoIdentity }), {
+          publicKey: repoIdentity,
+        })
 
         const rawRepoRecord = {
           protocol: REPO_ESTABLISHMENT_PROTOCOL_REFERENCE,
           protocolHash: REPO_PROTOCOL_HASH,
           createdBy: identity,
           createdAt: '2026-09-18T00:00:01.000Z',
-          data: { repo: repoIdentity },
+          data: { publicKey: repoIdentity },
         }
         const repoRecordId = recordService.recordId(rawRepoRecord)
         const repoSignature = sign(
@@ -258,7 +263,7 @@ test(
 
         assert.deepEqual(established, {
           identity: repoIdentity,
-          operator: identity,
+          createdBy: identity,
           establishmentRecordId: repoRecordId,
         })
         assert.deepEqual(loadedRepo, established)
@@ -272,7 +277,7 @@ test(
           protocolHash: REPO_PROTOCOL_HASH,
           createdBy: identity,
           createdAt: '2026-09-18T00:00:02.000Z',
-          data: { repo: identity },
+          data: { publicKey: identity },
         }
         const memberScopedRepoRecordId = recordService.recordId(
           rawMemberScopedRepoRecord,
@@ -293,7 +298,7 @@ test(
 
         assert.deepEqual(memberScopedRepo, {
           identity,
-          operator: identity,
+          createdBy: identity,
           establishmentRecordId: memberScopedRepoRecordId,
         })
         assert.deepEqual(
@@ -302,6 +307,7 @@ test(
           ),
           memberScopedRepo,
         )
+
       } finally {
         await node.dispose()
       }

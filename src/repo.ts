@@ -23,7 +23,7 @@ export interface RepoEstablishmentMountConfig {
 
 export interface RepoView {
   readonly identity: string
-  readonly operator: string
+  readonly createdBy: string
   readonly establishmentRecordId: string
 }
 
@@ -53,8 +53,7 @@ export class RepoEstablishingMemberError extends RepoError {
 
   constructor(identity: string, options?: ErrorOptions) {
     super(
-      'Repo establishment author does not satisfy the Member capability: ' +
-        identity,
+      'Repo establishment author does not satisfy the Member capability: ' + identity,
       options,
     )
     this.name = 'RepoEstablishingMemberError'
@@ -108,45 +107,10 @@ function requireProtocolHash(config: RepoEstablishmentMountConfig): string {
   return config.protocolHash
 }
 
-function requireRepoPayload(value: unknown): unknown {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    throw new RepoEstablishmentError(
-      'repo.establishment data must be a plain object containing only repo.',
-    )
-  }
-
-  const prototype = Object.getPrototypeOf(value)
-  if (prototype !== Object.prototype && prototype !== null) {
-    throw new RepoEstablishmentError(
-      'repo.establishment data must be a plain object containing only repo.',
-    )
-  }
-
-  const keys = Reflect.ownKeys(value)
-  if (
-    keys.length !== 1 ||
-    keys[0] !== 'repo' ||
-    !Object.prototype.propertyIsEnumerable.call(value, 'repo')
-  ) {
-    throw new RepoEstablishmentError(
-      'repo.establishment data must contain exactly one enumerable repo field.',
-    )
-  }
-
-  const descriptor = Object.getOwnPropertyDescriptor(value, 'repo')
-  if (!descriptor || !('value' in descriptor)) {
-    throw new RepoEstablishmentError(
-      'repo.establishment data.repo must be an enumerable data property.',
-    )
-  }
-
-  return descriptor.value
-}
-
 function repoView(record: CoreRecordValue, identity: string): RepoView {
   return Object.freeze({
     identity,
-    operator: record.createdBy,
+    createdBy: record.createdBy,
     establishmentRecordId: record.id,
   })
 }
@@ -161,7 +125,6 @@ export class RepoEstablishmentService {
   private readonly ctx: Context
   readonly protocolHash: string
   private readonly establishments = new Map<string, string>()
-  private establishmentGate: Promise<void> = Promise.resolve()
 
   constructor(ctx: Context, protocolHash: string) {
     this.ctx = ctx
@@ -194,9 +157,12 @@ export class RepoEstablishmentService {
   }
 
   async establishRepo(value: unknown): Promise<RepoView> {
-    const validated = await this.validateEstablishment(value)
+    return this.ctx.recordJournal.runExclusive(async (journal) => {
+      // Creator-Member validation, Repo singularity validation and durable
+      // publication share the journal mutation gate. Raw same-process journal
+      // acceptance therefore cannot interleave between check and publish.
+      const validated = await this.validateEstablishment(value)
 
-    return this.withEstablishmentGate(async () => {
       // Durable facts, not the replaceable in-memory index, decide whether the
       // Repo identity has already been established.
       await this.rebuild()
@@ -209,9 +175,9 @@ export class RepoEstablishmentService {
         )
       }
 
-      // Exact replay still goes through the journal so non-equivalent content
-      // under one RecordId cannot bypass journal conflict detection.
-      await this.ctx.recordJournal.accept(validated.record)
+      // Exact replay still goes through the journal session so non-equivalent
+      // content under one RecordId cannot bypass journal conflict detection.
+      await journal.accept(validated.record)
       this.establishments.set(validated.repoIdentity, validated.record.id)
 
       return repoView(validated.record, validated.repoIdentity)
@@ -221,11 +187,11 @@ export class RepoEstablishmentService {
   async loadRepo(identity: unknown): Promise<RepoView> {
     const repoIdentity = this.validateRepoIdentity(identity)
 
-    let recordId = this.establishments.get(repoIdentity)
-    if (recordId === undefined) {
-      await this.rebuild()
-      recordId = this.establishments.get(repoIdentity)
-    }
+    // Durable establishment facts are authoritative. Always reconcile before
+    // returning a cached Repo so newly durable conflicts cannot be hidden by
+    // the in-memory lookup projection.
+    await this.rebuild()
+    const recordId = this.establishments.get(repoIdentity)
 
     if (recordId === undefined) {
       throw new RepoNotFoundError(repoIdentity)
@@ -240,24 +206,7 @@ export class RepoEstablishmentService {
       )
     }
 
-    return repoView(validated.record, repoIdentity)
-  }
-
-  private async withEstablishmentGate<T>(
-    operation: () => Promise<T>,
-  ): Promise<T> {
-    const previous = this.establishmentGate
-    let release!: () => void
-    this.establishmentGate = new Promise<void>((resolve) => {
-      release = resolve
-    })
-
-    await previous
-    try {
-      return await operation()
-    } finally {
-      release()
-    }
+    return repoView(validated.record, validated.repoIdentity)
   }
 
   private isCandidate(value: JournalRecord): boolean {
@@ -325,8 +274,16 @@ export class RepoEstablishmentService {
       )
     }
 
-    const payloadRepo = requireRepoPayload(record.data)
-    const repoIdentity = this.validateRepoIdentity(payloadRepo)
+    let repoIdentity: string
+    try {
+      repoIdentity =
+        this.ctx[CORE_ENTITY_PROTOCOL_SERVICE].validateEntity(record.data).publicKey
+    } catch (cause) {
+      throw new RepoEstablishmentError(
+        'repo.establishment data must be valid Core Entity data.',
+        { cause },
+      )
+    }
 
     try {
       await this.ctx[MEMBER_PROTOCOL_SERVICE].requireMember(record.createdBy)

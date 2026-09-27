@@ -1,7 +1,7 @@
 # Repo Specification
 
 - **Status:** Draft
-- **Scope:** Repo establishment, stable identity, operator relationship and loading
+- **Scope:** Repo establishment, stable identity, creation provenance, decision-operator trace and loading
 - **Requirements:** [`../docs/requirements.md`](../docs/requirements.md)
 - **Architecture:** [`../docs/architecture.md`](../docs/architecture.md)
 - **Umbrella:** [`repository-mvp.md`](./repository-mvp.md)
@@ -23,28 +23,29 @@ core.entity / EntityPublicKey
 Repo identity
     ├─ repo protocol
     ├─ asset-related protocols
-    ├─ membership / contribution protocols
+    ├─ contribution protocols
     └─ other protocols...
 ```
 
 Identity/key-pair generation and secret-key custody are Runtime/signer concerns. This capability validates and consumes a Repo identity; it does not define a second key-management system.
 
-Core `Entity.introducedBy` is not the Repo operator relation. It must not be interpreted as ownership, membership, or Repository authorization.
+Core `Entity.introducedBy` is not the Repo ownership or operator-trace relation. It must not be interpreted as Repository ownership, organization membership, or authorization.
 
 ## Member dependency
 
-A Repo establishment actor must satisfy the Member capability defined in [`member.md`](./member.md).
+The Repo establishment creator must satisfy the Member capability defined in [`member.md`](./member.md).
 
 `Member` is the human-participant protocol/implementation term. `Worker` may still describe the labour subject conceptually, but Repo APIs must not accept a generic runtime/process worker merely because of naming overlap.
 
-Repo establishment therefore depends on two distinct identities/capabilities:
+Repo establishment relates two identities:
 
 ```text
-establishing Member
+creator
     = Entity identity satisfying Member protocol
+    = Record.createdBy / signature authority
 
 Repo
-    = Entity identity receiving Repo protocol semantics
+    = Entity identity declared by Record.data.publicKey
 ```
 
 For a collective Repo these identities may differ. For a Member-scoped Repo they may be the same Entity identity/keypair.
@@ -61,47 +62,48 @@ The exact ProtocolHash is supplied by the Host from the verified descriptor when
 
 Repo establishment is represented by one Record under these Protocol semantics.
 
-The minimum establishment payload is equivalent to:
+The establishment payload is Core Entity data. Repository does not define a parallel Repo-identity payload schema:
 
-```ts
-interface RepoEstablishment {
-  repo: EntityPublicKey
-}
+```text
+Record.data
+= Core Entity
+= {
+    publicKey: Repo EntityPublicKey
+    introducedBy?: EntityPublicKey
+  }
 ```
 
-The enclosing Record supplies the actor source:
+Core `validateEntity()` owns that data contract. Repository consumes the validated `publicKey` and does not duplicate Entity shape validation.
+
+The enclosing Record supplies creator provenance:
 
 ```text
 Record.createdBy
-= establishing Member identity
+= creator Member EntityPublicKey
 
-Repo establishment protocol interpretation:
-Record.createdBy
-= initial MVP operator
+Record.signature
+= creator personal signature
 
-Record.data.repo
-= stable Repo EntityPublicKey
+Record.data.publicKey
+= created Repo EntityPublicKey
 ```
 
-`Record.createdBy` does not universally mean operator. The Repo establishment Protocol assigns that domain meaning for this Record type.
-
-The operator is not duplicated inside `Record.data`. The establishment Record is the domain source for the initial operator relationship.
+`Record.createdBy / signature` answer who confirmed the creation fact. `Record.data.publicKey` from the validated Core Entity answers which Repo identity was created. Repo establishment does not infer ownership, permanent control, membership, ACL or governance authority from either field.
 
 This Spec does not define the generic historical Protocol loader/resolver. Story #5 only consumes the Host-mounted exact `repo.establishment@0.1.0` implementation and its verified ProtocolHash.
 
 ## Establishment
 
-Any valid Member may establish a Repo.
+Any valid Member may create a Repo identity fact.
 
 Repo establishment must:
 
-- require the establishing identity to satisfy the Member capability;
-- accept or obtain a valid Core `EntityPublicKey` for the Repo;
-- validate an establishment Record whose `createdBy` is the establishing Member and whose payload names the Repo identity;
-- interpret that Member as the single initial MVP operator under Repo establishment Protocol semantics;
+- require `Record.createdBy` to identify an Entity satisfying the Member capability;
+- verify the Record signature against that creator identity through Core Record semantics;
+- require `Record.data` to be valid Core Entity data and use its validated `publicKey` as the Repo identity;
 - durably accept the establishment Record into the configured Record ingress/journal before reporting the Repo established;
 - make the established Repo loadable again by its stable identity after restart;
-- fail on a conflicting already-accepted or already-chain-confirmed establishment of the same Repo identity rather than silently replacing its operator;
+- fail on a conflicting already-accepted or already-chain-confirmed establishment of the same Repo identity rather than silently replacing its creation source;
 - persist only the Runtime index/state required for efficient lookup in addition to the durable establishment Record itself.
 
 Exact TypeScript operation names are not fixed. Behavior is equivalent to:
@@ -111,7 +113,7 @@ establishRepo(establishmentRecord)
 loadRepo(repoIdentity)
 ```
 
-A higher-level caller/signer may construct and sign the establishment Record from a Member identity and Repo identity. Signing UX, secret-key custody and key generation are outside this capability.
+A higher-level caller may generate/select the Repo public key and construct the establishment Record. The creator signs that Record with the creator's personal private key. Repo secret-key custody, Repo decision signing UX and key generation are outside this capability.
 
 ## Same-identity Member Repo
 
@@ -129,19 +131,27 @@ Such a Repo may temporarily gather Records/Assets that have not entered a collec
 
 LabourFlow may build a personal product experience on top of this generic composition, but the underlying Repo semantics remain the same.
 
-## Operator
+## Creation provenance and operator trace
 
-The initial operator is the Member recorded as `createdBy` on the Repo establishment Record under the establishment Protocol semantics.
+Repo establishment retains only the creator provenance carried by `Record.createdBy`. This answers who created/introduced the Repo identity fact; it is not an ownership relation.
 
-Only this initial operator relationship exists in the MVP. There is no separate mutable `operator` field or provider-owned operator row that can override the establishment Record.
+Repo-authored decision facts are a separate concern. When an applicable Protocol represents a Repo decision, the Record is signed by the Repo identity and its signed Protocol data must identify the actual `operator: EntityPublicKey`. The operator field records who performed that specific Repo action; it does not itself prove an organization role, delegation chain or political authority.
 
-This Spec does not introduce owner, admin, maintainer, editor, viewer or other role hierarchies.
+Repository therefore preserves the distinction:
 
-Changing operator semantics or transfer behavior is outside the MVP unless later added to Requirements.
+```text
+createdBy
+= creator of the Repo establishment fact
+
+operator
+= actor declared inside one later Repo-signed decision fact
+```
+
+Technology records these actions and signatures. It does not infer ownership or complete organization governance from Repo establishment.
 
 ## Record status boundary
 
-The same establishment Record can have different runtime/chain statuses without changing its identity or operator meaning:
+The same establishment Record can have different runtime/chain statuses without changing its identity or creation-provenance meaning:
 
 ```text
 accepted / pending-chain
@@ -178,7 +188,7 @@ Repository must not satisfy these dependencies by introducing a domain-owned can
 
 ## Persistence and Runtime index
 
-Repo identity and operator relationship must survive ordinary application restart in a usable deployment because the exact establishment Record is durably retained.
+Repo identity and creator provenanceship relationship must survive ordinary application restart in a usable deployment because the exact establishment Record is durably retained.
 
 Runtime may persist a replaceable lookup index equivalent to:
 
@@ -188,7 +198,7 @@ Repo EntityPublicKey -> establishment RecordId
 
 The index may additionally cache a derived Repo view or chain-confirmation status for efficient loading, but those derived values must be repairable/rebuildable from the durable journal and, when available, chain state.
 
-Provider-native paths, database IDs, row keys or collection identifiers must not become the Repo identity or operator source.
+Provider-native paths, database IDs, row keys or collection identifiers must not become the Repo identity or creation source.
 
 An in-memory implementation may be used for isolated tests but does not satisfy the usable-deployment persistence contract.
 
@@ -196,7 +206,7 @@ An in-memory implementation may be used for isolated tests but does not satisfy 
 
 For the MVP, one Repo identity has one accepted establishment Record.
 
-A second attempt to establish the same Repo identity must not silently create a second operator or replace the first accepted establishment. Conflict checks must consider durable accepted/pending state and any available block-confirmed state; a stale or missing lookup index cannot authorize a duplicate establishment.
+A second attempt to establish the same Repo identity must not silently replace the first accepted establishment. Conflict checks must consider durable accepted/pending state and any available block-confirmed state; a stale or missing lookup index cannot authorize a duplicate establishment.
 
 Cross-node concurrent establishment, fork/reorg arbitration and generic Entity admission are outside this Story unless the later chain/network model introduces explicit requirements for them.
 
@@ -207,10 +217,10 @@ This Spec does not define:
 - generic Entity registration/admission;
 - Repo key generation or secret-key custody;
 - `member.profile` schema/UX;
-- ownership or private-property semantics;
-- operator transfer;
+- ownership/private-property semantics;
+- owner transfer / multi-owner governance;
 - Block packing or chain selection;
-- Repo member add/remove behavior;
+- chain-level Repo membership / organization governance;
 - Asset contribution;
 - Asset storage format;
 - Project or Board organization;
@@ -237,14 +247,14 @@ Tests must demonstrate that:
 
 - a valid Member can establish a Repo whose identity is a Core `EntityPublicKey`;
 - a generic/non-Member Entity identity cannot establish a Repo through the human Member path;
-- the establishment Record's `createdBy` is interpreted by the Repo establishment Protocol as the single initial MVP operator;
+- the establishment Record's `createdBy` is the creator Member identity and its signature verifies with that identity;
 - the exact establishment Record is durably accepted before establishment succeeds;
 - the same Repo can be loaded again by stable identity after restart;
-- Repo identity and operator can be recovered from the durable Record journal even if the lookup index is rebuilt;
+- Repo identity from `data.publicKey` and creator provenance from `Record.createdBy` can be recovered from the durable Record journal even if the lookup index is rebuilt;
 - a conflicting second establishment of the same Repo identity is rejected;
 - stale/missing Runtime index state cannot replace the establishment Record as the domain source;
 - provider-native storage identifiers do not replace Repo identity;
-- `Entity.introducedBy` is not used as the operator relation;
+- `Entity.introducedBy` is not used as the ownership or operator-trace relation;
 - the same Entity identity can compose both Member and Repo protocols without creating a second keypair;
 - same-identity Member/Repo composition does not imply ownership/private-property semantics;
 - accepted/pending-chain and block-confirmed status are not conflated.

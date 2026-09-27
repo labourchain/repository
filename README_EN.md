@@ -6,11 +6,11 @@
 
 `@labourchain/repository` is the LabourChain Repository project.
 
-In the LabourChain model, the Worker is the subject of labour, a Record represents living labour, and an Asset represents objectified labour output. A Repo preserves Assets and participates in Repo-side confirmation of the labour related to contributed Assets. Repo contribution history is projected from on-chain labour facts and relations, while runtime components may cache those views for normal use.
+In the LabourChain model, the Worker is the subject of labour and Core Record is a generic signed Protocol-fact container. Labour facts are expressed by a labour Protocol through `Record.data = labourRecord`. An Asset represents objectified labour output. A Repo preserves Assets and participates in handling labour/Asset contributions. Repo contribution history is projected from the relevant labour facts and relations, while runtime components may cache those views for normal use.
 
 Repository uses Cordis as its runtime plugin model. Repository capability emerges from multiple Cordis plugins. Stable semantics that must remain historically addressable on chain are declared as versioned LabourChain Protocols and implemented by Cordis plugins. Repository does not build a separate Runner, Hoster, or mega-service framework around Cordis.
 
-Requirements, Architecture, and the MVP Specs have completed the current re-projection round. Bootstrap and the durable Record journal are merged, Core Protocols v0.1.0 are released, and draft PR #29 now implements the minimum Member Protocol plus Repo establishment/reload pending independent review/merge.
+Requirements, Architecture, and the MVP Specs have completed the current re-projection round. Bootstrap, the durable Record journal, and the minimum Member runtime are on `main`, and Core Protocols v0.1.0 are released. Draft PR #30 is now the current baseline-correction PR for Repo establishment, the Runtime Record database boundary, and the Membership/Record concept cleanup.
 
 ## Documentation
 
@@ -24,7 +24,7 @@ Main entry points:
 - [`specs/repository-mvp.md`](./specs/repository-mvp.md): MVP umbrella Spec for capability composition, shared invariants, and completion criteria;
 - [`specs/`](./specs/): capability Specs split by stable functional boundary.
 
-The current capability Specs cover bootstrap, Repo, membership, Protocol resolution, contribution, Asset storage, and contribution history.
+The current capability Specs cover bootstrap, Repo, Protocol resolution, contribution, Asset storage, and contribution history. The minimum labourRecord Protocol is tracked separately in #32, while Asset is still in design. Contributor/member grouping is a product or local-software view rather than an on-chain membership capability.
 
 If Concepts, Requirements, Architecture, Spec, or implementation diverge, correct the mismatch at the appropriate upstream layer instead of silently choosing an interpretation in code.
 
@@ -108,4 +108,4 @@ The current checks mainly protect the Bootstrap runtime, Cordis lifecycle, and p
 
 The current package remains `private: true`.
 
-Bootstrap and the durable Record journal are complete. Draft PR #29 implements `member.identity` and `repo.establishment@0.1.0` and runs a trusted compatibility smoke against the released Core v0.1.0 `core.entity` / `core.record` artifacts. Membership, Asset, contribution, recovery, and history follow in later Stories.
+Bootstrap, the durable Record journal, and `member.identity` are complete. The current `repo.establishment@0.1.0` contract correction is being finalized in PR #30. Next work includes #32 minimum labourRecord, #7 exact Protocol resolution, and #8 Asset after its design is accepted; chain-level Repo membership has been removed from the MVP.

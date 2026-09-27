@@ -12,16 +12,16 @@ core.entity / EntityPublicKey
 Repo identity
     ├─ repo protocol
     ├─ asset-related protocols
-    ├─ membership / contribution protocols
+    ├─ contribution protocols
     └─ other protocols...
 ```
 
-Repo 用于保存劳动成果，并维护与仓库有关的劳动者关系。Repo 不把 Record 作为另一类仓库内容保存；与 Repo 有关的劳动历史由相关 LabourChain facts 重新构建。
+Repo 用于保存劳动成果，并留下其采纳了哪些劳动贡献的可验证事实。Repo 不把 Record 作为另一类仓库内容保存；与 Repo 有关的劳动历史由相关 LabourChain facts 重新构建。劳动者与 Repo 之间不额外建立链上 membership 状态。
 
 ```text
 Member performs labour
   ↓
-Record
+Record<data = labourRecord>
   ↓ relates to
 Asset
   ↓ contribution
@@ -30,9 +30,13 @@ Repo
 
 ## establishment 与 operator
 
-一个有效 Member 可以 establishment 一个 Repo。普通集体 Repo 使用独立的 Repo Entity identity；establishment 记录建立该 Repo identity 与发起 Member 之间的初始 operator 关系。
+一个有效 Member 可以建立 Repo。普通集体 Repo 可以使用独立的 Repo Entity identity；establishment Record 由创建者以个人 Entity identity 签名，`Record.data.publicKey` 只声明被创建的 Repo EntityPublicKey。
 
-每个 Repo 有一个 operator，用于维护哪些 Members 可以向该 Repo contribution。Repo membership 是 Member 与 Repo 的关系，不创建新的 Member identity。
+这里的 `Record.createdBy` 只是创建来源。Repository 不从 establishment 推导 owner/ownership，也不由技术层自动决定谁拥有 Repo 中的 Asset、劳动成果或相应私人财产权。Asset 的生产、使用、收益和其他权利关系仍由各自事实与协议表达。
+
+Repo 之后作出需要链上留痕的决定时，由 Repo identity 的 private key 对相应 Record 签名，并在该 Repo decision 的签名内容中标注实际 operator。`operator` 用于回答“这次 Repo 行为是谁操作的”，不是长期角色、成员资格或组织授权证明。谁有资格代表组织操作 Repo、如何授权或复核 operator 属于后续组织治理问题；Repository 技术层只保留事实和责任痕迹。
+
+劳动者与 Repo 本身相互独立。两者真正需要链上表达的关系是 Repo 是否采纳某次劳动 / Asset contribution。产品可以把曾经或持续有贡献的人展示为 contributor / member，也可以按人员建立分组和筛选条件，但这些组织视图在 MVP 中属于软件数据，不形成 `repo.membership` 链上事实。
 
 Member 也可以在自己的同一个 Entity identity / keypair 上组合 Repo 协议能力：
 
@@ -46,12 +50,12 @@ Entity K
 
 ## Asset contribution
 
-Repo contribution 的对象是 Asset。一次 contribution 通常同时关联描述相关劳动的 Record。
+Repo contribution 的对象是 Asset。一次 contribution 通常同时关联描述相关劳动的 labour Record。
 
 ```text
 Member performs labour
         ↓
-Record + Asset
+labour Record + Asset
         ↓
 Asset contribution
         ↓
@@ -59,9 +63,9 @@ Repo accepts Asset
 and confirms related labour
 ```
 
-Repo 接受 contribution 后保存 Asset，并对相关劳动形成仓库侧确证。该确证不会改变 Record 的劳动主体，也不会把 Record 转移到 Repo 名下。
+Repo 接受 contribution 后保存 Asset，并对相关劳动形成仓库侧确证。该处理不会改变 labour Record 的劳动主体，也不会把 Record 转移到 Repo 名下。
 
-没有形成或提交 Asset 的劳动仍然可以产生 Record，只是不构成 Repo contribution。
+没有形成或提交 Asset 的劳动仍然可以产生承载 labourRecord 的 Record，只是不构成 Repo contribution。
 
 ## Contribution history
 
@@ -82,7 +86,7 @@ Git / GitHub 可以作为近似参照：
 | Git / GitHub | LabourChain |
 | --- | --- |
 | 仓库中的内容 | Asset / 劳动成果 |
-| commit 中的劳动描述 | Record / 劳动记录 |
+| commit 中的劳动描述 | labour Record / 劳动记录 |
 | repository history | Repo contribution history |
 | personal commits / contributions | Member labour history |
 
