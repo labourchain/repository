@@ -21,7 +21,7 @@ Repo 用于保存劳动成果，并留下其采纳了哪些劳动贡献的可验
 ```text
 Member performs labour
   ↓
-Record
+Record<data = labourRecord>
   ↓ relates to
 Asset
   ↓ contribution
@@ -50,12 +50,12 @@ Entity K
 
 ## Asset contribution
 
-Repo contribution 的对象是 Asset。一次 contribution 通常同时关联描述相关劳动的 Record。
+Repo contribution 的对象是 Asset。一次 contribution 通常同时关联描述相关劳动的 labour Record。
 
 ```text
 Member performs labour
         ↓
-Record + Asset
+labour Record + Asset
         ↓
 Asset contribution
         ↓
@@ -63,9 +63,9 @@ Repo accepts Asset
 and confirms related labour
 ```
 
-Repo 接受 contribution 后保存 Asset，并对相关劳动形成仓库侧确证。该确证不会改变 Record 的劳动主体，也不会把 Record 转移到 Repo 名下。
+Repo 接受 contribution 后保存 Asset，并对相关劳动形成仓库侧确证。该处理不会改变 labour Record 的劳动主体，也不会把 Record 转移到 Repo 名下。
 
-没有形成或提交 Asset 的劳动仍然可以产生 Record，只是不构成 Repo contribution。
+没有形成或提交 Asset 的劳动仍然可以产生承载 labourRecord 的 Record，只是不构成 Repo contribution。
 
 ## Contribution history
 
@@ -86,7 +86,7 @@ Git / GitHub 可以作为近似参照：
 | Git / GitHub | LabourChain |
 | --- | --- |
 | 仓库中的内容 | Asset / 劳动成果 |
-| commit 中的劳动描述 | Record / 劳动记录 |
+| commit 中的劳动描述 | labour Record / 劳动记录 |
 | repository history | Repo contribution history |
 | personal commits / contributions | Member labour history |
 
