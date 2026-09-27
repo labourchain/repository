@@ -9,7 +9,7 @@
 | 条目 | 中文 | 定义 |
 | --- | --- | --- |
 | [Worker / Member](./worker.md) | 劳动者 / 劳动主体 | 能够产生劳动记录和劳动成果的劳动主体 |
-| [Record](./record.md) | 劳动记录 / 活劳动 | 对劳动过程的链上事实记录 |
+| [Record](./record.md) | 通用事实记录 | 由 Protocol 解释的通用签名事实容器；劳动事实是其中一种 |
 | [Asset](./asset.md) | 劳动成果 / 死劳动 | 劳动对象化后形成的成果及其链上表示 |
 | [Repo](./repository.md) | 仓库 | 存放劳动成果，并在 contribution 中参与相关劳动的确证 |
 | [Project](./project.md) | 项目 | 对劳动者、活劳动和死劳动的组织形式 |
@@ -22,7 +22,7 @@
 
 ```text
 Worker
-  ├── produces Record
+  ├── produces Record<data = labourRecord>
   └── produces / changes Asset
 
 Repo
@@ -33,7 +33,7 @@ Project
   └── organizes Workers + Records + Assets
 ```
 
-Record 和 Asset 都是链上的规范对象。Repo 以 Asset 为存放对象，与 Repo 有关的 Record 通过链上关系形成 contribution history。Project 组织这些对象，但不取代它们原有的归属和存储关系。
+Record 是通用签名事实容器；labourRecord 是由 labour Protocol 定义并承载在 Record.data 中的一类劳动事实。Repo 以 Asset 为存放对象，与 Repo 有关的 labour Records 和其他协议事实共同形成 contribution history。Project 组织这些对象，但不取代它们原有的身份和存储关系。
 
 ## 文档约定
 
