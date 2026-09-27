@@ -62,13 +62,18 @@ The exact ProtocolHash is supplied by the Host from the verified descriptor when
 
 Repo establishment is represented by one Record under these Protocol semantics.
 
-The minimum establishment payload mirrors the Core Entity identity field naming:
+The establishment payload is Core Entity data. Repository does not define a parallel Repo-identity payload schema:
 
-```ts
-interface RepoEstablishment {
-  publicKey: EntityPublicKey
-}
+```text
+Record.data
+= Core Entity
+= {
+    publicKey: Repo EntityPublicKey
+    introducedBy?: EntityPublicKey
+  }
 ```
+
+Core `validateEntity()` owns that data contract. Repository consumes the validated `publicKey` and does not duplicate Entity shape validation.
 
 The enclosing Record supplies creator provenance:
 
@@ -83,7 +88,7 @@ Record.data.publicKey
 = created Repo EntityPublicKey
 ```
 
-`Record.createdBy / signature` answer who confirmed the creation fact. `Record.data.publicKey` answers which Repo identity was created. Repo establishment does not infer ownership, permanent control, membership, ACL or governance authority from either field.
+`Record.createdBy / signature` answer who confirmed the creation fact. `Record.data.publicKey` from the validated Core Entity answers which Repo identity was created. Repo establishment does not infer ownership, permanent control, membership, ACL or governance authority from either field.
 
 This Spec does not define the generic historical Protocol loader/resolver. Story #5 only consumes the Host-mounted exact `repo.establishment@0.1.0` implementation and its verified ProtocolHash.
 
@@ -95,7 +100,7 @@ Repo establishment must:
 
 - require `Record.createdBy` to identify an Entity satisfying the Member capability;
 - verify the Record signature against that creator identity through Core Record semantics;
-- require `Record.data.publicKey` to be a valid Core `EntityPublicKey` for the Repo;
+- require `Record.data` to be valid Core Entity data and use its validated `publicKey` as the Repo identity;
 - durably accept the establishment Record into the configured Record ingress/journal before reporting the Repo established;
 - make the established Repo loadable again by its stable identity after restart;
 - fail on a conflicting already-accepted or already-chain-confirmed establishment of the same Repo identity rather than silently replacing its creation source;
@@ -201,7 +206,7 @@ An in-memory implementation may be used for isolated tests but does not satisfy 
 
 For the MVP, one Repo identity has one accepted establishment Record.
 
-A second attempt to establish the same Repo identity must not silently create a second owner or replace the first accepted establishment. Conflict checks must consider durable accepted/pending state and any available block-confirmed state; a stale or missing lookup index cannot authorize a duplicate establishment.
+A second attempt to establish the same Repo identity must not silently replace the first accepted establishment. Conflict checks must consider durable accepted/pending state and any available block-confirmed state; a stale or missing lookup index cannot authorize a duplicate establishment.
 
 Cross-node concurrent establishment, fork/reorg arbitration and generic Entity admission are outside this Story unless the later chain/network model introduces explicit requirements for them.
 
