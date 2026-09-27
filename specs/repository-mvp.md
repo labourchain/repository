@@ -89,9 +89,20 @@ Records in one Block may form one or more Protocol-defined production trees / fo
 
 The MVP does not require a general smart-contract VM, trusted execution environment, full Block packer, peer validator, synchronization or consensus implementation. It only preserves the Runtime and Protocol boundaries those later capabilities will consume.
 
-### Labour Records remain labour facts
+### Core Record remains generic; labourRecord carries labour semantics
 
-A Record describing labour is produced/signed by the Member acting as labour subject, with stable identity/signature semantics supplied by Core. Other Protocol facts may assign authorship to another Entity identity; Repo decision facts are signed by the Repo identity and retain their actual operator in signed Protocol data. Repository does not turn either kind of Record into a Repository-owned domain object or maintain a canonical `repo.records[]` collection.
+Core Record is a generic signed Protocol fact container. It does not itself mean labour.
+
+A labour fact is a Record whose applicable labour Protocol interprets `Record.data` as a labour-domain payload, currently working-named `labourRecord`:
+
+```text
+Record
+└─ data = labourRecord
+```
+
+A labour Record is produced/signed by the Member acting as labour subject, with stable identity/signature semantics supplied by Core. Other Protocol facts may represent Member declarations, Repo establishment, Repo decisions or other domains without becoming labour facts. Story #32 defines and implements the minimum labourRecord Protocol before meaningful Repository labour-record visual testing and before the Contribution vertical slice.
+
+Repository does not turn Records into Repository-owned domain objects or maintain a canonical `repo.records[]` collection.
 
 ### Durable Record ingress is not Block confirmation
 
@@ -241,14 +252,15 @@ In addition to the acceptance tests defined by each capability Spec, the MVP int
 2. a Core Entity identity can satisfy the Member capability without receiving a second Member ID;
 3. a valid Member can create a Repo identity fact from an exact establishment Record and reload that Repo after restart;
 4. the same Entity identity may compose Member + Repo capability without creating a second keypair or implying Asset/labour property rights;
-5. a labour / Asset contribution resolves and verifies the exact required ProtocolHash / implementation artifacts;
-6. valid confirmations, durable Record ingress and durable Asset retrieval produce Repository `COMMITTED` / accepted state;
-7. the accepted Asset remains retrievable after restart;
-8. an interrupted contribution recovers without false acceptance or duplicate durable Record acceptance;
-9. a Repository-committed contribution appears in contribution history as pending-chain before Block inclusion;
-10. when chain-state access reports Block inclusion, the same history entry can be represented as block-confirmed without changing its Repository acceptance identity;
-11. Project and Board concepts are not required for the Repository MVP flow;
-12. plugin activation/disposal does not leak or duplicate owned resources.
+5. the minimum labourRecord Protocol can produce/validate a real Member-signed labour fact before the labour / Asset contribution path is integrated;
+6. a labour / Asset contribution resolves and verifies the exact required ProtocolHash / implementation artifacts;
+7. valid confirmations, durable Record ingress and durable Asset retrieval produce Repository `COMMITTED` / accepted state;
+8. the accepted Asset remains retrievable after restart;
+9. an interrupted contribution recovers without false acceptance or duplicate durable Record acceptance;
+10. a Repository-committed contribution appears in contribution history as pending-chain before Block inclusion;
+11. when chain-state access reports Block inclusion, the same history entry can be represented as block-confirmed without changing its Repository acceptance identity;
+12. Project and Board concepts are not required for the Repository MVP flow;
+13. plugin activation/disposal does not leak or duplicate owned resources.
 
 An in-memory-only path may be used for isolated unit or contract tests but does not by itself satisfy the usable Repository MVP because restart and recovery behavior are part of the product requirements.
 
