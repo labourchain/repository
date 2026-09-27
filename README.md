@@ -4,11 +4,11 @@
 
 `@labourchain/repository` 是 LabourChain 的仓库项目。
 
-在 LabourChain 的模型中，Worker 是劳动主体，Record 记录活劳动，Asset 表示已经对象化的劳动成果。Repo 负责保存劳动成果，并在劳动者提交劳动成果时参与相关劳动的仓库侧确证。Repo contribution history 由链上的劳动事实和关系投影得到，运行时可以为日常使用缓存这些视图。
+在 LabourChain 的模型中，Worker 是劳动主体，Core Record 是通用签名协议事实容器；劳动事实由 labour Protocol 通过 `Record.data = labourRecord` 表达。Asset 表示已经对象化的劳动成果。Repo 负责保存劳动成果，并在劳动者提交劳动成果时参与相关劳动的仓库侧处理。Repo contribution history 由相关劳动事实和关系投影得到，运行时可以为日常使用缓存这些视图。
 
 Repository 采用 Cordis 的插件运行模型。仓库能力由多个 Cordis plugins 共同形成；其中需要被链上历史长期引用的稳定语义以版本化 LabourChain Protocol 声明，并由 Cordis plugin 实现。Repository 不建立独立于 Cordis 的 Runner、Hoster 或 mega-service 体系。
 
-Requirements、Architecture 与 MVP Specs 已完成当前轮次的重新投影。Bootstrap 与 durable Record journal 已合并；Core Protocols v0.1.0 已发布。Draft PR #29 已实现最小 Member Protocol 与 Repo establishment/reload，当前等待独立 review/merge。
+Requirements、Architecture 与 MVP Specs 已完成当前轮次的重新投影。Bootstrap、durable Record journal 与最小 Member runtime 已进入 `main`；Core Protocols v0.1.0 已发布。当前 draft PR #30 收口 Repo establishment、Runtime Record database 边界以及 Membership/Record 概念清理。
 
 ## 文档
 
@@ -22,7 +22,7 @@ Requirements、Architecture 与 MVP Specs 已完成当前轮次的重新投影�
 - [`specs/repository-mvp.md`](./specs/repository-mvp.md)：MVP umbrella spec，维护能力组合、共享不变量与完成边界；
 - [`specs/`](./specs/)：按稳定功能边界拆分的能力 Specs。
 
-当前能力 Specs 包括 bootstrap、Repo、Protocol resolution、contribution、Asset storage 和 contribution history。Repo contributor/member 分组属于产品视图或本地软件数据，不建立链上 membership capability。
+当前能力 Specs 包括 bootstrap、Repo、Protocol resolution、contribution、Asset storage 和 contribution history。最小 labourRecord Protocol 由 #32 单独推进；Asset 仍处于设计阶段。Repo contributor/member 分组属于产品视图或本地软件数据，不建立链上 membership capability。
 
 如果 Concepts、Requirements、Architecture、Spec 或实现出现冲突，应先在对应上游层显式讨论和修订，而不是让实现静默选择一种解释。
 
@@ -110,4 +110,4 @@ pnpm run package:check
 
 当前 package 保持 `private: true`。
 
-Bootstrap runtime、durable Record journal、`member.identity` 与 `repo.establishment@0.1.0` 已完成。当前继续推进 exact Protocol resolution、Asset、contribution、recovery 与 history；链上 Repo membership 已从 MVP 移除。
+Bootstrap runtime、durable Record journal 与 `member.identity` 已完成。`repo.establishment@0.1.0` 的当前契约修正在 PR #30 中收口；下一阶段包括 #32 minimum labourRecord、#7 exact Protocol resolution，以及仍需先完成设计的 #8 Asset。链上 Repo membership 已从 MVP 移除。
