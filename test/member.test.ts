@@ -33,6 +33,25 @@ function coreEntityProvider(ctx: Context) {
       }
       return value
     },
+    validateEntity(value: unknown) {
+      if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+        throw new Error('invalid test Entity')
+      }
+      const entity = value as Record<string, unknown>
+      const keys = Object.keys(entity)
+      if (
+        !keys.includes('publicKey') ||
+        keys.some((key) => key !== 'publicKey' && key !== 'introducedBy')
+      ) {
+        throw new Error('invalid test Entity')
+      }
+      const publicKey = this.validateEntityPublicKey(entity.publicKey)
+      const result: { publicKey: string; introducedBy?: string } = { publicKey }
+      if ('introducedBy' in entity) {
+        result.introducedBy = this.validateEntityPublicKey(entity.introducedBy)
+      }
+      return result
+    },
   })
 }
 
