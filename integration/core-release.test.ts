@@ -185,6 +185,9 @@ test(
         )
 
         assert.equal(entityService.validateEntityPublicKey(identity), identity)
+        assert.deepEqual(entityService.validateEntity({ publicKey: repoIdentity }), {
+          publicKey: repoIdentity,
+        })
 
         const rawRecord = {
           protocol: MEMBER_PROTOCOL_REFERENCE,
