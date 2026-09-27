@@ -60,15 +60,33 @@ Resolution must not silently fall back to:
 - a nearest or semver-compatible version;
 - another loaded implementation that appears behaviorally compatible.
 
-Two implementations with the same human-readable `name@version` but different hashes are not interchangeable for historical validation.
+Two implementations with the same human-readable Protocol namespace/name/version but different hashes are different builds claiming the same version. They are invalid as a single node / candidate-Block composition and must fail closed rather than coexist.
 
-## Coexistence
+## Coexistence and build uniqueness
 
-A runtime may need several historical ProtocolHash values at the same time.
+A runtime may need several historical ProtocolHash values at the same time when they belong to genuinely distinct Protocol references/versions.
 
-Coexistence is a resolution requirement, not permission to create a second plugin manager. The Host/runtime may maintain the minimum lookup needed to associate an exact verified ProtocolHash with the Cordis-loaded implementation that provides those semantics.
+For example:
 
-A collision or ambiguous runtime mapping in which one exact ProtocolHash could resolve to more than one non-equivalent implementation must fail closed.
+```text
+foo@1.0.0 -> HASH_A
+foo@2.0.0 -> HASH_B
+```
+
+may coexist, while:
+
+```text
+foo@1.0.0 -> HASH_A
+foo@1.0.0 -> HASH_B
+```
+
+is a same-version build conflict and is invalid.
+
+The Host/runtime may maintain only the minimum lookup needed to associate exact verified ProtocolHashes with Cordis-loaded implementations. This is not permission to create a second plugin manager.
+
+The same single-build invariant is enforced at boundaries that have the necessary context: SDK upload/publish, Repository download/load, and candidate-Block audit/validation. `core.protocol` itself remains limited to deterministic Protocol identity/artifact primitives and does not become a version registry.
+
+A collision or ambiguous runtime mapping in which one exact ProtocolHash could resolve to more than one non-equivalent implementation must also fail closed.
 
 ## Block validation relationship
 
@@ -102,7 +120,8 @@ Consumers must be able to distinguish at least:
 Tests must demonstrate that:
 
 - a fact is dispatched by its exact `ProtocolHash`, not merely by `name@version`;
-- two historical hashes can coexist when the runtime needs both;
+- historical hashes for genuinely distinct Protocol references/versions can coexist when the runtime needs them;
+- two different hashes claiming the same Protocol namespace/name/version are rejected as a build/version conflict;
 - a fact never falls back to `latest`, a nearest version or a same-version different artifact;
 - an unavailable exact hash fails explicitly;
 - a descriptor/artifact that does not verify against the requested hash fails explicitly;
