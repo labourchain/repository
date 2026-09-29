@@ -90,7 +90,7 @@ Cordis plugins 不按照 CRUD 操作或单个 Requirement 机械拆分。
 
 拆分主要服从协议边界、版本边界和生命周期。一起升级、一起加载、一起失效且没有独立运行价值的紧密协议可以由同一个 Cordis plugin 实现；能够被其他产品独立复用的协议应避免与 Repository 产品运行时绑定。
 
-Member、Repo、Asset 和 contribution relation 都应首先按各自协议边界提供可组合能力。LabourFlow 等上层产品可以只加载所需协议，不应为了使用同 identity 的 Member + Repo 能力而加载完整 Repository 产品运行时。
+Member、`labour.record`、Repo、Asset 和 contribution relation 都应首先按各自协议边界提供可组合能力。`labour.record@0.1.0` 是独立 Cordis Protocol implementation，不依赖 Board/Project 产品模型。LabourFlow 等上层产品可以只加载所需协议，不应为了使用同 identity 的 Member + labour Record + Repo 能力而加载完整 Repository 产品运行时.
 
 Contribution history 属于事实的 view / projection。它可以由插件提供查询、索引或缓存能力，但不需要为了概念完整性固定建立一个 History Protocol。
 
