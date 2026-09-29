@@ -17,6 +17,7 @@ import {
   MEMBER_PROTOCOL_SERVICE,
   RecordJournalService,
   createRepositoryNode,
+  runtimeRecordDatabasePlugin,
   type CoreRecordProtocolService,
   type CoreRecordValue,
 } from '../src/index.ts'
@@ -129,6 +130,7 @@ function composition(directory: string) {
     },
     { plugin: coreEntityProvider },
     { plugin: coreRecordProvider },
+    { plugin: runtimeRecordDatabasePlugin },
     { plugin: RecordJournalService, config: { directory } },
   ]
 }
@@ -147,7 +149,7 @@ test('Protocol artifact entry exports exactly one named plugin', async () => {
   assert.deepEqual(namespace.plugin.inject, [
     CORE_RECORD_PROTOCOL_SERVICE,
     MEMBER_PROTOCOL_SERVICE,
-    'recordJournal',
+    'runtimeRecordDatabase',
   ])
 })
 
