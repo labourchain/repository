@@ -41,7 +41,7 @@ Record
    描述一次已经发生的劳动
 ```
 
-labourRecord 的字段和正式 Protocol namespace 暂不在本概念页中冻结；它应由独立 labour Protocol 定义，并在 Repository 的可视化劳动记录测试之前实现。
+`labour.record@0.1.0` 已作为第一版独立 labour Protocol 收敛：`Record.data` 保持扁平，只包含劳动内容 `content`、主观投入 `duration`、可选成对时间日志 `startAt/endAt`、可选上游 Asset `references` 与可选成果 `assets`。tags、Project、summary 和通用 relations 不属于基础劳动事实。
 
 一条 labourRecord 可以描述形成、修改或维护 Asset 的劳动，也可以描述没有形成独立 Asset 的劳动，例如会议、沟通、组织、分析或学习。
 
