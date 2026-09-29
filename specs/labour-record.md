@@ -127,11 +127,13 @@ acceptLabourRecord(record)
 loadLabourRecord(recordId)
 ```
 
-`acceptLabourRecord` durably accepts the exact signed Record through the existing
-Record journal. This is pending-chain Runtime acceptance, not Block confirmation.
+`acceptLabourRecord` enters the existing Runtime Record database serialized ingress
+boundary. That Runtime boundary delegates exact durability to the Record journal.
+This is pending-chain Runtime acceptance, not Block confirmation.
 
-`loadLabourRecord` reads the exact durable Record and validates it again. No
-secondary labour index or projection is required for v0.1.0.
+`loadLabourRecord` reads the exact durable Record through the Runtime Record
+database boundary and validates it again. No secondary labour index, relationship
+state or projection is required for v0.1.0.
 
 ## Analysis boundary
 
