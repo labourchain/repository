@@ -237,6 +237,12 @@ test('requires deterministic RFC 3339 UTC time logs', async () => {
         startAt: '2026-09-29T01:00:00.125Z',
         endAt: '2026-09-29T01:30:00.875Z',
       },
+      {
+        content: '高精度 UTC 时间日志',
+        duration: 0.5,
+        startAt: '2026-09-29T01:00:00.123456Z',
+        endAt: '2026-09-29T01:30:00.123456789Z',
+      },
     ]
 
     for (const [index, data] of valid.entries()) {
@@ -282,6 +288,39 @@ test('requires deterministic RFC 3339 UTC time logs', async () => {
         LabourRecordValidationError,
       )
     }
+
+    await node.dispose()
+  })
+})
+
+test('orders RFC 3339 fractional seconds beyond millisecond precision', async () => {
+  await withDirectory(async (directory) => {
+    const node = await createRepositoryNode({ plugins: composition(directory) })
+    await declareMember(node)
+    const service = node.context[LABOUR_RECORD_PROTOCOL_SERVICE]
+
+    await assert.rejects(
+      service.acceptLabourRecord(
+        labourRecord('sub-millisecond-reversed', {
+          content: '亚毫秒级时间顺序校验',
+          duration: 0.5,
+          startAt: '2026-09-29T01:00:00.123456Z',
+          endAt: '2026-09-29T01:00:00.123455Z',
+        }),
+      ),
+      LabourRecordValidationError,
+    )
+
+    const accepted = await service.acceptLabourRecord(
+      labourRecord('fraction-equivalent', {
+        content: '等值小数秒表达',
+        duration: 0.5,
+        startAt: '2026-09-29T01:00:00.1Z',
+        endAt: '2026-09-29T01:00:00.100000Z',
+      }),
+    )
+    assert.equal(accepted.data.startAt, '2026-09-29T01:00:00.1Z')
+    assert.equal(accepted.data.endAt, '2026-09-29T01:00:00.100000Z')
 
     await node.dispose()
   })
