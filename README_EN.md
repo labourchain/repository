@@ -10,7 +10,7 @@ In the LabourChain model, the Worker is the subject of labour and Core Record is
 
 Repository uses Cordis as its runtime plugin model. Repository capability emerges from multiple Cordis plugins. Stable semantics that must remain historically addressable on chain are declared as versioned LabourChain Protocols and implemented by Cordis plugins. Repository does not build a separate Runner, Hoster, or mega-service framework around Cordis.
 
-Requirements, Architecture, and the MVP Specs have completed the current re-projection round. Bootstrap, the durable Record journal, and the minimum Member runtime are on `main`, and Core Protocols v0.1.0 are released. Draft PR #30 is now the current baseline-correction PR for Repo establishment, the Runtime Record database boundary, and the Membership/Record concept cleanup.
+Requirements, Architecture, and the MVP Specs have completed the current re-projection round. Bootstrap, the durable Record journal, the minimum Member runtime, Repo establishment, the Runtime Record database, and the `labour.record@0.1.0` minimum labour-fact Protocol are on `main`, and Core Protocols v0.1.0 are released.
 
 ## Documentation
 
@@ -24,7 +24,7 @@ Main entry points:
 - [`specs/repository-mvp.md`](./specs/repository-mvp.md): MVP umbrella Spec for capability composition, shared invariants, and completion criteria;
 - [`specs/`](./specs/): capability Specs split by stable functional boundary.
 
-The current capability Specs cover bootstrap, Repo, Protocol resolution, contribution, Asset storage, and contribution history. The minimum labourRecord Protocol is tracked separately in #32, while Asset is still in design. Contributor/member grouping is a product or local-software view rather than an on-chain membership capability.
+The current capability Specs cover bootstrap, Member, `labour.record`, Repo, Protocol resolution, contribution, Asset storage, and contribution history. `labour.record@0.1.0` keeps only flat labour content, subjective duration, optional observed time logs, and Asset references, while Asset itself remains in design. Contributor/member grouping is a product or local-software view rather than an on-chain membership capability.
 
 If Concepts, Requirements, Architecture, Spec, or implementation diverge, correct the mismatch at the appropriate upstream layer instead of silently choosing an interpretation in code.
 
@@ -108,4 +108,4 @@ The current checks mainly protect the Bootstrap runtime, Cordis lifecycle, and p
 
 The current package remains `private: true`.
 
-Bootstrap, the durable Record journal, and `member.identity` are complete. The current `repo.establishment@0.1.0` contract correction is being finalized in PR #30. Next work includes #32 minimum labourRecord, #7 exact Protocol resolution, and #8 Asset after its design is accepted; chain-level Repo membership has been removed from the MVP.
+Bootstrap, the durable Record journal, `member.identity`, `repo.establishment@0.1.0`, the Runtime Record database, and `labour.record@0.1.0` are complete. #7 exact Protocol resolution and #8 Asset after accepted design remain downstream. Chain-level Repo membership has been removed from the MVP.
