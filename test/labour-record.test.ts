@@ -218,6 +218,75 @@ test('accepts zero-duration incidental labour and optional observed time logs', 
   })
 })
 
+test('requires deterministic RFC 3339 UTC time logs', async () => {
+  await withDirectory(async (directory) => {
+    const node = await createRepositoryNode({ plugins: composition(directory) })
+    await declareMember(node)
+    const service = node.context[LABOUR_RECORD_PROTOCOL_SERVICE]
+
+    const valid = [
+      {
+        content: '无毫秒 UTC 时间日志',
+        duration: 0.5,
+        startAt: '2026-09-29T01:00:00Z',
+        endAt: '2026-09-29T01:30:00Z',
+      },
+      {
+        content: '带毫秒 UTC 时间日志',
+        duration: 0.5,
+        startAt: '2026-09-29T01:00:00.125Z',
+        endAt: '2026-09-29T01:30:00.875Z',
+      },
+    ]
+
+    for (const [index, data] of valid.entries()) {
+      const accepted = await service.acceptLabourRecord(
+        labourRecord(`valid-rfc3339-utc-${index}`, data),
+      )
+      assert.equal(accepted.data.startAt, data.startAt)
+      assert.equal(accepted.data.endAt, data.endAt)
+    }
+
+    const invalid = [
+      {
+        content: '缺少时区',
+        duration: 0.5,
+        startAt: '2026-09-29T01:00:00',
+        endAt: '2026-09-29T01:30:00',
+      },
+      {
+        content: '非 UTC offset',
+        duration: 0.5,
+        startAt: '2026-09-29T09:00:00+08:00',
+        endAt: '2026-09-29T09:30:00+08:00',
+      },
+      {
+        content: '非法日历日期',
+        duration: 0.5,
+        startAt: '2026-02-30T01:00:00Z',
+        endAt: '2026-02-30T01:30:00Z',
+      },
+      {
+        content: '非 RFC 时间字符串',
+        duration: 0.5,
+        startAt: '0',
+        endAt: '1',
+      },
+    ]
+
+    for (const [index, data] of invalid.entries()) {
+      await assert.rejects(
+        service.acceptLabourRecord(
+          labourRecord(`invalid-rfc3339-utc-${index}`, data),
+        ),
+        LabourRecordValidationError,
+      )
+    }
+
+    await node.dispose()
+  })
+})
+
 test('does not derive duration from startAt/endAt', async () => {
   await withDirectory(async (directory) => {
     const node = await createRepositoryNode({ plugins: composition(directory) })
