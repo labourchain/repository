@@ -13,6 +13,7 @@ export const LABOUR_RECORD_PROTOCOL_SERVICE =
   `protocol:${LABOUR_RECORD_PROTOCOL_REFERENCE}` as const
 
 const DIGEST_RE = /^[0-9a-f]{64}$/u
+const RFC3339_UTC_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?Z$/u
 const ALLOWED_DATA_KEYS = new Set([
   'content',
   'duration',
@@ -135,16 +136,30 @@ function requireAssetRefs(
 }
 
 function requireDateTime(value: unknown, field: 'startAt' | 'endAt'): string {
-  if (typeof value !== 'string' || value.length === 0) {
+  if (typeof value !== 'string') {
     throw new LabourRecordValidationError(
-      `labour.record ${field} must be a non-empty date-time string.`,
+      `labour.record ${field} must be an RFC 3339 UTC timestamp ending in Z.`,
     )
   }
-  if (!Number.isFinite(Date.parse(value))) {
+
+  const match = RFC3339_UTC_RE.exec(value)
+  if (!match) {
     throw new LabourRecordValidationError(
-      `labour.record ${field} must be a parseable date-time string.`,
+      `labour.record ${field} must be an RFC 3339 UTC timestamp ending in Z.`,
     )
   }
+
+  const [, year, month, day, hour, minute, second, fraction = ''] = match
+  const normalized =
+    `${year}-${month}-${day}T${hour}:${minute}:${second}.${fraction.padEnd(3, '0')}Z`
+  const timestamp = Date.parse(normalized)
+
+  if (!Number.isFinite(timestamp) || new Date(timestamp).toISOString() !== normalized) {
+    throw new LabourRecordValidationError(
+      `labour.record ${field} must be a valid RFC 3339 UTC timestamp ending in Z.`,
+    )
+  }
+
   return value
 }
 
