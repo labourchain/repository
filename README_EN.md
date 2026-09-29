@@ -10,7 +10,7 @@ In the LabourChain model, the Worker is the subject of labour and Core Record is
 
 Repository uses Cordis as its runtime plugin model. Repository capability emerges from multiple Cordis plugins. Stable semantics that must remain historically addressable on chain are declared as versioned LabourChain Protocols and implemented by Cordis plugins. Repository does not build a separate Runner, Hoster, or mega-service framework around Cordis.
 
-Requirements, Architecture, and the MVP Specs have completed the current re-projection round. Bootstrap, the durable Record journal, the minimum Member runtime, Repo establishment, and the Runtime Record database are on `main`, and Core Protocols v0.1.0 are released. Story #32 now implements the independent `labour.record@0.1.0` minimum labour-fact Protocol.
+Requirements, Architecture, and the MVP Specs have completed the current re-projection round. Bootstrap, the durable Record journal, the minimum Member runtime, Repo establishment, the Runtime Record database, and the `labour.record@0.1.0` minimum labour-fact Protocol are on `main`, and Core Protocols v0.1.0 are released.
 
 ## Documentation
 
@@ -108,4 +108,4 @@ The current checks mainly protect the Bootstrap runtime, Cordis lifecycle, and p
 
 The current package remains `private: true`.
 
-Bootstrap, the durable Record journal, `member.identity`, `repo.establishment@0.1.0`, and the Runtime Record database are complete. Current work is #32 `labour.record@0.1.0`; #7 exact Protocol resolution and #8 Asset after accepted design remain downstream. Chain-level Repo membership has been removed from the MVP.
+Bootstrap, the durable Record journal, `member.identity`, `repo.establishment@0.1.0`, the Runtime Record database, and `labour.record@0.1.0` are complete. #7 exact Protocol resolution and #8 Asset after accepted design remain downstream. Chain-level Repo membership has been removed from the MVP.
