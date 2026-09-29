@@ -36,6 +36,8 @@ duration
 startAt / endAt
     -> optional observational time log
     -> 成对出现
+    -> 使用 RFC 3339 UTC `Z` 格式
+    -> 不接受本地时间或其他时区 offset
     -> 不用于推导或校正 duration
 
 references[]
