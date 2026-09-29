@@ -7,11 +7,14 @@ import { pathToFileURL } from 'node:url'
 import { gunzipSync } from 'node:zlib'
 import { test } from 'node:test'
 import type { Plugin } from '@deepseek-ai/cordis'
+import { plugin as labourRecordPlugin } from '../src/protocols/labour.record.ts'
 import { plugin as memberIdentityPlugin } from '../src/protocols/member.identity.ts'
 import { plugin as repoEstablishmentPlugin } from '../src/protocols/repo.establishment.ts'
 import {
   CORE_ENTITY_PROTOCOL_SERVICE,
   CORE_RECORD_PROTOCOL_SERVICE,
+  LABOUR_RECORD_PROTOCOL_REFERENCE,
+  LABOUR_RECORD_PROTOCOL_SERVICE,
   MEMBER_PROTOCOL_REFERENCE,
   MEMBER_PROTOCOL_SERVICE,
   REPO_ESTABLISHMENT_PROTOCOL_REFERENCE,
@@ -35,6 +38,7 @@ const CORE_ENTITY_PROTOCOL_HASH =
 const CORE_RECORD_PROTOCOL_HASH =
   '752efeba281ee962b87f6fa69623c8e207dbed5f3a695cfc6871c9fc8a841df1'
 const MEMBER_PROTOCOL_HASH = 'a'.repeat(64)
+const LABOUR_RECORD_PROTOCOL_HASH = 'c'.repeat(64)
 const REPO_PROTOCOL_HASH = 'b'.repeat(64)
 const MAX_RUNTIME_BYTES = 1024 * 1024
 
@@ -150,6 +154,10 @@ test(
       const node = await createRepositoryNode({
         plugins: [
           {
+            plugin: labourRecordPlugin,
+            config: { protocolHash: LABOUR_RECORD_PROTOCOL_HASH },
+          },
+          {
             plugin: repoEstablishmentPlugin,
             config: { protocolHash: REPO_PROTOCOL_HASH },
           },
@@ -219,6 +227,46 @@ test(
         assert.deepEqual(
           await node.context.recordJournal.get(memberRecord.id),
           memberRecord,
+        )
+
+        const rawLabourRecord = {
+          protocol: LABOUR_RECORD_PROTOCOL_REFERENCE,
+          protocolHash: LABOUR_RECORD_PROTOCOL_HASH,
+          createdBy: identity,
+          createdAt: '2026-09-18T00:00:00.500Z',
+          data: {
+            content: '梳理新的 bug 排查原则与方法，形成 skill',
+            duration: 0.5,
+            references: ['asset:old-debug-notes'],
+            assets: ['asset:skill-debugging'],
+          },
+        }
+        const labourRecordId = recordService.recordId(rawLabourRecord)
+        const labourRecord: CoreRecordValue = {
+          id: labourRecordId,
+          ...rawLabourRecord,
+          signature: sign(
+            null,
+            recordService.signingPayload(labourRecordId),
+            privateKey,
+          ).toString('hex'),
+        }
+
+        assert.equal(recordService.verifySignature(labourRecord), true)
+
+        const acceptedLabour = await node.context[
+          LABOUR_RECORD_PROTOCOL_SERVICE
+        ].acceptLabourRecord(labourRecord)
+        const loadedLabour = await node.context[
+          LABOUR_RECORD_PROTOCOL_SERVICE
+        ].loadLabourRecord(labourRecordId)
+
+        assert.deepEqual(loadedLabour, acceptedLabour)
+        assert.equal(acceptedLabour.createdBy, identity)
+        assert.equal(acceptedLabour.data.duration, 0.5)
+        assert.deepEqual(
+          await node.context.recordJournal.get(labourRecordId),
+          labourRecord,
         )
 
         const repoKeyPair = generateKeyPairSync('ed25519')
