@@ -26,21 +26,22 @@ const MEMBER_PROTOCOL_HASH = 'a'.repeat(64)
 const MEMBER_KEY = 'member-key'
 const OTHER_KEY = 'other-key'
 
+function validateTestEntityPublicKey(value: unknown): string {
+  if (value !== MEMBER_KEY && value !== OTHER_KEY) {
+    throw new Error('invalid test EntityPublicKey')
+  }
+  return value
+}
+
 function coreEntityProvider(ctx: Context) {
   ctx.provide(CORE_ENTITY_PROTOCOL_SERVICE, {
-    validateEntityPublicKey(value: unknown) {
-      if (value !== MEMBER_KEY && value !== OTHER_KEY) {
-        throw new Error('invalid test EntityPublicKey')
-      }
-      return value
-    },
+    validateEntityPublicKey: validateTestEntityPublicKey,
     validateEntity(value: unknown) {
       if (typeof value !== 'object' || value === null || Array.isArray(value)) {
         throw new Error('invalid test Entity')
       }
       const entity = value as Record<string, unknown>
-      if (typeof entity.publicKey !== 'string') throw new Error('invalid test Entity')
-      return { publicKey: this.validateEntityPublicKey(entity.publicKey) }
+      return { publicKey: validateTestEntityPublicKey(entity.publicKey) }
     },
   })
 }
@@ -345,9 +346,12 @@ test('exact replay is idempotent', async () => {
   })
 })
 
-test('fails startup when Host does not supply an exact ProtocolHash', async () => {
-  await assert.rejects(
-    labourRecordPlugin.apply({} as Context, { protocolHash: 'not-a-hash' }),
+test('fails startup when Host does not supply an exact ProtocolHash', () => {
+  assert.throws(
+    () =>
+      labourRecordPlugin.apply({} as Context, {
+        protocolHash: 'not-a-hash',
+      }),
     LabourRecordProtocolConfigError,
   )
 })
