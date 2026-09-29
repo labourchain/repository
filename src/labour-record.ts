@@ -22,15 +22,13 @@ const ALLOWED_DATA_KEYS = new Set([
   'assets',
 ])
 
-export type AssetRef = string
-
 export interface LabourRecordData {
   readonly content: string
   readonly duration: number
   readonly startAt?: string
   readonly endAt?: string
-  readonly references?: readonly AssetRef[]
-  readonly assets?: readonly AssetRef[]
+  readonly references?: readonly string[]
+  readonly assets?: readonly string[]
 }
 
 export interface ValidatedLabourRecord extends CoreRecordValue {
