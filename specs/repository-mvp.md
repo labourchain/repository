@@ -15,6 +15,7 @@ The Specs are engineering projections of the current Requirements and Architectu
 | --- | --- |
 | [`bootstrap.md`](./bootstrap.md) | executable bootstrap and Cordis runtime integration |
 | [`member.md`](./member.md) | human Member identity capability over Core Entity identity |
+| [`labour-record.md`](./labour-record.md) | minimum Member-signed labour fact carried by Core Record |
 | [`repo.md`](./repo.md) | Repo establishment, stable identity, creation provenance, operator trace and loading |
 | [`protocol-resolution.md`](./protocol-resolution.md) | exact ProtocolHash / verified artifact resolution |
 | [`contribution.md`](./contribution.md) | Asset contribution, confirmation, Repository commit, staging and recovery |
@@ -100,7 +101,7 @@ Record
 └─ data = labourRecord
 ```
 
-A labour Record is produced/signed by the Member acting as labour subject, with stable identity/signature semantics supplied by Core. Other Protocol facts may represent Member declarations, Repo establishment, Repo decisions or other domains without becoming labour facts. Story #32 defines and implements the minimum labourRecord Protocol before meaningful Repository labour-record visual testing and before the Contribution vertical slice.
+A labour Record is produced/signed by the Member acting as labour subject, with stable identity/signature semantics supplied by Core. The minimum Protocol is `labour.record@0.1.0`; its flat data contains `content`, subjective `duration` in 0.5-hour increments, optional paired `startAt/endAt`, optional confirmed upstream `references`, and optional directly associated result `assets`. Tags, summaries, Project identity and generic relations are analysis/organization concerns rather than base labour facts. Other Protocol facts may represent Member declarations, Repo establishment, Repo decisions or other domains without becoming labour facts.
 
 Repository does not turn Records into Repository-owned domain objects or maintain a canonical `repo.records[]` collection.
 
@@ -185,6 +186,11 @@ member
   -> uses Core EntityPublicKey
   -> identifies a human Member
   -> may compose Repo on the same identity/keypair
+
+labour-record
+  -> uses Core Record + Member capability
+  -> records flat labour content, subjective duration and optional observed time logs
+  -> may cite upstream Asset references and declare directly associated result Assets
 
 durable Record ingress / journal
   -> Runtime/composition dependency
