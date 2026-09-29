@@ -6,6 +6,7 @@ All notable user-visible changes to this project will be documented here.
 
 ### Added
 
+- Independent `labour.record@0.1.0` Cordis Protocol capability with flat Member-signed labour facts, subjective 0.5-hour duration, optional observed time logs, and optional upstream/result Asset references.
 - Initial spec-driven Repository scaffold.
 - Requirements -> Spec -> Implementation development model.
 - Repository product requirements under `docs/requirements.md`.
