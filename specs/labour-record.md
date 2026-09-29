@@ -78,8 +78,10 @@ Git activity, chat context or a timer. It is not required to equal
 
 `startAt` and `endAt` are optional observational time-log fields.
 
-They are either both absent or both present. When present they must be parseable
-date-time strings and `startAt <= endAt`.
+They are either both absent or both present. When present they must use the
+RFC 3339 UTC form ending in `Z` (for example `2026-09-29T13:30:00Z` or
+`2026-09-29T13:30:00.123Z`). Local-time strings and numeric UTC offsets are not
+accepted. The timestamps must be valid calendar times and `startAt <= endAt`.
 
 These fields do not claim perfect measurement and do not define `duration`.
 
@@ -174,8 +176,8 @@ Tests must demonstrate that:
 - `content` must be non-empty;
 - `duration` accepts 0 and 0.5-hour multiples, but rejects negative,
   non-finite and finer-grained values;
-- `startAt/endAt` are optional as a pair and do not constrain duration;
-- invalid or reversed time ranges fail;
+- `startAt/endAt` are optional as a pair, use RFC 3339 UTC `Z` timestamps, and do not constrain duration;
+- timezone-less, non-UTC-offset, invalid-calendar, or reversed time ranges fail;
 - `references/assets` are optional lists of unique non-empty opaque strings;
 - the same Asset reference may occur once in each list;
 - missing Asset references do not require Asset resolution during labour Record
