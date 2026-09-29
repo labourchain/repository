@@ -8,7 +8,7 @@
 
 Repository 采用 Cordis 的插件运行模型。仓库能力由多个 Cordis plugins 共同形成；其中需要被链上历史长期引用的稳定语义以版本化 LabourChain Protocol 声明，并由 Cordis plugin 实现。Repository 不建立独立于 Cordis 的 Runner、Hoster 或 mega-service 体系。
 
-Requirements、Architecture 与 MVP Specs 已完成当前轮次的重新投影。Bootstrap、durable Record journal、最小 Member runtime、Repo establishment 与 Runtime Record database 已进入 `main`；Core Protocols v0.1.0 已发布。当前 #32 实现独立的 `labour.record@0.1.0` 最小劳动事实 Protocol。
+Requirements、Architecture 与 MVP Specs 已完成当前轮次的重新投影。Bootstrap、durable Record journal、最小 Member runtime、Repo establishment、Runtime Record database 与 `labour.record@0.1.0` 最小劳动事实 Protocol 已进入 `main`；Core Protocols v0.1.0 已发布。
 
 ## 文档
 
@@ -110,4 +110,4 @@ pnpm run package:check
 
 当前 package 保持 `private: true`。
 
-Bootstrap runtime、durable Record journal、`member.identity`、`repo.establishment@0.1.0` 与 Runtime Record database 已完成。当前推进 #32 `labour.record@0.1.0`；其后仍有 #7 exact Protocol resolution 与需要先完成设计的 #8 Asset。链上 Repo membership 已从 MVP 移除。
+Bootstrap runtime、durable Record journal、`member.identity`、`repo.establishment@0.1.0`、Runtime Record database 与 `labour.record@0.1.0` 已完成。后续仍有 #7 exact Protocol resolution 与需要先完成设计的 #8 Asset。链上 Repo membership 已从 MVP 移除。
