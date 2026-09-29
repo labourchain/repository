@@ -20,6 +20,37 @@ Repository MVP 包括：
 
 Member 是人类参与者在协议与实现层的称呼，以 Core Entity identity 为身份锚点。`Worker` 保留为概念层的劳动主体描述，不作为程序中的人类实体类型。Core Record 是通用协议事实容器；描述劳动的领域事实暂称 `labourRecord`，作为适用 labour Protocol 下的一种 `Record.data`，由承担劳动的 Member 以其 Entity identity 产生或签署。Repo 自身作出的链上决定由 Repo identity 签名，并在相应 decision fact 中标注实际 operator。Record 被 Block 收录后获得这条链上的收录与确证顺序。Repository 不把 Record 作为另一类规范仓库内容保存，可以为日常查询和分析保留与 contribution 相关的 Record 投影。
 
+## labour.record 最小劳动事实
+
+Repository MVP 使用独立的 `labour.record@0.1.0` Protocol 表达一项已经发生的劳动。Core Record 继续负责 RecordId、Protocol reference/hash、`createdBy`、`createdAt` 与 signature；劳动 Protocol 只定义扁平的 `Record.data`：
+
+```text
+content
+    -> 劳动者对“做了什么”的直接描述
+
+duration
+    -> 主观劳动投入标注，单位小时
+    -> >= 0，v0.1.0 使用 0.5h 粒度
+    -> 0 表示随手完成、未明显消耗注意力或精力的劳动
+
+startAt / endAt
+    -> optional observational time log
+    -> 成对出现
+    -> 不用于推导或校正 duration
+
+references[]
+    -> optional confirmed upstream Asset references
+    -> 表达这次劳动明确建立在什么已有劳动成果之上
+
+assets[]
+    -> optional directly associated result Asset references
+    -> 表达这次劳动直接声明形成/留下的成果关联
+```
+
+`references` / `assets` 的引用完整性不能成为快速劳动记录的前置负担。缺少引用不阻止 labour Record 成立；上层产品可以根据 Git、聊天、计时器、当前打开的资料或 LLM 分析提出引用建议，但未经确认的推测不写入基础劳动事实。
+
+`labour.record` 不记录 tags、Project、pid、assignee、status、priority、日报/周报、项目推进统计或 LLM 分类。它们属于组织、分析或 projection。Asset 的规范 identity、存在性和内容完整性仍由后续 Asset Protocol 定义；`labour.record@0.1.0` 只把 Asset reference 当作 opaque reference 保存。
+
 ## Member 与身份组合
 
 Member 不建立第二套 identity。一个 Member 以 Core `EntityPublicKey` 为唯一身份锚点，通过 `member`、`member.profile` 及未来其他协议组合形成完整的人类参与者能力。
