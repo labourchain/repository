@@ -4,6 +4,7 @@ import {
   MEMBER_PROTOCOL_SERVICE,
   type CoreRecordValue,
 } from './member.ts'
+import { RUNTIME_RECORD_DATABASE_SERVICE } from './runtime-record-database.ts'
 
 export const LABOUR_RECORD_PROTOCOL_NAME = 'labour.record' as const
 export const LABOUR_RECORD_PROTOCOL_VERSION = '0.1.0' as const
@@ -346,24 +347,30 @@ export class LabourRecordService {
   }
 
   async acceptLabourRecord(value: unknown): Promise<LabourRecordView> {
-    return this.ctx.recordJournal.runExclusive(async (journal) => {
-      const record = await this.validateLabourRecord(value)
-      await journal.accept(record)
-      return labourRecordView(record)
-    })
+    return this.ctx[RUNTIME_RECORD_DATABASE_SERVICE].runExclusive(
+      async (database) => {
+        const record = await this.validateLabourRecord(value)
+        await database.accept(record)
+        return labourRecordView(record)
+      },
+    )
   }
 
   async loadLabourRecord(recordId: string): Promise<LabourRecordView> {
-    const stored = await this.ctx.recordJournal.get(recordId)
-    const record = await this.validateLabourRecord(stored)
-    return labourRecordView(record)
+    return this.ctx[RUNTIME_RECORD_DATABASE_SERVICE].runExclusive(
+      async (database) => {
+        const stored = await database.get(recordId)
+        const record = await this.validateLabourRecord(stored)
+        return labourRecordView(record)
+      },
+    )
   }
 }
 
 export const LABOUR_RECORD_PROTOCOL_INJECT = Object.freeze([
   CORE_RECORD_PROTOCOL_SERVICE,
   MEMBER_PROTOCOL_SERVICE,
-  'recordJournal',
+  RUNTIME_RECORD_DATABASE_SERVICE,
 ] as const)
 
 export function createLabourRecordProtocolPlugin() {
