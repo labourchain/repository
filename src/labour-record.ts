@@ -13,7 +13,7 @@ export const LABOUR_RECORD_PROTOCOL_SERVICE =
   `protocol:${LABOUR_RECORD_PROTOCOL_REFERENCE}` as const
 
 const DIGEST_RE = /^[0-9a-f]{64}$/u
-const RFC3339_UTC_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?Z$/u
+const RFC3339_UTC_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?Z$/u
 const ALLOWED_DATA_KEYS = new Set([
   'content',
   'duration',
@@ -135,7 +135,16 @@ function requireAssetRefs(
   return Object.freeze(refs)
 }
 
-function requireDateTime(value: unknown, field: 'startAt' | 'endAt'): string {
+interface ParsedUtcDateTime {
+  readonly value: string
+  readonly epochSecond: number
+  readonly fraction: string
+}
+
+function requireDateTime(
+  value: unknown,
+  field: 'startAt' | 'endAt',
+): ParsedUtcDateTime {
   if (typeof value !== 'string') {
     throw new LabourRecordValidationError(
       `labour.record ${field} must be an RFC 3339 UTC timestamp ending in Z.`,
@@ -150,17 +159,43 @@ function requireDateTime(value: unknown, field: 'startAt' | 'endAt'): string {
   }
 
   const [, year, month, day, hour, minute, second, fraction = ''] = match
-  const normalized =
-    `${year}-${month}-${day}T${hour}:${minute}:${second}.${fraction.padEnd(3, '0')}Z`
-  const timestamp = Date.parse(normalized)
+  const wholeSecond =
+    `${year}-${month}-${day}T${hour}:${minute}:${second}.000Z`
+  const timestamp = Date.parse(wholeSecond)
 
-  if (!Number.isFinite(timestamp) || new Date(timestamp).toISOString() !== normalized) {
+  if (
+    !Number.isFinite(timestamp) ||
+    new Date(timestamp).toISOString() !== wholeSecond
+  ) {
     throw new LabourRecordValidationError(
       `labour.record ${field} must be a valid RFC 3339 UTC timestamp ending in Z.`,
     )
   }
 
-  return value
+  return Object.freeze({
+    value,
+    epochSecond: timestamp,
+    fraction,
+  })
+}
+
+function compareDateTimes(
+  left: ParsedUtcDateTime,
+  right: ParsedUtcDateTime,
+): number {
+  if (left.epochSecond !== right.epochSecond) {
+    return left.epochSecond < right.epochSecond ? -1 : 1
+  }
+
+  const width = Math.max(left.fraction.length, right.fraction.length)
+  const leftFraction = left.fraction.padEnd(width, '0')
+  const rightFraction = right.fraction.padEnd(width, '0')
+
+  return leftFraction < rightFraction
+    ? -1
+    : leftFraction > rightFraction
+      ? 1
+      : 0
 }
 
 export function validateLabourRecordData(value: unknown): LabourRecordData {
@@ -202,13 +237,15 @@ export function validateLabourRecordData(value: unknown): LabourRecordData {
   let startAt: string | undefined
   let endAt: string | undefined
   if (hasStartAt && hasEndAt) {
-    startAt = requireDateTime(data.startAt, 'startAt')
-    endAt = requireDateTime(data.endAt, 'endAt')
-    if (Date.parse(startAt) > Date.parse(endAt)) {
+    const parsedStartAt = requireDateTime(data.startAt, 'startAt')
+    const parsedEndAt = requireDateTime(data.endAt, 'endAt')
+    if (compareDateTimes(parsedStartAt, parsedEndAt) > 0) {
       throw new LabourRecordValidationError(
         'labour.record startAt must not be later than endAt.',
       )
     }
+    startAt = parsedStartAt.value
+    endAt = parsedEndAt.value
   }
 
   const references = Object.prototype.hasOwnProperty.call(data, 'references')
