@@ -21,6 +21,7 @@ import {
 const HASH_A = 'a'.repeat(64)
 const HASH_B = 'b'.repeat(64)
 const HASH_C = 'c'.repeat(64)
+const HASH_INVALID = 'd'.repeat(64)
 
 function descriptor(
   name: string,
@@ -46,7 +47,7 @@ function coreProtocolProvider(ctx: Context) {
     },
     verifyArtifact(_protocol, bytes, expectedProtocolHash) {
       if (bytes.byteLength === 0) throw new Error('empty test artifact')
-      if (expectedProtocolHash === HASH_C) throw new Error('test hash mismatch')
+      if (expectedProtocolHash === HASH_INVALID) throw new Error('test hash mismatch')
       return expectedProtocolHash ?? HASH_A
     },
     verifyEmbeddedArtifact() {
@@ -329,13 +330,13 @@ test('rejects verification failure and human-readable reference mismatch', async
   const node = await nodeWith(
     new Map([
       [HASH_A, { protocol: alpha, artifact: artifact() }],
-      [HASH_C, { protocol: alpha, artifact: artifact() }],
+      [HASH_INVALID, { protocol: alpha, artifact: artifact() }],
     ]),
   )
   const service = node.context[PROTOCOL_RESOLUTION_SERVICE]
 
   await assert.rejects(
-    service.resolve('test.alpha@1.0.0', HASH_C),
+    service.resolve('test.alpha@1.0.0', HASH_INVALID),
     ProtocolResolutionError,
   )
   await assert.rejects(
