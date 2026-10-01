@@ -159,6 +159,57 @@ test('resolves exact Protocol dependencies before mounting the consumer', async 
   await node.dispose()
 })
 
+test('shares one exact dependency load across concurrent resolutions', async () => {
+  const dependency = descriptor('test.dep', '1.0.0')
+  const first = descriptor('test.first', '1.0.0', [
+    { name: 'test.dep', version: '1.0.0', protocolHash: HASH_A },
+  ])
+  const second = descriptor('test.second', '1.0.0', [
+    { name: 'test.dep', version: '1.0.0', protocolHash: HASH_A },
+  ])
+  const values = new Map([
+    [HASH_A, { protocol: dependency, artifact: artifact() }],
+    [HASH_B, { protocol: first, artifact: artifact() }],
+    [HASH_C, { protocol: second, artifact: artifact() }],
+  ])
+  let dependencyEvaluations = 0
+
+  const node = await createRepositoryNode({
+    plugins: [
+      {
+        plugin: protocolResolutionPlugin,
+        config: {
+          host: host(values, async (protocol) => {
+            if (protocol.name === 'test.dep') dependencyEvaluations += 1
+            return pluginNamespace(
+              protocol,
+              protocol.dependencies.map(
+                (dependency) =>
+                  `protocol:${dependency.name}@${dependency.version}`,
+              ),
+            )
+          }),
+        },
+      },
+      { plugin: coreProtocolProvider },
+    ],
+  })
+
+  await Promise.all([
+    node.context[PROTOCOL_RESOLUTION_SERVICE].resolve(
+      'test.first@1.0.0',
+      HASH_B,
+    ),
+    node.context[PROTOCOL_RESOLUTION_SERVICE].resolve(
+      'test.second@1.0.0',
+      HASH_C,
+    ),
+  ])
+
+  assert.equal(dependencyEvaluations, 1)
+  await node.dispose()
+})
+
 test('allows genuinely distinct Protocol versions to coexist', async () => {
   const first = descriptor('test.alpha', '1.0.0')
   const second = descriptor('test.alpha', '2.0.0')
