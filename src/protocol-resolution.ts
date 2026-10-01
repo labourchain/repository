@@ -327,6 +327,11 @@ export class ProtocolResolutionService {
       if (resolved.reference !== reference) {
         throw new ProtocolReferenceMismatchError(reference, resolved.reference)
       }
+      if (this.ctx.get(resolved.service) === undefined) {
+        throw new ProtocolRuntimeError(
+          `Resolved Protocol service is unavailable through Cordis: ${resolved.service}.`,
+        )
+      }
       return resolved
     }
 
@@ -372,8 +377,9 @@ export class ProtocolResolutionService {
       protocol = core.validateProtocol(source.protocol)
 
       if (source.artifact !== undefined) {
-        core.verifyArtifact(protocol, source.artifact, protocolHash)
-        artifact = source.artifact
+        const exactArtifact = Uint8Array.from(source.artifact)
+        core.verifyArtifact(protocol, exactArtifact, protocolHash)
+        artifact = exactArtifact
       } else {
         core.verifyEmbeddedArtifact(protocol, protocolHash)
         artifact = decodeEmbeddedArtifact(protocol)
