@@ -308,6 +308,19 @@ export class ProtocolResolutionService {
     protocolHash: string,
   ): Promise<ResolvedProtocolView> {
     requireProtocolHash(protocolHash)
+    return this.resolveShared(reference, protocolHash, new Set())
+  }
+
+  private async resolveShared(
+    reference: string,
+    protocolHash: string,
+    stack: Set<string>,
+  ): Promise<ResolvedProtocolView> {
+    if (stack.has(protocolHash)) {
+      throw new ProtocolRuntimeError(
+        `Protocol dependency cycle includes ${protocolHash}.`,
+      )
+    }
 
     const resolved = this.resolvedByHash.get(protocolHash)
     if (resolved !== undefined) {
@@ -326,7 +339,7 @@ export class ProtocolResolutionService {
       return result
     }
 
-    const operation = this.resolveExact(reference, protocolHash, new Set())
+    const operation = this.resolveExact(reference, protocolHash, stack)
     this.inFlight.set(protocolHash, operation)
 
     try {
@@ -343,20 +356,6 @@ export class ProtocolResolutionService {
     protocolHash: string,
     stack: Set<string>,
   ): Promise<ResolvedProtocolView> {
-    if (stack.has(protocolHash)) {
-      throw new ProtocolRuntimeError(
-        `Protocol dependency cycle includes ${protocolHash}.`,
-      )
-    }
-
-    const existing = this.resolvedByHash.get(protocolHash)
-    if (existing !== undefined) {
-      if (existing.reference !== reference) {
-        throw new ProtocolReferenceMismatchError(reference, existing.reference)
-      }
-      return existing
-    }
-
     const nextStack = new Set(stack)
     nextStack.add(protocolHash)
 
@@ -410,10 +409,17 @@ export class ProtocolResolutionService {
 
     try {
       for (const dependency of protocol.dependencies) {
-        await this.resolveExact(
+        await this.resolveShared(
           `${dependency.name}@${dependency.version}`,
           dependency.protocolHash,
           nextStack,
+        )
+      }
+
+      const service = serviceKey(protocol)
+      if (this.ctx.get(service) !== undefined) {
+        throw new ProtocolRuntimeError(
+          `Protocol service is already mounted outside exact resolution: ${service}.`,
         )
       }
 
@@ -424,13 +430,6 @@ export class ProtocolResolutionService {
         protocolHash,
       )
       const plugin = validateRuntimeModule(protocol, namespace)
-      const service = serviceKey(protocol)
-
-      if (this.ctx.get(service) !== undefined) {
-        throw new ProtocolRuntimeError(
-          `Protocol service is already mounted outside exact resolution: ${service}.`,
-        )
-      }
 
       const fiber = this.ctx.plugin(plugin, { protocolHash }) as Fiber &
         PromiseLike<Fiber>
