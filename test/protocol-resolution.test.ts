@@ -159,6 +159,55 @@ test('resolves exact Protocol dependencies before mounting the consumer', async 
   await node.dispose()
 })
 
+test('executes an immutable copy of the verified external artifact', async () => {
+  const dependency = descriptor('test.dep', '1.0.0')
+  const consumer = descriptor('test.consumer', '1.0.0', [
+    { name: 'test.dep', version: '1.0.0', protocolHash: HASH_A },
+  ])
+  const dependencyArtifact = artifact()
+  const consumerArtifact = artifact()
+
+  const node = await createRepositoryNode({
+    plugins: [
+      {
+        plugin: protocolResolutionPlugin,
+        config: {
+          host: {
+            async resolveArtifact(protocolHash: string) {
+              if (protocolHash === HASH_B) {
+                return { protocol: consumer, artifact: consumerArtifact }
+              }
+              if (protocolHash === HASH_A) {
+                consumerArtifact.fill(0)
+                return { protocol: dependency, artifact: dependencyArtifact }
+              }
+              return undefined
+            },
+            async evaluateRuntime(protocol: ProtocolDescriptor) {
+              return pluginNamespace(
+                protocol,
+                protocol.dependencies.map(
+                  (dependency) =>
+                    `protocol:${dependency.name}@${dependency.version}`,
+                ),
+              )
+            },
+          },
+        },
+      },
+      { plugin: coreProtocolProvider },
+    ],
+  })
+
+  const resolved = await node.context[PROTOCOL_RESOLUTION_SERVICE].resolve(
+    'test.consumer@1.0.0',
+    HASH_B,
+  )
+
+  assert.equal(resolved.protocolHash, HASH_B)
+  await node.dispose()
+})
+
 test('shares one exact dependency load across concurrent resolutions', async () => {
   const dependency = descriptor('test.dep', '1.0.0')
   const first = descriptor('test.first', '1.0.0', [
