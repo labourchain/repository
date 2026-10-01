@@ -12,6 +12,7 @@ import { plugin as memberIdentityPlugin } from '../src/protocols/member.identity
 import { plugin as repoEstablishmentPlugin } from '../src/protocols/repo.establishment.ts'
 import {
   CORE_ENTITY_PROTOCOL_SERVICE,
+  CORE_PROTOCOL_PROTOCOL_SERVICE,
   CORE_RECORD_PROTOCOL_SERVICE,
   LABOUR_RECORD_PROTOCOL_REFERENCE,
   LABOUR_RECORD_PROTOCOL_SERVICE,
@@ -19,8 +20,10 @@ import {
   MEMBER_PROTOCOL_SERVICE,
   REPO_ESTABLISHMENT_PROTOCOL_REFERENCE,
   REPO_ESTABLISHMENT_PROTOCOL_SERVICE,
+  PROTOCOL_RESOLUTION_SERVICE,
   RecordJournalService,
   createRepositoryNode,
+  protocolResolutionPlugin,
   runtimeRecordDatabasePlugin,
   type CoreEntityProtocolService,
   type CoreRecordProtocolService,
@@ -33,6 +36,8 @@ const CORE_RELEASE_BASE =
   'https://github.com/labourchain/core-protocols/releases/download/' +
   CORE_RELEASE
 
+const CORE_PROTOCOL_PROTOCOL_HASH =
+  '19b39e1f09682fed5b8648835a6c0dc9753ed0b60d9efc9397388a2ee9dfb198'
 const CORE_ENTITY_PROTOCOL_HASH =
   'c507745d8e17760f25d852f3889381ca9053b0197f418bdc0f0a5e9e0f19ae9c'
 const CORE_RECORD_PROTOCOL_HASH =
@@ -72,7 +77,7 @@ interface CoreRecordRuntimeService extends CoreRecordProtocolService {
 }
 
 async function loadReleasedCorePlugin(
-  name: 'core.entity' | 'core.record',
+  name: 'core.protocol' | 'core.entity' | 'core.record',
   expectedProtocolHash: string,
   directory: string,
 ): Promise<Plugin> {
@@ -129,6 +134,103 @@ async function loadReleasedCorePlugin(
 
   return namespace.plugin as Plugin
 }
+
+test(
+  'exact Protocol resolution verifies and mounts released Core artifacts',
+  async () => {
+    const root = await mkdtemp(join(tmpdir(), 'labourchain-protocol-resolution-'))
+
+    try {
+      const coreProtocolPlugin = await loadReleasedCorePlugin(
+        'core.protocol',
+        CORE_PROTOCOL_PROTOCOL_HASH,
+        root,
+      )
+
+      const descriptorUrl =
+        CORE_RELEASE_BASE + '/core.entity-' + CORE_VERSION + '.json'
+      const response = await fetch(descriptorUrl, { redirect: 'follow' })
+      assert.equal(response.ok, true)
+      const descriptor =
+        (await response.json()) as ReleasedProtocolDescriptor
+      assert.equal(descriptor.protocolHash, CORE_ENTITY_PROTOCOL_HASH)
+      assert.equal(typeof descriptor.protocol.artifact, 'string')
+
+      const artifact = Buffer.from(
+        descriptor.protocol.artifact as string,
+        'base64',
+      )
+
+      const node = await createRepositoryNode({
+        plugins: [
+          {
+            plugin: protocolResolutionPlugin,
+            config: {
+              host: {
+                async resolveArtifact(protocolHash: string) {
+                  if (protocolHash !== CORE_ENTITY_PROTOCOL_HASH) {
+                    return undefined
+                  }
+                  return {
+                    protocol: descriptor.protocol,
+                    artifact,
+                  }
+                },
+                async evaluateRuntime(
+                  _protocol: unknown,
+                  runtimeBytes: Uint8Array,
+                  protocolHash: string,
+                ) {
+                  const runtimePath = join(
+                    root,
+                    'resolved-' + protocolHash + '.mjs',
+                  )
+                  await writeFile(runtimePath, runtimeBytes)
+                  return import(
+                    pathToFileURL(runtimePath).href + '?' + protocolHash
+                  )
+                },
+              },
+            },
+          },
+          { plugin: coreProtocolPlugin },
+        ],
+      })
+
+      try {
+        const resolved = await node.context[
+          PROTOCOL_RESOLUTION_SERVICE
+        ].resolve(
+          'core.entity@0.1.0',
+          CORE_ENTITY_PROTOCOL_HASH,
+        )
+
+        assert.deepEqual(resolved, {
+          protocolHash: CORE_ENTITY_PROTOCOL_HASH,
+          reference: 'core.entity@0.1.0',
+          service: CORE_ENTITY_PROTOCOL_SERVICE,
+        })
+
+        const entityService = node.context[
+          CORE_ENTITY_PROTOCOL_SERVICE
+        ] as CoreEntityRuntimeService
+        const bytes = Buffer.alloc(32, 7)
+        const identity = entityService.encodeBase58btc(bytes)
+        assert.equal(entityService.validateEntityPublicKey(identity), identity)
+      } finally {
+        await node.dispose()
+      }
+
+      assert.equal(
+        node.context.get(CORE_ENTITY_PROTOCOL_SERVICE),
+        undefined,
+      )
+      assert.ok(node.context.get(CORE_PROTOCOL_PROTOCOL_SERVICE) === undefined)
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  },
+)
 
 test(
   'Member and Repo establishment run against released Core v0.1.0 Protocol artifacts',
