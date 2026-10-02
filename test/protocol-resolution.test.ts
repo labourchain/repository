@@ -5,6 +5,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import {
   CORE_PROTOCOL_PROTOCOL_SERVICE,
   PROTOCOL_RESOLUTION_SERVICE,
+  ProtocolArtifactUnavailableError,
   ProtocolBuildConflictError,
   ProtocolReferenceMismatchError,
   ProtocolResolutionError,
@@ -260,6 +261,39 @@ test('shares one exact dependency load across concurrent resolutions', async () 
   await node.dispose()
 })
 
+test('rejects concurrent cross-root dependency cycles without hanging', async () => {
+  const first = descriptor('test.first', '1.0.0', [
+    { name: 'test.second', version: '1.0.0', protocolHash: HASH_B },
+  ])
+  const second = descriptor('test.second', '1.0.0', [
+    { name: 'test.first', version: '1.0.0', protocolHash: HASH_A },
+  ])
+  const node = await nodeWith(
+    new Map([
+      [HASH_A, { protocol: first, artifact: artifact() }],
+      [HASH_B, { protocol: second, artifact: artifact() }],
+    ]),
+  )
+
+  const results = await Promise.allSettled([
+    node.context[PROTOCOL_RESOLUTION_SERVICE].resolve(
+      'test.first@1.0.0',
+      HASH_A,
+    ),
+    node.context[PROTOCOL_RESOLUTION_SERVICE].resolve(
+      'test.second@1.0.0',
+      HASH_B,
+    ),
+  ])
+
+  assert.ok(results.some(
+    (result) =>
+      result.status === 'rejected' &&
+      result.reason instanceof ProtocolRuntimeError,
+  ))
+  await node.dispose()
+})
+
 test('allows genuinely distinct Protocol versions to coexist', async () => {
   const first = descriptor('test.alpha', '1.0.0')
   const second = descriptor('test.alpha', '2.0.0')
@@ -322,6 +356,23 @@ test('fails when exact hash is unavailable without fallback', async () => {
     ),
     ProtocolUnavailableError,
   )
+  await node.dispose()
+})
+
+test('distinguishes an unavailable executable artifact', async () => {
+  const alpha = descriptor('test.alpha', '1.0.0')
+  const node = await nodeWith(
+    new Map([[HASH_A, { protocol: alpha }]]),
+  )
+
+  await assert.rejects(
+    node.context[PROTOCOL_RESOLUTION_SERVICE].resolve(
+      'test.alpha@1.0.0',
+      HASH_A,
+    ),
+    ProtocolArtifactUnavailableError,
+  )
+
   await node.dispose()
 })
 
