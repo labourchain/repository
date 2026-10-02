@@ -93,6 +93,16 @@ export class ProtocolUnavailableError extends ProtocolResolutionError {
   }
 }
 
+export class ProtocolArtifactUnavailableError extends ProtocolResolutionError {
+  readonly protocolHash: string
+
+  constructor(protocolHash: string) {
+    super(`Executable artifact is unavailable for ProtocolHash: ${protocolHash}`)
+    this.name = 'ProtocolArtifactUnavailableError'
+    this.protocolHash = protocolHash
+  }
+}
+
 export class ProtocolBuildConflictError extends ProtocolResolutionError {
   readonly reference: string
   readonly acceptedProtocolHash: string
@@ -297,6 +307,7 @@ export class ProtocolResolutionService {
   private readonly resolvedByHash = new Map<string, ResolvedProtocolView>()
   private readonly hashByReference = new Map<string, string>()
   private readonly inFlight = new Map<string, Promise<ResolvedProtocolView>>()
+  private readonly waitingFor = new Map<string, string>()
 
   constructor(ctx: Context, host: ProtocolResolutionHost) {
     this.ctx = ctx
@@ -356,6 +367,39 @@ export class ProtocolResolutionService {
     }
   }
 
+  private async resolveDependency(
+    parentHash: string,
+    reference: string,
+    protocolHash: string,
+    stack: Set<string>,
+  ): Promise<ResolvedProtocolView> {
+    this.assertNoWaitCycle(parentHash, protocolHash)
+    this.waitingFor.set(parentHash, protocolHash)
+
+    try {
+      return await this.resolveShared(reference, protocolHash, stack)
+    } finally {
+      if (this.waitingFor.get(parentHash) === protocolHash) {
+        this.waitingFor.delete(parentHash)
+      }
+    }
+  }
+
+  private assertNoWaitCycle(parentHash: string, protocolHash: string): void {
+    let current: string | undefined = protocolHash
+    const visited = new Set<string>()
+
+    while (current !== undefined && !visited.has(current)) {
+      if (current === parentHash) {
+        throw new ProtocolRuntimeError(
+          `Protocol dependency cycle includes ${parentHash}.`,
+        )
+      }
+      visited.add(current)
+      current = this.waitingFor.get(current)
+    }
+  }
+
   private async resolveExact(
     reference: string,
     protocolHash: string,
@@ -371,24 +415,40 @@ export class ProtocolResolutionService {
 
     const core = this.ctx[CORE_PROTOCOL_PROTOCOL_SERVICE]
     let protocol: ProtocolDescriptor
-    let artifact: Uint8Array
-
     try {
       protocol = core.validateProtocol(source.protocol)
-
-      if (source.artifact !== undefined) {
-        const exactArtifact = Uint8Array.from(source.artifact)
-        core.verifyArtifact(protocol, exactArtifact, protocolHash)
-        artifact = exactArtifact
-      } else {
-        core.verifyEmbeddedArtifact(protocol, protocolHash)
-        artifact = decodeEmbeddedArtifact(protocol)
-      }
     } catch (cause) {
       throw new ProtocolResolutionError(
         `Protocol verification failed for ${protocolHash}.`,
         { cause },
       )
+    }
+
+    let artifact: Uint8Array
+    if (source.artifact !== undefined) {
+      const exactArtifact = Uint8Array.from(source.artifact)
+      try {
+        core.verifyArtifact(protocol, exactArtifact, protocolHash)
+      } catch (cause) {
+        throw new ProtocolResolutionError(
+          `Protocol verification failed for ${protocolHash}.`,
+          { cause },
+        )
+      }
+      artifact = exactArtifact
+    } else {
+      if (protocol.artifact === undefined) {
+        throw new ProtocolArtifactUnavailableError(protocolHash)
+      }
+      try {
+        core.verifyEmbeddedArtifact(protocol, protocolHash)
+        artifact = decodeEmbeddedArtifact(protocol)
+      } catch (cause) {
+        throw new ProtocolResolutionError(
+          `Protocol verification failed for ${protocolHash}.`,
+          { cause },
+        )
+      }
     }
 
     sameReference(protocol, reference)
@@ -415,7 +475,8 @@ export class ProtocolResolutionService {
 
     try {
       for (const dependency of protocol.dependencies) {
-        await this.resolveShared(
+        await this.resolveDependency(
+          protocolHash,
           `${dependency.name}@${dependency.version}`,
           dependency.protocolHash,
           nextStack,
