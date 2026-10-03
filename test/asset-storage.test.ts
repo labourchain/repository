@@ -270,7 +270,8 @@ test('durable corruption is explicit and never returned as a valid Asset', async
   await node.context[ASSET_STORAGE_SERVICE].preserve(asset)
   const file = await finalizedAssetFile(directory)
   const bytes = await readFile(file)
-  bytes[bytes.length - 1] ^= 0x01
+  const lastByte = bytes.length - 1
+  bytes[lastByte] = bytes[lastByte]! ^ 0x01
   await writeFile(file, bytes)
 
   await assert.rejects(
