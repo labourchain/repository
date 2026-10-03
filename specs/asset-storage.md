@@ -204,6 +204,24 @@ The persistence tests must cross the actual persistent provider boundary. A mock
 that only stores the Asset in process memory does not satisfy restart,
 interruption or corruption coverage.
 
+## Deferred cross-boundary validation
+
+The #8 identity and storage invariants above are testable without another
+Repository architecture layer.
+
+Three assertions intentionally cannot be completed by the #8 implementation
+alone because they require the later Contribution boundary:
+
+- a successfully COMMITTED contribution cannot leave durable Record and Asset
+  state disagreeing about the contributed Asset;
+- a durable Asset by itself never upgrades a contribution to COMMITTED;
+- a missing upstream Asset follows the concrete contribution/applicable-Protocol
+  acceptance policy rather than an Asset-storage policy.
+
+Those tests belong in the #9 Contribution integration suite. This is a
+dependency on a real consumer boundary, not a reason to add transaction,
+registry or graph machinery to #8.
+
 ## Boundaries
 
 This Spec does not define:
