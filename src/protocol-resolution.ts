@@ -306,7 +306,13 @@ export class ProtocolResolutionService {
   private readonly host: ProtocolResolutionHost
   private readonly resolvedByHash = new Map<string, ResolvedProtocolView>()
   private readonly hashByReference = new Map<string, string>()
-  private readonly inFlight = new Map<string, Promise<ResolvedProtocolView>>()
+  private readonly inFlight = new Map<
+    string,
+    {
+      readonly reference: string
+      readonly promise: Promise<ResolvedProtocolView>
+    }
+  >()
   private readonly waitingFor = new Map<string, string>()
 
   constructor(ctx: Context, host: ProtocolResolutionHost) {
@@ -348,20 +354,37 @@ export class ProtocolResolutionService {
 
     const pending = this.inFlight.get(protocolHash)
     if (pending !== undefined) {
-      const result = await pending
-      if (result.reference !== reference) {
-        throw new ProtocolReferenceMismatchError(reference, result.reference)
+      try {
+        const result = await pending.promise
+        if (result.reference !== reference) {
+          throw new ProtocolReferenceMismatchError(reference, result.reference)
+        }
+        return result
+      } catch (cause) {
+        if (
+          cause instanceof ProtocolReferenceMismatchError &&
+          pending.reference !== reference
+        ) {
+          if (this.inFlight.get(protocolHash) === pending) {
+            this.inFlight.delete(protocolHash)
+          }
+          return this.resolveShared(reference, protocolHash, stack)
+        }
+        throw cause
       }
-      return result
     }
 
     const operation = this.resolveExact(reference, protocolHash, stack)
-    this.inFlight.set(protocolHash, operation)
+    const pendingResolution = Object.freeze({
+      reference,
+      promise: operation,
+    })
+    this.inFlight.set(protocolHash, pendingResolution)
 
     try {
       return await operation
     } finally {
-      if (this.inFlight.get(protocolHash) === operation) {
+      if (this.inFlight.get(protocolHash) === pendingResolution) {
         this.inFlight.delete(protocolHash)
       }
     }
