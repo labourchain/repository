@@ -460,6 +460,53 @@ test('adding a newer version does not change an existing exact resolution', asyn
   await node.dispose()
 })
 
+test('failed Protocol mounts are disposed and can be retried cleanly', async () => {
+  const alpha = descriptor('test.alpha', '1.0.0')
+  const values = new Map([
+    [HASH_A, { protocol: alpha, artifact: artifact() }],
+  ])
+  let attempts = 0
+  const failingPlugin = {
+    name: 'test.alpha@1.0.0',
+    provide: 'protocol:test.alpha@1.0.0',
+    inject: [],
+    apply() {
+      throw new Error('test startup failure')
+    },
+  }
+
+  const node = await createRepositoryNode({
+    plugins: [
+      {
+        plugin: protocolResolutionPlugin,
+        config: {
+          host: host(values, async (protocol) => {
+            attempts += 1
+            if (attempts === 1) return { plugin: failingPlugin }
+            return pluginNamespace(protocol)
+          }),
+        },
+      },
+      { plugin: coreProtocolProvider },
+    ],
+  })
+
+  const service = node.context[PROTOCOL_RESOLUTION_SERVICE]
+
+  await assert.rejects(
+    service.resolve('test.alpha@1.0.0', HASH_A),
+    ProtocolRuntimeError,
+  )
+  assert.equal(node.context.registry.get(failingPlugin), undefined)
+  assert.equal(node.context.get('protocol:test.alpha@1.0.0'), undefined)
+
+  const resolved = await service.resolve('test.alpha@1.0.0', HASH_A)
+  assert.equal(resolved.protocolHash, HASH_A)
+  assert.ok(node.context.get('protocol:test.alpha@1.0.0'))
+
+  await node.dispose()
+})
+
 test('validates runtime dependency projection', async () => {
   const dependency = descriptor('test.dep', '1.0.0')
   const consumer = descriptor('test.consumer', '1.0.0', [
