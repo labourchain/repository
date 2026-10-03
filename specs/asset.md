@@ -60,6 +60,24 @@ If such information later becomes semantically required, it belongs to a later
 Asset Protocol or another signed fact rather than storage-provider metadata
 silently entering the Asset identity.
 
+## Resource boundary
+
+`asset.content@0.1.0` accepts at most **16 MiB** (`16 * 1024 * 1024` bytes)
+of raw `content` bytes. The limit applies to the exact unencoded byte sequence
+before hashing or durable persistence; it does not measure JSON/base64,
+filesystem, database-row or provider-specific representation size.
+
+Content larger than this limit is outside this Protocol version and must fail
+deterministically as an Asset-content resource-limit error before hashing,
+durable lookup or persistence. A provider used for `asset.content@0.1.0` must
+support every valid Asset up to this limit; it must not impose a smaller hidden
+Asset-size policy. Ordinary I/O/capacity failures remain persistence failures.
+
+The MVP may therefore use a complete `Uint8Array` as its canonical Runtime
+representation without promising arbitrary-size in-memory processing. Future
+larger or streamed Asset support may evolve the Protocol/provider boundary;
+it does not change the identity formula defined below and is not part of #8.
+
 ## Identity
 
 Asset identity is derived, never provider-assigned.
@@ -164,22 +182,35 @@ not require local Asset resolution. Whether a later contribution requires a
 referenced Asset to be locally available is a Contribution/applicable-Protocol
 decision, not an Asset identity rule.
 
-## Immutability and conflict
+## Validation, immutability and conflict
 
-An accepted Asset value is immutable.
+An accepted Asset value is immutable. Incoming validation has one deterministic
+order before durable state is consulted:
 
-When an Asset with a claimed `id` is checked:
+1. reject raw `content.byteLength > 16 MiB` as an Asset-content resource-limit
+   error;
+2. recompute `contentHash` from the exact bytes and reject a mismatching claimed
+   `contentHash` as `InvalidAsset`;
+3. recompute `AssetId` from the supplied `protocol`, `protocolHash` and the
+   recomputed `contentHash`, and reject a mismatching claimed `id` as
+   `InvalidAsset`;
+4. resolve the exact `protocolHash` and require the human-readable `protocol`
+   reference to match that descriptor; a mismatch is a
+   `ProtocolReferenceMismatchError`.
 
-1. recompute `contentHash` from the exact bytes;
-2. recompute `AssetId` from `protocol`, `protocolHash` and the recomputed
-   `contentHash`;
-3. require both supplied derived values to match.
+Only an incoming Asset that passes all four steps is canonical-valid and may be
+compared with durable state by AssetId. If no durable value exists, it may be
+preserved. If the durable descriptor and bytes are exact-equal, preservation is
+idempotent success. Only if a canonical-valid incoming Asset resolves to an
+already-present AssetId whose durable descriptor or bytes differ is the result
+`AssetIdentityConflict`; the existing value must never be overwritten.
 
-An exact duplicate is the same logical Asset and may be handled idempotently.
-
-If an existing AssetId is associated with a different descriptor or different
-bytes, the implementation must fail closed. It must never replace the existing
-Asset under that identity.
+A caller therefore cannot manufacture an identity conflict merely by pairing a
+valid AssetId with unrelated bytes: that incoming object is `InvalidAsset`
+before durable lookup. Under normal cryptographic operation a canonical-valid
+identity conflict should be unreachable except for a hash collision, durable
+provider corruption/state anomaly, or implementation/storage defect, but the
+boundary remains deterministic and fails closed.
 
 ## Protocol boundary
 
@@ -231,9 +262,16 @@ Implementation must demonstrate:
 - deterministic `contentHash` and AssetId test vectors;
 - same exact input yields the same AssetId;
 - content or exact ProtocolHash changes yield a different AssetId;
-- invalid supplied `contentHash` or `id` fails closed;
+- size exactly 16 MiB is accepted, while size above 16 MiB fails with the
+  resource-limit result before hashing, durable lookup or visibility;
+- invalid supplied `contentHash` or `id` is `InvalidAsset`;
+- a human-readable `protocol` / exact descriptor mismatch is
+  `ProtocolReferenceMismatchError` before durable lookup;
 - exact duplicate validation is idempotent;
-- an AssetId conflict cannot silently replace accepted bytes;
+- arbitrary same-id/different-bytes input is `InvalidAsset`, not an identity
+  conflict;
+- a canonical-valid durable identity conflict/state anomaly fails closed and
+  cannot silently replace accepted bytes;
 - AssetId remains unchanged across serialization/restart;
 - `labour.record` may use AssetId directly in `references[]` and
   `assets[]`;
