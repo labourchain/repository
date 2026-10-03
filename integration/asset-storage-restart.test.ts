@@ -153,7 +153,8 @@ test('Asset durability, duplicate/conflict semantics and Record joins survive re
 
     const file = join(assetDirectory, `${asset.id}.asset`)
     const persisted = await readFile(file)
-    persisted[persisted.length - 1] ^= 0x01
+    const lastByte = persisted.length - 1
+    persisted[lastByte] = persisted[lastByte]! ^ 0x01
     await writeFile(file, persisted)
     const corrupted = await readFile(file)
 
