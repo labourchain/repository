@@ -90,7 +90,7 @@ Cordis plugins 不按照 CRUD 操作或单个 Requirement 机械拆分。
 
 拆分主要服从协议边界、版本边界和生命周期。一起升级、一起加载、一起失效且没有独立运行价值的紧密协议可以由同一个 Cordis plugin 实现；能够被其他产品独立复用的协议应避免与 Repository 产品运行时绑定。
 
-Member、`labour.record`、Repo、Asset 和 contribution relation 都应首先按各自协议边界提供可组合能力。`labour.record@0.1.0` 是独立 Cordis Protocol implementation，不依赖 Board/Project 产品模型。LabourFlow 等上层产品可以只加载所需协议，不应为了使用同 identity 的 Member + labour Record + Repo 能力而加载完整 Repository 产品运行时.
+Member、`labour.record`、Repo、Asset 和 contribution relation 都应首先按各自协议边界提供可组合能力。`labour.record@0.1.0` 与 `asset.content@0.1.0` 都是独立 Cordis Protocol implementations，不依赖 Board/Project 产品模型。LabourFlow 等上层产品可以只加载所需协议，不应为了使用同 identity 的 Member + labour Record + Asset + Repo 能力而加载完整 Repository 产品运行时.
 
 Contribution history 属于事实的 view / projection。它可以由插件提供查询、索引或缓存能力，但不需要为了概念完整性固定建立一个 History Protocol。
 
@@ -126,6 +126,68 @@ Chain-state / Block-confirmation access
 
 Repository 领域插件消费这些运行能力，但不通过 `repo.records[]` 或第二套链来替代 Core Block / canonical-chain 语义。
 
+## Asset Protocol 与持久化边界
+
+Asset 的领域 identity 与 Repository 的存储 identity 必须分离。当前 MVP 的
+`asset.content@0.1.0` 固定最小 Asset：
+
+```text
+exact content bytes
+    -> contentHash
+
+protocol + protocolHash + contentHash
+    -> deterministic AssetId
+```
+
+AssetId 使用与 Core Record identity 相同的 RFC 8785 JCS + DoubleSHA256
+确定性约定，但它不是 RecordId，也不把 Asset 变成 Core Record。Core 已有的
+`ProtocolHash` / exact artifact verification 直接复用；Repository 不为 Asset
+复制第二套 Protocol identity。
+
+Asset identity 不包含 Repo、Member、RecordId、createdAt、filename、
+`previous`、`pid` 或 provider-native key。生产来源和使用关系由已有
+labour Records 表达：
+
+```text
+Record.assets[]      -> directly associated result AssetIds
+Record.references[]  -> confirmed upstream AssetIds
+```
+
+因此 `old Asset -> labour -> new Asset` 的顺序以及一个 Asset 被多个后续
+labour Records 使用的分支关系，都从实际 Record/Asset 引用重建。Repository
+不建立 Asset DAG engine、reverse-link registry 或 generic relation store。
+
+Asset storage 是可替换 Runtime provider，只负责精确 durable bytes。最小边界
+等价于：
+
+```text
+preserve(exact Asset)
+get(AssetId)
+has(AssetId)
+```
+
+一次成功 preserve 必须使完整 descriptor + exact bytes 在重启后仍可读取；
+中断写入不能通过 get/has 暴露成完整 Asset。`asset.content@0.1.0` 将 raw
+content 明确限制为最多 16 MiB，使当前完整 `Uint8Array` 路径具有确定的资源
+边界；更大或 streaming Asset 留给未来 Protocol/provider 演进，不在 #8
+引入新的 streaming framework。
+
+精确重复写入幂等。incoming Asset 必须先通过 size、contentHash、AssetId 与
+exact Protocol/reference validation，之后才按 AssetId 查询 durable state；
+因此任意 same-id/different-bytes 输入首先是 InvalidAsset，只有 canonical-valid
+incoming Asset 与既有 durable descriptor/bytes 冲突时才是
+AssetIdentityConflict，并且绝不覆盖既有内容。
+
+Asset 的 durable existence 本身不是 Repository acceptance。Repo→Asset
+关系与 Asset 浏览列表来自 accepted contribution facts/state，而不是 Asset
+storage 内的 canonical registry。#9 Contribution 负责协调 durable Records、
+durable Asset 与 confirmations；两类 provider 不需要被强行塞进一个分布式
+transaction。Record 已持久但 Asset 尚未完成时，contribution 仍不能进入
+COMMITTED，恢复流程可以继续完成 Asset 持久化。
+
+缺失 Asset reference 在 storage 层只表现为 explicit not-found。
+`labour.record@0.1.0` 的创建仍不要求本地 resolution；某个 Contribution
+是否必须取得 referenced Asset，由其适用 Protocol 决定。
 
 ## Repo Runtime 与链上信任边界
 
@@ -328,8 +390,8 @@ sequenceDiagram
     Protocol->>Protocol: verify required labour-subject and Repo confirmations; retain Repo operator trace
     Protocol->>Journal: durably accept resulting Records
     Journal-->>Protocol: accepted/pending-chain
-    Protocol->>Assets: finalize durable accepted Asset
-    Assets-->>Protocol: retrievable
+    Protocol->>Assets: preserve exact Asset durably
+    Assets-->>Protocol: exact Asset retrievable
     Protocol->>Stage: reconcile / clear runtime state
     Protocol-->>Consumer: Repository committed / accepted
 
@@ -400,10 +462,10 @@ Repository 不以领域 service-owned state 复制链确证事实。
 
 Runtime 还可以保存：
 
-- Asset payload 或其他协议允许的持久内容；
+- exact Asset descriptor + content bytes；
 - Repo identity -> establishment RecordId 等领域关系索引；
 - 在未来具体 Protocol consumer 需要时新增的最小 Record relationship / dependency indexes；
-- Asset 查询索引；
+- 从 accepted contributions 派生的 Repo Asset / 查询 projection；
 - contribution history projection；
 - cache 和其他可重建运行数据。
 
