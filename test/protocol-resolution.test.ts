@@ -460,6 +460,66 @@ test('adding a newer version does not change an existing exact resolution', asyn
   await node.dispose()
 })
 
+test('cached exact resolution rejects a replacement Cordis provider', async () => {
+  const alpha = descriptor('test.alpha', '1.0.0')
+  const protocolService = 'protocol:test.alpha@1.0.0'
+  const runtimeService = 'runtime.helper'
+  const values = new Map([
+    [HASH_A, { protocol: alpha, artifact: artifact() }],
+  ])
+  const helperPlugin = {
+    name: 'runtime.helper',
+    provide: runtimeService,
+    inject: [],
+    apply(ctx: Context) {
+      ctx.provide(runtimeService, { helper: true })
+    },
+  }
+  const foreignPlugin = {
+    name: 'runtime.foreign-alpha',
+    provide: protocolService,
+    inject: [],
+    apply(ctx: Context) {
+      ctx.provide(protocolService, { protocol: 'foreign' })
+    },
+  }
+
+  const node = await createRepositoryNode({
+    plugins: [
+      {
+        plugin: protocolResolutionPlugin,
+        config: {
+          host: host(values, async (protocol) =>
+            pluginNamespace(protocol, [runtimeService]),
+          ),
+        },
+      },
+      { plugin: coreProtocolProvider },
+    ],
+  })
+  const helperFiber = node.context.plugin(helperPlugin)
+  await helperFiber
+
+  const service = node.context[PROTOCOL_RESOLUTION_SERVICE]
+  await service.resolve('test.alpha@1.0.0', HASH_A)
+
+  await helperFiber.dispose()
+  assert.equal(node.context.get(protocolService), undefined)
+
+  const foreignFiber = node.context.plugin(foreignPlugin)
+  await foreignFiber
+  assert.deepEqual(node.context.get(protocolService), {
+    protocol: 'foreign',
+  })
+
+  await assert.rejects(
+    service.resolve('test.alpha@1.0.0', HASH_A),
+    ProtocolRuntimeError,
+  )
+
+  await node.dispose()
+})
+
 test('failed Protocol mounts are disposed and can be retried cleanly', async () => {
   const alpha = descriptor('test.alpha', '1.0.0')
   const values = new Map([
