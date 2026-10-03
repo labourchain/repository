@@ -167,8 +167,16 @@ has(AssetId)
 ```
 
 一次成功 preserve 必须使完整 descriptor + exact bytes 在重启后仍可读取；
-中断写入不能通过 get/has 暴露成完整 Asset。精确重复写入幂等；同一 claimed
-AssetId 下出现不同 descriptor/bytes 时失败关闭，不能覆盖既有内容。
+中断写入不能通过 get/has 暴露成完整 Asset。`asset.content@0.1.0` 将 raw
+content 明确限制为最多 16 MiB，使当前完整 `Uint8Array` 路径具有确定的资源
+边界；更大或 streaming Asset 留给未来 Protocol/provider 演进，不在 #8
+引入新的 streaming framework。
+
+精确重复写入幂等。incoming Asset 必须先通过 size、contentHash、AssetId 与
+exact Protocol/reference validation，之后才按 AssetId 查询 durable state；
+因此任意 same-id/different-bytes 输入首先是 InvalidAsset，只有 canonical-valid
+incoming Asset 与既有 durable descriptor/bytes 冲突时才是
+AssetIdentityConflict，并且绝不覆盖既有内容。
 
 Asset 的 durable existence 本身不是 Repository acceptance。Repo→Asset
 关系与 Asset 浏览列表来自 accepted contribution facts/state，而不是 Asset
