@@ -210,6 +210,50 @@ test('executes an immutable copy of the verified external artifact', async () =>
   await node.dispose()
 })
 
+test('a concurrent wrong reference cannot poison a valid exact-hash resolution', async () => {
+  const alpha = descriptor('test.alpha', '1.0.0')
+  let release!: () => void
+  const gate = new Promise<void>((resolve) => {
+    release = resolve
+  })
+
+  const node = await createRepositoryNode({
+    plugins: [
+      {
+        plugin: protocolResolutionPlugin,
+        config: {
+          host: {
+            async resolveArtifact(protocolHash: string) {
+              assert.equal(protocolHash, HASH_A)
+              await gate
+              return { protocol: alpha, artifact: artifact() }
+            },
+            async evaluateRuntime(protocol: ProtocolDescriptor) {
+              return pluginNamespace(protocol)
+            },
+          },
+        },
+      },
+      { plugin: coreProtocolProvider },
+    ],
+  })
+
+  const service = node.context[PROTOCOL_RESOLUTION_SERVICE]
+  const wrong = service.resolve('test.wrong@1.0.0', HASH_A)
+  const valid = service.resolve('test.alpha@1.0.0', HASH_A)
+
+  release()
+
+  await assert.rejects(wrong, ProtocolReferenceMismatchError)
+  assert.deepEqual(await valid, {
+    protocolHash: HASH_A,
+    reference: 'test.alpha@1.0.0',
+    service: 'protocol:test.alpha@1.0.0',
+  })
+
+  await node.dispose()
+})
+
 test('shares one exact dependency load across concurrent resolutions', async () => {
   const dependency = descriptor('test.dep', '1.0.0')
   const first = descriptor('test.first', '1.0.0', [
