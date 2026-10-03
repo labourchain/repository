@@ -51,7 +51,21 @@ assets[]
 
 `references` / `assets` 的引用完整性不能成为快速劳动记录的前置负担。缺少引用不阻止 labour Record 成立；上层产品可以根据 Git、聊天、计时器、当前打开的资料或 LLM 分析提出引用建议，但未经确认的推测不写入基础劳动事实。
 
-`labour.record` 不记录 tags、Project、pid、assignee、status、priority、日报/周报、项目推进统计或 LLM 分类。它们属于组织、分析或 projection。Asset 的规范 identity、存在性和内容完整性仍由后续 Asset Protocol 定义；`labour.record@0.1.0` 只把 Asset reference 当作 opaque reference 保存。
+`labour.record` 不记录 tags、Project、pid、assignee、status、priority、日报/周报、项目推进统计或 LLM 分类。它们属于组织、分析或 projection。`labour.record@0.1.0` 仍只把 Asset reference 当作 opaque reference 保存；当前 `asset.content@0.1.0` 已将 MVP 的实际引用值收敛为 AssetId。
+
+## Asset 最小身份与内容
+
+Repository MVP 使用 `asset.content@0.1.0` 表达第一种最小 Asset。Asset 是精确 Protocol 语义下的不可变内容对象，最小值由 `id / protocol / protocolHash / contentHash / exact content bytes` 构成。
+
+`contentHash` 由精确内容字节确定性派生；AssetId 再由 `protocol + protocolHash + contentHash` 按 RFC 8785 JCS + DoubleSHA256 确定性派生。AssetId 与 Core RecordId、EntityPublicKey、ProtocolHash 是不同 identity 空间；其中 exact ProtocolHash 与其 verified artifact 继续复用 Core/Repository 已建立的精确协议解析边界。
+
+Asset 不重复劳动事实已经拥有的 `createdBy`、`createdAt`、signature 或关系字段，也不加入 `previous`、`pid`、Repo、Member、filename、MIME、tag 等字段。生产与使用关系继续由 labour Record 建立：`assets[]` 声明这次劳动直接留下的 AssetId，`references[]` 声明本次劳动明确建立在其上的既有 AssetId。
+
+因此修改链自然表现为 `old Asset -> labour -> new Asset`；同一个 Asset 也可以被多个后续 labour Records 引用形成分支。若一次维护没有改变精确内容，同一个 AssetId 可以同时出现在该 Record 的 `references[]` 与 `assets[]` 中，不为了记录劳动而制造空洞版本。
+
+内容或 exact ProtocolHash 改变时形成新的 AssetId，旧 Asset 不被原地改写。相同的精确 `protocol + protocolHash + content` 得到相同 AssetId；其生产者、被哪些 Repo 接受以及由哪些 Records 引用不进入 Asset identity。
+
+最小 Asset Protocol 只建立内容 identity/integrity。任意可写入磁盘的 bytes 不会因此自动成为被接受的劳动成果；它仍需进入真实 labour/contribution facts 与 Repository acceptance 流程。
 
 ## Member 与身份组合
 
@@ -152,7 +166,7 @@ Member / Repo identity、Repo creation provenance 以及已接受 contribution �
 
 Repository Runtime 必须维护经过适用 Protocol 验证的 Record 关系、顺序/依赖和待打包状态。新的 Repository 领域 Record 在进入正常 accepted/pending-chain 路径时，应在同一 Runtime 写入边界内完成关系验证并可靠持久接收；这些关系状态用于后续验证、追溯和 Block packing，但不因此成为链确证来源。
 
-Asset 的规范身份和语义由适用的 LabourChain Protocol 定义。Repository 不应为了存储、索引或展示方便而静默改写已经接受的 Asset、Record、confirmation 或 contribution relation。
+Asset 的规范身份和语义由适用的 LabourChain Protocol 定义。当前 `asset.content@0.1.0` 要求 AssetId 与内容完整性可由持久内容重新验证；成功持久化后，重启不得得到不同 identity 或不同 bytes。精确重复写入应安全收敛为同一 Asset；同一 claimed AssetId 下出现不同 descriptor/bytes 时必须失败，不能静默替换。Repository 不应为了存储、索引或展示方便而改写已经接受的 Asset、Record、confirmation 或 contribution relation。
 
 
 Repo 可更新状态采用 Record + Patch 的事实演化方式。Snapshot 只允许作为节点 Runtime 对这些事实的可重建物化结果，用于恢复、查询、索引或计算加速；Snapshot 不进入 Record 历史，不作为独立链上事实，也不得反向替代或覆盖 Record + Patch history。具体 Patch 数据结构由相应 Protocol / Spec 在进入实现范围时定义。
@@ -161,9 +175,9 @@ Repo 可更新状态采用 Record + Patch 的事实演化方式。Snapshot 只�
 
 ## Asset 读取与浏览
 
-使用方可以通过稳定的 LabourChain identity 或 reference 获取已经接受的 Asset，并区分目标 Asset 是否存在。
+使用方可以通过稳定 AssetId 获取已经接受的 Asset，并区分目标 Asset 是否存在、存储读取是否失败以及持久内容是否损坏。
 
-MVP 还需要支持查看 Repo 的 contributors 视图和 Assets。contributors 可以从已接受 contribution 派生；人工分组和筛选属于本地软件数据。
+MVP 还需要支持查看 Repo 的 contributors 视图和 Assets。contributors 与 Repo Asset 列表都可以从已接受 contribution 派生；因此底层 Asset storage 只需要精确 preserve/get/has 能力，不为了浏览需求建立第二套 Repo→Asset registry。人工分组和筛选属于本地软件数据。
 
 高级搜索、分页、全文索引和复杂查询在出现实际规模需求之前，不属于当前产品要求。
 
