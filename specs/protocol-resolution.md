@@ -1,6 +1,6 @@
 # Protocol Resolution Specification
 
-- **Status:** Draft
+- **Status:** Accepted
 - **Scope:** exact LabourChain ProtocolHash / executable-artifact resolution in a Cordis runtime
 - **Requirements:** [`../docs/requirements.md`](../docs/requirements.md)
 - **Architecture:** [`../docs/architecture.md`](../docs/architecture.md)
@@ -39,6 +39,25 @@ Protocol reference + ProtocolHash
 ```
 
 If Core verification cannot establish that the resolved descriptor/artifact corresponds to the requested `ProtocolHash`, resolution fails.
+
+## Host boundary
+
+Repository does not define a registry or distribution protocol in this capability.
+The Host supplies only two operational hooks:
+
+```text
+resolveArtifact(exact ProtocolHash)
+    -> descriptor + optional external artifact bytes
+    -> no name/version/latest fallback
+
+evaluateRuntime(verified decompressed runtime bytes)
+    -> evaluate inside the Host-established sandbox/capability boundary
+    -> return the ESM namespace to Repository for ABI validation
+```
+
+Repository performs Core verification before runtime evaluation. The Host hook is
+therefore not permission to rebuild source, install packages, choose a compatible
+version, or bypass exact artifact identity.
 
 ## Resolution behavior
 
