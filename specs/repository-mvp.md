@@ -18,8 +18,9 @@ The Specs are engineering projections of the current Requirements and Architectu
 | [`labour-record.md`](./labour-record.md) | minimum Member-signed labour fact carried by Core Record |
 | [`repo.md`](./repo.md) | Repo establishment, stable identity, creation provenance, operator trace and loading |
 | [`protocol-resolution.md`](./protocol-resolution.md) | exact ProtocolHash / verified artifact resolution |
+| [`asset.md`](./asset.md) | minimum immutable Asset identity, integrity and labour-reference semantics |
+| [`asset-storage.md`](./asset-storage.md) | exact durable preservation and retrieval of Asset content |
 | [`contribution.md`](./contribution.md) | Asset contribution, confirmation, Repository commit, staging and recovery |
-| [`asset-storage.md`](./asset-storage.md) | durable preservation and retrieval of accepted Assets |
 | [`contribution-history.md`](./contribution-history.md) | contribution-history view and derived projection |
 
 These boundaries are capability boundaries, not Story or Task boundaries. A Story may depend on several Specs, and one Spec may be implemented through several Stories and Tasks.
@@ -104,6 +105,29 @@ Record
 A labour Record is produced/signed by the Member acting as labour subject, with stable identity/signature semantics supplied by Core. The minimum Protocol is `labour.record@0.1.0`; its flat data contains `content`, subjective `duration` in 0.5-hour increments, optional paired `startAt/endAt`, optional confirmed upstream `references`, and optional directly associated result `assets`. Tags, summaries, Project identity and generic relations are analysis/organization concerns rather than base labour facts. Other Protocol facts may represent Member declarations, Repo establishment, Repo decisions or other domains without becoming labour facts.
 
 Repository does not turn Records into Repository-owned domain objects or maintain a canonical `repo.records[]` collection.
+
+### Asset identity is immutable and independent of storage
+
+The minimum Asset Protocol is `asset.content@0.1.0`. An Asset binds exact content
+bytes to exact Protocol semantics:
+
+```text
+content -> contentHash
+protocol + protocolHash + contentHash -> AssetId
+```
+
+AssetId is deterministic and separate from RecordId, EntityPublicKey and
+ProtocolHash. Provider-native paths/rows/keys never become Asset identity.
+
+Asset does not contain `createdBy`, `createdAt`, Repo, RecordId,
+`previous`, `pid` or a generic relation graph. Labour lineage is reconstructed
+from signed `labour.record.references[]` and `labour.record.assets[]` values.
+
+Exact duplicate Asset preservation is idempotent. A claimed AssetId associated
+with different descriptor data or bytes is a conflict and must fail closed.
+
+Asset durability is also separate from acceptance: durable bytes alone do not
+make a contribution Repository COMMITTED, and do not imply Block confirmation.
 
 ### Durable Record ingress is not Block confirmation
 
@@ -216,13 +240,19 @@ repo
 protocol-resolution
   -> resolves exact historical Protocol implementations
 
-contribution
-  -> uses protocol resolution + durable Record ingress
-  -> reaches Repository COMMITTED before Block packing
-  -> requires durable Asset retrieval
+asset
+  -> defines deterministic AssetId / content integrity
+  -> reuses exact ProtocolHash semantics
+  -> is referenced by labour-record references[] / assets[]
 
 asset-storage
-  -> preserves accepted Asset content
+  -> preserves exact Asset descriptor + bytes by AssetId
+  -> does not own Repo acceptance or a Repo->Asset registry
+
+contribution
+  -> uses protocol resolution + durable Record ingress + Asset storage
+  -> reaches Repository COMMITTED before Block packing
+  -> derives Repo/Asset acceptance from contribution semantics
 
 contribution-history
   -> projects Repository-committed contributions
@@ -238,6 +268,8 @@ Implementation must:
 - reuse Core Protocol, Entity, Record, signature and Block semantics rather than duplicating them;
 - treat Member and Repo as protocol-composed identities, not fixed provider-owned object schemas;
 - persist exact accepted Records through an explicit Runtime/composition dependency rather than a Repository-domain `records[]` model;
+- preserve Assets by deterministic AssetId without turning provider-native keys into identity or maintaining a parallel lineage registry;
+- derive Record/Asset lineage from signed labour Record references rather than `pid`/`previous` metadata;
 - use the Repository Runtime database as the serialized ingress boundary; concrete Protocol-owned relationship / pending-packing state is added only when a real consumer such as #9 requires it, without turning that runtime state into a second blockchain or canonical-chain authority;
 - treat Repository Runtime validation as the normal producer path rather than a chain trust root; peer validation of a future Block must recompute the Record-derived `vroot`, resolve exact ProtocolHashes from the actual Records, and independently validate their semantics and relations;
 - keep Repo fact evolution in Record + Patch history while treating Snapshot only as rebuildable Runtime materialization;
@@ -259,14 +291,15 @@ In addition to the acceptance tests defined by each capability Spec, the MVP int
 3. a valid Member can create a Repo identity fact from an exact establishment Record and reload that Repo after restart;
 4. the same Entity identity may compose Member + Repo capability without creating a second keypair or implying Asset/labour property rights;
 5. the minimum labourRecord Protocol can produce/validate a real Member-signed labour fact before the labour / Asset contribution path is integrated;
-6. a labour / Asset contribution resolves and verifies the exact required ProtocolHash / implementation artifacts;
-7. valid confirmations, durable Record ingress and durable Asset retrieval produce Repository `COMMITTED` / accepted state;
-8. the accepted Asset remains retrievable after restart;
-9. an interrupted contribution recovers without false acceptance or duplicate durable Record acceptance;
-10. a Repository-committed contribution appears in contribution history as pending-chain before Block inclusion;
-11. when chain-state access reports Block inclusion, the same history entry can be represented as block-confirmed without changing its Repository acceptance identity;
-12. Project and Board concepts are not required for the Repository MVP flow;
-13. plugin activation/disposal does not leak or duplicate owned resources.
+6. the minimum Asset Protocol deterministically derives and verifies AssetId from exact Protocol semantics and content;
+7. a labour / Asset contribution resolves and verifies the exact required ProtocolHash / implementation artifacts;
+8. valid confirmations, durable Record ingress and durable Asset retrieval produce Repository `COMMITTED` / accepted state;
+9. the accepted Asset remains retrievable with the same AssetId and exact bytes after restart;
+10. an interrupted contribution recovers without false acceptance or duplicate durable Record acceptance;
+11. a Repository-committed contribution appears in contribution history as pending-chain before Block inclusion;
+12. when chain-state access reports Block inclusion, the same history entry can be represented as block-confirmed without changing its Repository acceptance identity;
+13. Project and Board concepts are not required for the Repository MVP flow;
+14. plugin activation/disposal does not leak or duplicate owned resources.
 
 An in-memory-only path may be used for isolated unit or contract tests but does not by itself satisfy the usable Repository MVP because restart and recovery behavior are part of the product requirements.
 
