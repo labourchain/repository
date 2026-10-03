@@ -305,6 +305,7 @@ export class ProtocolResolutionService {
   private readonly ctx: Context
   private readonly host: ProtocolResolutionHost
   private readonly resolvedByHash = new Map<string, ResolvedProtocolView>()
+  private readonly providerByHash = new Map<string, Fiber>()
   private readonly hashByReference = new Map<string, string>()
   private readonly inFlight = new Map<
     string,
@@ -344,9 +345,15 @@ export class ProtocolResolutionService {
       if (resolved.reference !== reference) {
         throw new ProtocolReferenceMismatchError(reference, resolved.reference)
       }
-      if (this.ctx.get(resolved.service) === undefined) {
+      const provider = this.providerByHash.get(protocolHash)
+      const implementation = provider?.store?.[resolved.service]
+      if (
+        provider === undefined ||
+        implementation?.fiber !== provider ||
+        this.ctx.get(resolved.service) === undefined
+      ) {
         throw new ProtocolRuntimeError(
-          `Resolved Protocol service is unavailable through Cordis: ${resolved.service}.`,
+          `Verified Protocol provider is unavailable through Cordis: ${resolved.service}.`,
         )
       }
       return resolved
@@ -537,6 +544,7 @@ export class ProtocolResolutionService {
         reference,
         service,
       })
+      this.providerByHash.set(protocolHash, mountedFiber)
       this.resolvedByHash.set(protocolHash, view)
       return view
     } catch (cause) {
