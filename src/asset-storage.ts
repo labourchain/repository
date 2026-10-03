@@ -5,7 +5,6 @@ import { isDeepStrictEqual } from 'node:util'
 import type { Context } from '@deepseek-ai/cordis'
 import {
   ASSET_CONTENT_PROTOCOL_REFERENCE,
-  ASSET_CONTENT_PROTOCOL_SERVICE,
   type AssetContentProtocolService,
 } from './asset-content.ts'
 import {
