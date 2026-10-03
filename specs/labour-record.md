@@ -90,9 +90,11 @@ These fields do not claim perfect measurement and do not define `duration`.
 `references` is an optional list of confirmed upstream Asset references: existing
 labour results that this labour explicitly builds on or cites.
 
-The Protocol treats each reference as an opaque non-empty string. Asset identity,
-existence and content integrity remain Asset-Protocol concerns. Missing references
-never prevent a labour Record from being created.
+The Protocol treats each reference as an opaque non-empty string. The current
+`asset.content@0.1.0` Asset Protocol uses its deterministic AssetId as that
+reference value, but `labour.record@0.1.0` deliberately does not validate the
+AssetId shape, existence or content integrity itself. Missing references never
+prevent a labour Record from being created.
 
 LLM/context inferred references remain Runtime suggestions until a human or
 authorized product flow confirms them into the signed Record or a later Patch.
@@ -106,8 +108,9 @@ The Protocol deliberately does not introduce `outcome`, `producedAssets`,
 `modifiedAssets` or a generic relation vocabulary. A reference may appear in
 both `references` and `assets` when a labour act works on an existing Asset.
 
-As with `references`, this Protocol validates only the reference representation;
-Asset existence and semantics are outside v0.1.0.
+As with `references`, this Protocol validates only the reference representation.
+For the current MVP the value supplied by `asset.content@0.1.0` is AssetId;
+Asset existence and integrity remain outside labour Record validation.
 
 ## Member and signature boundary
 
@@ -157,7 +160,7 @@ the base labour Record.
 
 This Protocol does not define:
 
-- Asset schema, storage or canonical Asset identity;
+- Asset schema, storage or canonical Asset identity rules beyond carrying opaque references;
 - contribution acceptance;
 - Project or Board;
 - generic relation Protocols;
