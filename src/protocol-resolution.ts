@@ -346,12 +346,8 @@ export class ProtocolResolutionService {
         throw new ProtocolReferenceMismatchError(reference, resolved.reference)
       }
       const provider = this.providerByHash.get(protocolHash)
-      const implementation = provider?.store?.[resolved.service]
-      if (
-        provider === undefined ||
-        implementation?.fiber !== provider ||
-        this.ctx.get(resolved.service) === undefined
-      ) {
+      const implementation = this.ctx.reflect._getImpl(resolved.service)
+      if (provider === undefined || implementation?.fiber !== provider) {
         throw new ProtocolRuntimeError(
           `Verified Protocol provider is unavailable through Cordis: ${resolved.service}.`,
         )
