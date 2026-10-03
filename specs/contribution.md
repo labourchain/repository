@@ -8,7 +8,7 @@
 
 ## Purpose
 
-A Repo contribution is the process by which a Member submits an Asset associated with a Member-produced labour Record and the relations, Patch facts and confirmations required by the applicable LabourChain Protocols.
+A Repo contribution is the process by which a Member submits an Asset associated with a Member-produced labour Record and the relations, Patch facts and confirmations required by the applicable LabourChain Protocols. The minimum Asset identity/integrity contract is defined in [`asset.md`](./asset.md); this Spec does not redefine it.
 
 Repository participates in Repo-side confirmation of the related labour. It does not produce the Member's labour Record and does not reinterpret the Asset, Record or Patch facts.
 
@@ -87,7 +87,7 @@ Repository may report a contribution as accepted only when:
 
 1. all applicable contribution and domain-confirmation rules have succeeded;
 2. every Record required to preserve the accepted contribution has been durably accepted by the configured Record ingress/journal; and
-3. the accepted Asset can be durably retrieved according to [`asset-storage.md`](./asset-storage.md).
+3. the exact Asset referenced by the contribution can be durably retrieved by AssetId according to [`asset-storage.md`](./asset-storage.md).
 
 A failed, incomplete, staged or domain-confirmed-but-not-durable contribution must not be reported as accepted.
 
@@ -140,7 +140,7 @@ This Spec does not define a generic Patch schema. Patch meaning belongs to the P
 
 A usable deployment must persist only the staging/correlation state needed to recover work that has not yet reached `COMMITTED`.
 
-Staging must retain enough correlation information to determine which exact Records, Patch facts and Asset finalization belong to the in-flight contribution.
+Staging must retain enough correlation information to determine which exact Records, Patch facts and AssetId belong to the in-flight contribution. It must not create a second Asset identity or lineage registry.
 
 Persisting staging does not make the contribution accepted.
 
@@ -154,9 +154,9 @@ The implementation must satisfy these invariants:
 
 - work that never reached the durable Record journal and durable Asset boundary never appears as `COMMITTED`;
 - if required Records were durably accepted before a crash, recovery does not create duplicate Record acceptance;
-- if the Records are durable but Asset finalization was incomplete, recovery can finish/reconcile Asset persistence before exposing `COMMITTED`;
+- if the Records are durable but exact Asset preservation was incomplete, recovery can finish/reconcile Asset persistence before exposing `COMMITTED`;
 - if the Asset is durable but required Record acceptance failed, recovery does not invent `COMMITTED`;
-- retrying recovery does not create duplicate singular confirmations or duplicate accepted Asset finalization;
+- retrying recovery does not create duplicate singular confirmations; exact duplicate Asset preservation remains idempotent by AssetId;
 - any concrete Runtime relationship state introduced by the contribution implementation and any Snapshot/cache state remain rebuildable from durable facts and exact Protocol semantics rather than independent acceptance truth;
 - staging cleanup may occur after commit, but cleanup failure does not make a committed contribution appear uncommitted;
 - later accepted Block inclusion can upgrade/display chain-confirmation status without changing the Repository acceptance fact.
