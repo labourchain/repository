@@ -544,7 +544,7 @@ export class ProtocolResolutionService {
         reference,
         service,
       })
-      this.providerByHash.set(protocolHash, mountedFiber)
+      this.providerByHash.set(protocolHash, mountedFiber.ctx.fiber)
       this.resolvedByHash.set(protocolHash, view)
       return view
     } catch (cause) {
