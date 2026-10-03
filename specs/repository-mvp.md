@@ -123,8 +123,16 @@ Asset does not contain `createdBy`, `createdAt`, Repo, RecordId,
 `previous`, `pid` or a generic relation graph. Labour lineage is reconstructed
 from signed `labour.record.references[]` and `labour.record.assets[]` values.
 
-Exact duplicate Asset preservation is idempotent. A claimed AssetId associated
-with different descriptor data or bytes is a conflict and must fail closed.
+`asset.content@0.1.0` accepts at most 16 MiB of raw content, so the current
+complete-`Uint8Array` path has a deterministic resource boundary without a new
+streaming abstraction. Oversize content fails before hashing or durable
+visibility.
+
+Exact duplicate Asset preservation is idempotent. Incoming Asset validity is
+established before durable lookup: wrong claimed `contentHash`/AssetId is
+`InvalidAsset`, while `AssetIdentityConflict` is reserved for a canonical-valid
+incoming Asset encountering incompatible durable state under the same AssetId.
+Neither case may overwrite durable bytes.
 
 Asset durability is also separate from acceptance: durable bytes alone do not
 make a contribution Repository COMMITTED, and do not imply Block confirmation.
@@ -291,7 +299,7 @@ In addition to the acceptance tests defined by each capability Spec, the MVP int
 3. a valid Member can create a Repo identity fact from an exact establishment Record and reload that Repo after restart;
 4. the same Entity identity may compose Member + Repo capability without creating a second keypair or implying Asset/labour property rights;
 5. the minimum labourRecord Protocol can produce/validate a real Member-signed labour fact before the labour / Asset contribution path is integrated;
-6. the minimum Asset Protocol deterministically derives and verifies AssetId from exact Protocol semantics and content;
+6. the minimum Asset Protocol deterministically derives and verifies AssetId from exact Protocol semantics and content, enforces the 16 MiB raw-content boundary, and classifies invalid incoming identity before any durable identity conflict;
 7. a labour / Asset contribution resolves and verifies the exact required ProtocolHash / implementation artifacts;
 8. valid confirmations, durable Record ingress and durable Asset retrieval produce Repository `COMMITTED` / accepted state;
 9. the accepted Asset remains retrievable with the same AssetId and exact bytes after restart;
