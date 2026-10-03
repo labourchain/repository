@@ -495,6 +495,7 @@ export class ProtocolResolutionService {
     }
 
     this.hashByReference.set(reference, protocolHash)
+    let mountedFiber: (Fiber & PromiseLike<Fiber>) | undefined
 
     try {
       for (const dependency of protocol.dependencies) {
@@ -521,12 +522,11 @@ export class ProtocolResolutionService {
       )
       const plugin = validateRuntimeModule(protocol, namespace)
 
-      const fiber = this.ctx.plugin(plugin, { protocolHash }) as Fiber &
+      mountedFiber = this.ctx.plugin(plugin, { protocolHash }) as Fiber &
         PromiseLike<Fiber>
-      await fiber
+      await mountedFiber
 
       if (this.ctx.get(service) === undefined) {
-        await fiber.dispose()
         throw new ProtocolRuntimeError(
           `Protocol plugin did not provide ${service}.`,
         )
@@ -540,6 +540,9 @@ export class ProtocolResolutionService {
       this.resolvedByHash.set(protocolHash, view)
       return view
     } catch (cause) {
+      if (mountedFiber !== undefined) {
+        await mountedFiber.dispose()
+      }
       if (this.hashByReference.get(reference) === protocolHash) {
         this.hashByReference.delete(reference)
       }
