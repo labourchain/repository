@@ -53,10 +53,41 @@ LabourChain Asset identity.
 No separate `repo`, `member`, `recordId`, `previous`, `pid`,
 accepted-status or relation field is required in the Asset value.
 
+## Resource boundary
+
+`asset.content@0.1.0` accepts at most 16 MiB (`16 * 1024 * 1024` bytes) of raw
+content. The storage provider must support the whole valid range and may not
+quietly substitute a smaller provider-specific Asset-size limit. Content above
+the Protocol limit is rejected deterministically before hashing, durable lookup
+or publication. I/O, filesystem quota and capacity exhaustion for an otherwise
+valid-size Asset are persistence failures, not size-policy results.
+
+This MVP intentionally keeps the complete-Asset boundary and does not introduce
+chunk manifests, multipart persistence, range retrieval or a generic streaming
+API. Larger/streamed Assets are a future Protocol/provider evolution.
+
 ## Preserve semantics
 
-Before successful preservation, the implementation must verify the Asset
-identity/integrity contract from [`asset.md`](./asset.md).
+`preserve` must apply this order exactly:
+
+1. enforce the `asset.content@0.1.0` raw-content resource limit;
+2. validate the incoming Asset canonically under [`asset.md`](./asset.md):
+   claimed `contentHash`, claimed AssetId, then exact Protocol/reference
+   consistency;
+3. only after the incoming Asset is canonical-valid, look up durable state by
+   AssetId;
+4. if absent, preserve the new Asset atomically; if exact-equal, return
+   idempotent success; if the already-present canonical descriptor or bytes
+   differ, fail with `AssetIdentityConflict` and never overwrite.
+
+A valid AssetId paired with unrelated bytes fails incoming canonical validation
+as `InvalidAsset`; it is not an `AssetIdentityConflict`. A resolved exact
+Protocol whose human-readable reference differs fails as
+`ProtocolReferenceMismatchError` before durable lookup. The conflict category
+is reserved for a canonical-valid incoming Asset encountering incompatible
+durable state under the same AssetId. In normal cryptographic operation that
+should require a hash collision, provider corruption/state anomaly, or an
+implementation/storage defect, but the behavior must remain fail-closed.
 
 Success means that after an ordinary process restart:
 
@@ -66,10 +97,6 @@ Success means that after an ordinary process restart:
 
 An exact duplicate preserve is idempotent and must not create a second logical
 Asset.
-
-If the same claimed AssetId is presented with different descriptor data or
-different bytes, preservation fails closed. Existing accepted bytes must never
-be overwritten by the conflict.
 
 Content-derived Asset identity does not require the provider itself to be a
 content-addressed storage system.
@@ -169,16 +196,20 @@ After an interrupted preserve:
 
 - no falsely complete Asset may be exposed;
 - retry with the exact Asset may safely converge to one durable value;
-- retry with conflicting bytes under the same claimed identity must fail
+- retry with an internally invalid same-id/different-bytes object remains
+  `InvalidAsset`;
+- a canonical-valid identity conflict/provider-state anomaly remains fail
   closed.
 
 ## Failure model
 
 Consumers must be able to distinguish at least:
 
+- Asset content exceeds the `asset.content@0.1.0` 16 MiB raw-content limit;
 - invalid Asset identity/integrity;
+- exact Protocol/reference mismatch;
 - exact Asset not found;
-- Asset identity conflict;
+- canonical-valid Asset identity conflict / durable state anomaly;
 - persistence failure;
 - retrieval/provider failure;
 - detected durable corruption.
@@ -190,10 +221,13 @@ Exact error class names are implementation choices.
 | Invariant | Future executable test | Likely module |
 | --- | --- | --- |
 | same exact Asset persists once | preserve twice, retrieve one exact value | `test/asset-storage.test.ts` |
-| conflicting payload never replaces | preserve A, attempt same id/different bytes, retrieve A | `test/asset-storage.test.ts` |
+| raw-content limit is exact | size == 16 MiB succeeds; size > 16 MiB returns the resource-limit result before durable visibility | `test/asset-storage.test.ts` |
+| invalid claimed identity is not conflict | valid id A + unrelated bytes B returns `InvalidAsset` before durable lookup | `test/asset-storage.test.ts` |
+| canonical-valid conflict/state anomaly never replaces | inject competing canonical-valid durable state at the persistence seam; preserve fails closed and existing bytes remain | `test/asset-storage.test.ts` |
 | restart durability | preserve, dispose node/provider, reopen, get exact bytes | `integration/asset-storage-restart.test.ts` |
 | duplicate detection survives restart | preserve, restart, preserve same Asset again | `integration/asset-storage-restart.test.ts` |
-| conflict detection survives restart | preserve, restart, attempt conflicting value | `integration/asset-storage-restart.test.ts` |
+| conflict detection survives restart | preserve, restart, inject/observe canonical-valid conflicting state at the persistence seam; fail closed | `integration/asset-storage-restart.test.ts` |
+| resource semantics survive restart | size boundary and oversize classification are unchanged after provider restart | `integration/asset-storage-restart.test.ts` |
 | interrupted write is not visible | inject failure before durable completion; get/has cannot expose complete Asset | `test/asset-storage.test.ts` |
 | corruption is not not-found | corrupt persistent fixture; retrieval fails explicitly | `integration/asset-storage-restart.test.ts` |
 | Record store remains authoritative for Records | Asset preservation creates no second canonical Record entry | `test/asset-storage.test.ts` |
