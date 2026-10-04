@@ -918,6 +918,363 @@ test('exact dependency reachable values remain bound to the captured generation'
   await node.dispose()
 })
 
+test('exact service reflection remains bound to the captured generation', async () => {
+  const alpha = descriptor('test.alpha', '1.0.0')
+  const serviceName = 'protocol:test.alpha@1.0.0'
+  const values = new Map([
+    [HASH_A, { protocol: alpha, artifact: artifact() }],
+  ])
+  let exactInvocations = 0
+  let foreignInvocations = 0
+  let getterInvocations = 0
+  let setterInvocations = 0
+
+  interface NestedService {
+    touch(): void
+  }
+
+  interface ReflectedService {
+    mutable: number
+    ownMethod(): void
+    nested: NestedService
+    frozen: Readonly<{
+      touch(): void
+      nested: NestedService
+    }>
+    accessor: number
+    prototypeTouch(): void
+  }
+
+  interface ReflectedPrototype {
+    prototypeTouch(): void
+    prototypeNested: NestedService
+  }
+
+  const nested: NestedService = {
+    touch() {
+      exactInvocations += 1
+    },
+  }
+  const prototypeNested: NestedService = {
+    touch() {
+      exactInvocations += 1
+    },
+  }
+
+  class ExactService {
+    mutable = 1
+
+    prototypeTouch() {
+      exactInvocations += 1
+    }
+  }
+
+  Object.defineProperty(ExactService.prototype, 'prototypeNested', {
+    configurable: true,
+    enumerable: true,
+    writable: true,
+    value: prototypeNested,
+  })
+
+  const exactService = new ExactService() as ExactService &
+    Omit<ReflectedService, 'mutable' | 'prototypeTouch'>
+  Object.defineProperties(exactService, {
+    ownMethod: {
+      configurable: true,
+      enumerable: true,
+      writable: true,
+      value() {
+        exactInvocations += 1
+      },
+    },
+    nested: {
+      configurable: true,
+      enumerable: true,
+      writable: true,
+      value: nested,
+    },
+    frozen: {
+      configurable: true,
+      enumerable: true,
+      writable: true,
+      value: Object.freeze({
+        touch() {
+          exactInvocations += 1
+        },
+        nested,
+      }),
+    },
+    accessor: {
+      configurable: true,
+      enumerable: false,
+      get() {
+        getterInvocations += 1
+        return exactService.mutable
+      },
+      set(value: number) {
+        setterInvocations += 1
+        exactService.mutable = value
+      },
+    },
+  })
+
+  const node = await createRepositoryNode({
+    plugins: [
+      {
+        plugin: protocolResolutionPlugin,
+        config: {
+          host: host(values, async () => ({
+            plugin: {
+              name: 'test.alpha@1.0.0',
+              provide: serviceName,
+              inject: [],
+              apply(ctx: Context) {
+                ctx.provide(serviceName, exactService)
+              },
+            },
+          })),
+        },
+      },
+      { plugin: coreProtocolProvider },
+    ],
+  })
+  const resolver = node.context[PROTOCOL_RESOLUTION_SERVICE]
+
+  let boundService!: ReflectedService
+  let descriptorMethod!: () => void
+  let reflectDescriptorMethod!: () => void
+  let descriptorNested!: NestedService
+  let descriptorGetter!: () => number
+  let descriptorSetter!: (value: number) => void
+  let prototypeMethod!: () => void
+  let reflectPrototypeMethod!: () => void
+  let prototypeNestedHandle!: NestedService
+  let frozenMethod!: () => void
+  let frozenNested!: NestedService
+
+  await resolver.withExactService(
+    'test.alpha@1.0.0',
+    HASH_A,
+    (value) => {
+      boundService = value as ReflectedService
+
+      const descriptor = Object.getOwnPropertyDescriptor(
+        boundService,
+        'ownMethod',
+      )
+      const reflectedDescriptor = Reflect.getOwnPropertyDescriptor(
+        boundService,
+        'ownMethod',
+      )
+      assert.ok(descriptor)
+      assert.ok(reflectedDescriptor)
+      assert.equal(descriptor.configurable, true)
+      assert.equal(descriptor.enumerable, true)
+      assert.equal(descriptor.writable, true)
+      descriptorMethod = descriptor.value as () => void
+      reflectDescriptorMethod =
+        reflectedDescriptor.value as () => void
+      assert.equal(descriptorMethod, reflectDescriptorMethod)
+      assert.equal(descriptorMethod, boundService.ownMethod)
+
+      const nestedDescriptor = Object.getOwnPropertyDescriptor(
+        boundService,
+        'nested',
+      )
+      assert.ok(nestedDescriptor)
+      descriptorNested = nestedDescriptor.value as NestedService
+      assert.equal(descriptorNested, boundService.nested)
+
+      const accessorDescriptor = Object.getOwnPropertyDescriptor(
+        boundService,
+        'accessor',
+      )
+      assert.ok(accessorDescriptor)
+      assert.equal(accessorDescriptor.configurable, true)
+      assert.equal(accessorDescriptor.enumerable, false)
+      assert.ok(accessorDescriptor.get)
+      assert.ok(accessorDescriptor.set)
+      descriptorGetter = accessorDescriptor.get as () => number
+      descriptorSetter =
+        accessorDescriptor.set as (value: number) => void
+      assert.equal(descriptorGetter.call(boundService), 1)
+      descriptorSetter.call(boundService, 7)
+      assert.equal(boundService.mutable, 7)
+
+      const prototype = Object.getPrototypeOf(
+        boundService,
+      ) as ReflectedPrototype
+      const reflectedPrototype = Reflect.getPrototypeOf(
+        boundService,
+      ) as ReflectedPrototype
+      assert.equal(prototype, reflectedPrototype)
+      assert.equal(Object.getPrototypeOf(boundService), prototype)
+      prototypeMethod = prototype.prototypeTouch
+      reflectPrototypeMethod = reflectedPrototype.prototypeTouch
+      assert.equal(prototypeMethod, reflectPrototypeMethod)
+      prototypeNestedHandle = prototype.prototypeNested
+      assert.equal(
+        prototypeNestedHandle,
+        reflectedPrototype.prototypeNested,
+      )
+
+      const frozen = boundService.frozen
+      assert.equal(Object.isExtensible(frozen), false)
+      assert.deepEqual(Object.keys(frozen), ['touch', 'nested'])
+      const frozenDescriptor = Object.getOwnPropertyDescriptor(
+        frozen,
+        'touch',
+      )
+      const frozenNestedDescriptor =
+        Object.getOwnPropertyDescriptor(frozen, 'nested')
+      assert.ok(frozenDescriptor)
+      assert.ok(frozenNestedDescriptor)
+      assert.equal(frozenDescriptor.configurable, false)
+      assert.equal(frozenDescriptor.enumerable, true)
+      assert.equal(frozenDescriptor.writable, false)
+      frozenMethod = frozenDescriptor.value as () => void
+      frozenNested = frozenNestedDescriptor.value as NestedService
+      assert.equal(frozenNested, boundService.nested)
+
+      descriptorMethod()
+      descriptorNested.touch()
+      prototypeMethod()
+      prototypeNestedHandle.touch()
+      frozenMethod()
+      frozenNested.touch()
+    },
+  )
+
+  assert.equal(exactInvocations, 6)
+  assert.equal(getterInvocations, 1)
+  assert.equal(setterInvocations, 1)
+
+  const exact = node.context.reflect._getImpl(serviceName)
+  assert.ok(exact)
+  await exact.fiber.dispose()
+
+  const foreignFiber = node.context.plugin({
+    name: 'runtime.foreign-reflection-provider',
+    provide: serviceName,
+    inject: [],
+    apply(ctx: Context) {
+      ctx.provide(serviceName, {
+        ownMethod() {
+          foreignInvocations += 1
+        },
+        nested: {
+          touch() {
+            foreignInvocations += 1
+          },
+        },
+      })
+    },
+  })
+  await foreignFiber
+
+  const staleInvocations = [
+    () => descriptorMethod(),
+    () => reflectDescriptorMethod(),
+    () => descriptorNested.touch(),
+    () => descriptorGetter.call(boundService),
+    () => descriptorSetter.call(boundService, 8),
+    () => prototypeMethod(),
+    () => reflectPrototypeMethod(),
+    () => prototypeNestedHandle.touch(),
+    () => frozenMethod(),
+    () => frozenNested.touch(),
+  ]
+
+  for (const invoke of staleInvocations) {
+    assert.throws(invoke, ProtocolRuntimeError)
+  }
+  assert.throws(
+    () => Object.getOwnPropertyDescriptor(boundService, 'ownMethod'),
+    ProtocolRuntimeError,
+  )
+  assert.throws(
+    () => Reflect.getOwnPropertyDescriptor(boundService, 'ownMethod'),
+    ProtocolRuntimeError,
+  )
+  assert.throws(
+    () => Object.getPrototypeOf(boundService),
+    ProtocolRuntimeError,
+  )
+  assert.throws(
+    () => Reflect.getPrototypeOf(boundService),
+    ProtocolRuntimeError,
+  )
+
+  assert.equal(exactInvocations, 6)
+  assert.equal(getterInvocations, 1)
+  assert.equal(setterInvocations, 1)
+  assert.equal(foreignInvocations, 0)
+  await node.dispose()
+})
+
+test('exact service binding fails closed for mixed mutable shadow shapes', async () => {
+  const alpha = descriptor('test.alpha', '1.0.0')
+  const serviceName = 'protocol:test.alpha@1.0.0'
+  const values = new Map([
+    [HASH_A, { protocol: alpha, artifact: artifact() }],
+  ])
+  let exactInvocations = 0
+  let callbackRan = false
+
+  const mixed = { mutable: 1 } as {
+    mutable: number
+    fixed?: () => void
+  }
+  Object.defineProperty(mixed, 'fixed', {
+    configurable: false,
+    enumerable: true,
+    writable: false,
+    value() {
+      exactInvocations += 1
+    },
+  })
+
+  const node = await createRepositoryNode({
+    plugins: [
+      {
+        plugin: protocolResolutionPlugin,
+        config: {
+          host: host(values, async () => ({
+            plugin: {
+              name: 'test.alpha@1.0.0',
+              provide: serviceName,
+              inject: [],
+              apply(ctx: Context) {
+                ctx.provide(serviceName, mixed)
+              },
+            },
+          })),
+        },
+      },
+      { plugin: coreProtocolProvider },
+    ],
+  })
+  const resolver = node.context[PROTOCOL_RESOLUTION_SERVICE]
+
+  await assert.rejects(
+    resolver.withExactService(
+      'test.alpha@1.0.0',
+      HASH_A,
+      () => {
+        callbackRan = true
+      },
+    ),
+    (error: unknown) =>
+      error instanceof ProtocolRuntimeError &&
+      error.message.includes('fixed bindable properties'),
+  )
+
+  assert.equal(callbackRan, false)
+  assert.equal(exactInvocations, 0)
+  assert.equal(mixed.mutable, 1)
+  await node.dispose()
+})
+
 test('exact async execution cannot switch to a foreign dependency mid-callback', async () => {
   const dependency = descriptor('test.dep', '1.0.0')
   const consumer = descriptor('test.consumer', '1.0.0', [
