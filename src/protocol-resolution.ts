@@ -473,6 +473,17 @@ export class ProtocolResolutionService {
       return Object.create(Reflect.getPrototypeOf(candidate)) as object
     }
 
+    const safeIntrinsicPrototypes = new Set<object>([
+      Object.prototype,
+      Function.prototype,
+      Array.prototype,
+      Uint8Array.prototype,
+    ])
+    const bindPrototype = (prototype: object | null): object | null =>
+      prototype === null || safeIntrinsicPrototypes.has(prototype)
+        ? prototype
+        : bind(prototype) as object
+
     const bindDescriptor = (
       descriptor: PropertyDescriptor,
     ): PropertyDescriptor => {
@@ -573,8 +584,7 @@ export class ProtocolResolutionService {
               '.',
           )
         }
-        const prototype = Reflect.getPrototypeOf(candidate)
-        return prototype === null ? null : bind(prototype) as object
+        return bindPrototype(Reflect.getPrototypeOf(candidate))
       }
       const defineProperty = () => {
         assertCurrent()
@@ -690,9 +700,9 @@ export class ProtocolResolutionService {
           }
         }
 
-        const prototype = Reflect.getPrototypeOf(candidate)
-        const boundPrototype =
-          prototype === null ? null : bind(prototype) as object
+        const boundPrototype = bindPrototype(
+          Reflect.getPrototypeOf(candidate),
+        )
         if (!Reflect.setPrototypeOf(proxyTarget, boundPrototype)) {
           throw new ProtocolRuntimeError(
             'Unable to bind exact Protocol service prototype: ' +
