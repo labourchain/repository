@@ -8,7 +8,7 @@
 
 Repository 采用 Cordis 的插件运行模型。仓库能力由多个 Cordis plugins 共同形成；其中需要被链上历史长期引用的稳定语义以版本化 LabourChain Protocol 声明，并由 Cordis plugin 实现。Repository 不建立独立于 Cordis 的 Runner、Hoster 或 mega-service 体系。
 
-Requirements、Architecture 与 MVP Specs 已完成当前轮次的重新投影。Bootstrap、durable Record journal、最小 Member runtime、Repo establishment、Runtime Record database 与 `labour.record@0.1.0` 最小劳动事实 Protocol 已进入 `main`；Core Protocols v0.1.0 已发布。
+Requirements、Architecture 与 MVP Specs 已完成当前轮次的重新投影。当前 `main` 已包含 Bootstrap、durable Record journal、最小 Member runtime、Repo establishment、Runtime Record database、`labour.record@0.1.0`、exact ProtocolHash resolution、`asset.content@0.1.0` 与 durable Asset storage，以及 `repo.contribution@0.1.0` / Repository Contribution commit path；Core Protocols v0.1.0 已发布。下一条 MVP 主线是 #10 interrupted-contribution recovery contract，#11 contribution history 仍待后续实现。
 
 ## 文档
 
@@ -22,7 +22,7 @@ Requirements、Architecture 与 MVP Specs 已完成当前轮次的重新投影�
 - [`specs/repository-mvp.md`](./specs/repository-mvp.md)：MVP umbrella spec，维护能力组合、共享不变量与完成边界；
 - [`specs/`](./specs/)：按稳定功能边界拆分的能力 Specs。
 
-当前能力 Specs 包括 bootstrap、Member、`labour.record`、Repo、Protocol resolution、contribution、Asset storage 和 contribution history。`labour.record@0.1.0` 只记录扁平的劳动内容、主观时长、可选时间日志与 Asset 引用；Asset 本身仍处于设计阶段。Repo contributor/member 分组属于产品视图或本地软件数据，不建立链上 membership capability。
+当前能力 Specs 包括 bootstrap、Member、`labour.record`、Repo、Protocol resolution、Asset / Asset storage、`repo.contribution`、contribution orchestration 和 contribution history。`labour.record@0.1.0` 只记录扁平的劳动内容、主观时长、可选时间日志与 Asset 引用；`asset.content@0.1.0` 已完成确定性 identity/integrity 与 durable storage；`repo.contribution@0.1.0` 已完成 Repo 对单个 labour result Asset 的正向采纳事实与 Repository `COMMITTED` 路径。Repo contributor/member 分组仍属于产品视图或本地软件数据，不建立链上 membership capability。
 
 如果 Concepts、Requirements、Architecture、Spec 或实现出现冲突，应先在对应上游层显式讨论和修订，而不是让实现静默选择一种解释。
 
@@ -104,10 +104,10 @@ pnpm run check
 pnpm run package:check
 ```
 
-当前检查主要保护 Bootstrap runtime、Cordis lifecycle 和 package executable 边界，不代表 Repository MVP 已完成实现。
+当前检查覆盖已实现的 Bootstrap、Cordis lifecycle、Record/Asset durability、exact Protocol resolution 与 Contribution runtime，但不代表 Repository MVP 已完成：#10 recovery、#11 contribution history，以及最终 concrete MVP composition / integrated lifecycle acceptance 仍未完成。
 
 ## 状态
 
 当前 package 保持 `private: true`。
 
-Bootstrap runtime、durable Record journal、`member.identity`、`repo.establishment@0.1.0`、Runtime Record database 与 `labour.record@0.1.0` 已完成。后续仍有 #7 exact Protocol resolution 与需要先完成设计的 #8 Asset。链上 Repo membership 已从 MVP 移除。
+Bootstrap runtime、durable Record journal、`member.identity` runtime capability、`repo.establishment@0.1.0`、Runtime Record database、`labour.record@0.1.0`、#7 exact Protocol resolution、#8 Asset identity/storage 与 #9 Repository Contribution runtime 已完成并进入 `main`。#10 interrupted-contribution recovery 当前需要先完成 recovery intent / staging-correlation contract 收口；#11 contribution history 仍未实现。默认 CLI/bin 的 concrete MVP composition 与完整 integrated lifecycle acceptance 也仍待完成。链上 Repo membership 已从 MVP 移除。
