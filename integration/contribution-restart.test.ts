@@ -31,6 +31,7 @@ import {
   PROTOCOL_RESOLUTION_SERVICE,
   REPOSITORY_CONTRIBUTION_SERVICE,
   REPO_CONTRIBUTION_PROTOCOL_REFERENCE,
+  REPO_CONTRIBUTION_PROTOCOL_SERVICE,
   REPO_ESTABLISHMENT_PROTOCOL_REFERENCE,
   REPO_ESTABLISHMENT_PROTOCOL_SERVICE,
   RecordJournalService,
@@ -448,9 +449,37 @@ test(
       )
 
       await resolver.resolve(
-        REPO_ESTABLISHMENT_PROTOCOL_REFERENCE,
-        repo.protocolHash,
+        REPO_CONTRIBUTION_PROTOCOL_REFERENCE,
+        contribution.protocolHash,
       )
+      const unestablishedAcceptance = signedRecord(
+        recordService,
+        repoKeys.privateKey,
+        {
+          protocol: REPO_CONTRIBUTION_PROTOCOL_REFERENCE,
+          protocolHash: contribution.protocolHash,
+          createdBy: repoIdentity,
+          createdAt: '2026-10-04T01:00:00.500Z',
+          data: {
+            labourRecordId: 'pending-labour',
+            assetId: 'pending-asset',
+            operator: operatorIdentity,
+          },
+        },
+      )
+      await assert.rejects(
+        first.context[
+          REPO_CONTRIBUTION_PROTOCOL_SERVICE
+        ].validateAcceptance(unestablishedAcceptance),
+        (error: unknown) => {
+          assert.equal(
+            (error as { readonly name?: unknown }).name,
+            'RepoContributionRepoNotEstablishedError',
+          )
+          return true
+        },
+      )
+
       const establishment = signedRecord(
         recordService,
         memberKeys.privateKey,

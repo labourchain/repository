@@ -10,7 +10,6 @@ import {
 } from './labour-record.ts'
 import {
   REPO_ESTABLISHMENT_PROTOCOL_SERVICE,
-  RepoNotFoundError,
 } from './repo.ts'
 
 export const REPO_CONTRIBUTION_PROTOCOL_NAME = 'repo.contribution' as const
@@ -90,6 +89,12 @@ declare module '@deepseek-ai/cordis' {
   interface Context {
     'protocol:repo.contribution@0.1.0': RepoContributionProtocolService
   }
+}
+
+function isRepoNotFoundError(value: unknown, identity: string): boolean {
+  if (typeof value !== 'object' || value === null) return false
+  const error = value as { readonly name?: unknown; readonly identity?: unknown }
+  return error.name === 'RepoNotFoundError' && error.identity === identity
 }
 
 function requireProtocolHash(config: RepoContributionMountConfig): string {
@@ -221,7 +226,7 @@ export class RepoContributionProtocolService {
         record.createdBy,
       )
     } catch (cause) {
-      if (cause instanceof RepoNotFoundError) {
+      if (isRepoNotFoundError(cause, record.createdBy)) {
         throw new RepoContributionRepoNotEstablishedError(
           record.createdBy,
           { cause },
