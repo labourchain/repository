@@ -935,6 +935,7 @@ test('exact service reflection remains bound to the captured generation', async 
 
   interface ReflectedService {
     mutable: number
+    removable: number
     ownMethod(): void
     nested: NestedService
     frozen: Readonly<{
@@ -963,6 +964,7 @@ test('exact service reflection remains bound to the captured generation', async 
 
   class ExactService {
     mutable = 1
+    removable = 1
 
     prototypeTouch() {
       exactInvocations += 1
@@ -1057,6 +1059,18 @@ test('exact service reflection remains bound to the captured generation', async 
     HASH_A,
     (value) => {
       boundService = value as ReflectedService
+      assert.equal(Object.isExtensible(boundService), true)
+      assert.equal(Reflect.has(boundService, 'removable'), true)
+      assert.equal(
+        Reflect.ownKeys(boundService).includes('removable'),
+        true,
+      )
+      assert.equal(
+        Reflect.deleteProperty(boundService, 'removable'),
+        true,
+      )
+      assert.equal(Reflect.has(boundService, 'removable'), false)
+      assert.equal(Reflect.has(exactService, 'removable'), false)
 
       const descriptor = Object.getOwnPropertyDescriptor(
         boundService,
@@ -1216,6 +1230,22 @@ test('exact service reflection remains bound to the captured generation', async 
   )
   assert.throws(
     () => Reflect.getPrototypeOf(boundService),
+    ProtocolRuntimeError,
+  )
+  assert.throws(
+    () => Reflect.ownKeys(boundService),
+    ProtocolRuntimeError,
+  )
+  assert.throws(
+    () => Reflect.has(boundService, 'ownMethod'),
+    ProtocolRuntimeError,
+  )
+  assert.throws(
+    () => Reflect.deleteProperty(boundService, 'missing'),
+    ProtocolRuntimeError,
+  )
+  assert.throws(
+    () => Reflect.isExtensible(boundService),
     ProtocolRuntimeError,
   )
 
