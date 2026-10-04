@@ -3,6 +3,10 @@ import { link, mkdir, open, readFile, readdir, unlink } from 'node:fs/promises'
 import { resolve, join } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
 import { Service, type Context } from '@deepseek-ai/cordis'
+import {
+  RECORD_JOURNAL_INTERNAL_RUN_EXCLUSIVE,
+  isProtectedRepositoryPublication,
+} from './internal-publication.ts'
 
 export const RECORD_JOURNAL_SERVICE = 'recordJournal' as const
 const RECORD_FILE_SUFFIX = '.record.json'
@@ -28,6 +32,12 @@ export interface RecordJournalExclusiveSession {
   accept(record: JournalRecord): Promise<void>
   get(recordId: string): Promise<JournalRecord>
   iterateAccepted(): AsyncIterableIterator<JournalRecord>
+}
+
+interface JournalPublicationSnapshot {
+  readonly recordId: string
+  readonly record: JournalRecord
+  readonly serialized: string
 }
 
 export class RecordJournalError extends Error {
@@ -81,6 +91,15 @@ export class RecordJournalStorageError extends RecordJournalError {
   }
 }
 
+export class RecordJournalPublicationError extends RecordJournalError {
+  constructor() {
+    super(
+      'repo.contribution Records must be published through RepositoryContributionService.',
+    )
+    this.name = 'RecordJournalPublicationError'
+  }
+}
+
 declare module '@deepseek-ai/cordis' {
   interface Context {
     recordJournal: RecordJournalService
@@ -123,6 +142,43 @@ function serializeRecord(record: JournalRecord): string {
   } catch (cause) {
     throw new RecordJournalInputError('Record cannot be persisted as JSON.', { cause })
   }
+}
+
+function snapshotRecord(record: JournalRecord): JournalPublicationSnapshot {
+  const inputRecordId = requireRecordId(record)
+  const serialized = serializeRecord(record)
+
+  let value: unknown
+  try {
+    value = JSON.parse(serialized)
+  } catch (cause) {
+    throw new RecordJournalInputError(
+      'Serialized Record is not valid JSON.',
+      { cause },
+    )
+  }
+
+  let recordId: string
+  try {
+    recordId = requireRecordId(value)
+  } catch (cause) {
+    throw new RecordJournalInputError(
+      'Serialized Record does not contain a valid RecordId.',
+      { cause },
+    )
+  }
+
+  if (recordId !== inputRecordId) {
+    throw new RecordJournalInputError(
+      'RecordId changed during JSON serialization.',
+    )
+  }
+
+  return Object.freeze({
+    recordId,
+    record: value as JournalRecord,
+    serialized,
+  })
 }
 
 function parseStoredRecord(serialized: string, file: string): JournalRecord {
@@ -202,6 +258,19 @@ export class RecordJournalService extends Service {
   async runExclusive<T>(
     operation: (journal: RecordJournalExclusiveSession) => Promise<T>,
   ): Promise<T> {
+    return this.runExclusiveImpl(operation, false)
+  }
+
+  async [RECORD_JOURNAL_INTERNAL_RUN_EXCLUSIVE]<T>(
+    operation: (journal: RecordJournalExclusiveSession) => Promise<T>,
+  ): Promise<T> {
+    return this.runExclusiveImpl(operation, true)
+  }
+
+  private async runExclusiveImpl<T>(
+    operation: (journal: RecordJournalExclusiveSession) => Promise<T>,
+    allowProtectedPublication: boolean,
+  ): Promise<T> {
     const previousGate = this.operationGate
     let release!: () => void
     this.operationGate = new Promise<void>((resolve) => {
@@ -211,7 +280,16 @@ export class RecordJournalService extends Service {
     await previousGate
     try {
       const session: RecordJournalExclusiveSession = {
-        accept: (record) => this.acceptUnlocked(record),
+        accept: (record) => {
+          const snapshot = snapshotRecord(record)
+          if (
+            !allowProtectedPublication &&
+            isProtectedRepositoryPublication(snapshot.record)
+          ) {
+            throw new RecordJournalPublicationError()
+          }
+          return this.acceptUnlocked(snapshot)
+        },
         get: (recordId) => this.get(recordId),
         iterateAccepted: () => this.iterateAccepted(),
       }
@@ -221,9 +299,10 @@ export class RecordJournalService extends Service {
     }
   }
 
-  private async acceptUnlocked(record: JournalRecord): Promise<void> {
-    const recordId = requireRecordId(record)
-    const serialized = serializeRecord(record)
+  private async acceptUnlocked(
+    snapshot: JournalPublicationSnapshot,
+  ): Promise<void> {
+    const { recordId, record, serialized } = snapshot
 
     try {
       await mkdir(this.directory, { recursive: true })
@@ -262,8 +341,7 @@ export class RecordJournalService extends Service {
         }
 
         const existing = await this.readStored(recordId, target, false)
-        const incoming = parseStoredRecord(serialized, temporary)
-        if (!isDeepStrictEqual(existing, incoming)) {
+        if (!isDeepStrictEqual(existing, record)) {
           throw new RecordJournalConflictError(recordId)
         }
 
