@@ -93,13 +93,36 @@ function requireAssetObject(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>
 }
 
-function requireContent(value: unknown): Uint8Array {
+function requireRawContent(value: unknown): Uint8Array {
   if (!(value instanceof Uint8Array)) {
     throw new InvalidAsset('Asset.content must be a Uint8Array.')
   }
   if (value.byteLength > MAX_ASSET_CONTENT_BYTES) {
     throw new AssetContentTooLargeError(value.byteLength)
   }
+  return value
+}
+
+function requireIncomingContent(value: unknown): Uint8Array {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new InvalidAsset('Asset must be a plain object.')
+  }
+
+  const descriptor = Object.getOwnPropertyDescriptor(value, 'content')
+  if (
+    descriptor === undefined ||
+    descriptor.enumerable !== true ||
+    !hasOwn(descriptor, 'value')
+  ) {
+    throw new InvalidAsset(
+      'Asset.content must be an enumerable own data property.',
+    )
+  }
+
+  return requireRawContent(descriptor.value)
+}
+
+function copyContent(value: Uint8Array): Uint8Array {
   return Uint8Array.from(value)
 }
 
@@ -171,7 +194,7 @@ export function createAssetIdentity(
   protocol: string,
   protocolHash: string,
 ): Asset {
-  const bytes = requireContent(content)
+  const bytes = copyContent(requireRawContent(content))
   const reference = requireIdentityString(protocol, 'Asset.protocol')
   const exactProtocolHash = requireDigest(
     protocolHash,
@@ -195,10 +218,11 @@ export function createAssetIdentity(
  * after this function succeeds, preserving the accepted validation order.
  */
 export function validateAssetIdentity(value: unknown): Asset {
+  // Step 1: inspect the raw content data property first so oversize content is
+  // rejected before the remaining Asset shape, hashing or provider lookup.
+  const rawContent = requireIncomingContent(value)
   const asset = requireAssetObject(value)
-
-  // Step 1: resource bound before hashing or any durable/provider lookup.
-  const content = requireContent(asset.content)
+  const content = copyContent(rawContent)
 
   // Step 2: exact content integrity.
   const contentHash = requireDigest(asset.contentHash, 'Asset.contentHash')
