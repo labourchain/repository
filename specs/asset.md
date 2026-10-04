@@ -178,9 +178,11 @@ Record/Asset production graph is reconstructed from signed
 
 Missing Asset references continue to be legal while a labour Record is being
 created. `labour.record@0.1.0` records a confirmed reference string; it does
-not require local Asset resolution. Whether a later contribution requires a
-referenced Asset to be locally available is a Contribution/applicable-Protocol
-decision, not an Asset identity rule.
+not require local Asset resolution. The current #9 contribution contract
+requires every `labour.references[]` input Asset plus the selected accepted
+result Asset to be durably retrievable before the Repo acceptance Record becomes
+the commit marker. That remains a Contribution policy, not an Asset identity
+rule.
 
 ## Validation, immutability and conflict
 
