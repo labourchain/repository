@@ -245,7 +245,7 @@ Runtime Record database
   -> Runtime/composition dependency
   -> serializes validated Repository Record ingress in one node
   -> delegates exact Record durability to the journal
-  -> does not define generic relationship state before the first concrete consumer
+  -> #9 relationships remain in signed labour/acceptance facts; no generic relation state is required
 
 chain-state / Block-confirmation access
   -> Runtime/composition dependency
