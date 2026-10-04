@@ -43,18 +43,22 @@ The history view derives from distinct Runtime and chain evidence:
 
 ```text
 durable Record journal
-    -> Repository-accepted Record + Patch facts
+    -> Member-signed labour Records
+    -> Repo-signed repo.contribution@0.1.0 acceptance Records
 
-Contribution relation state / correlation, once defined by #9
-    -> Protocol-validated relationships needed to reconstruct the Repo contribution view
-    -> rebuildable from durable facts + exact Protocol semantics
+Concrete contribution relation
+    -> acceptance Record.createdBy identifies the Repo
+    -> acceptance data.labourRecordId identifies the labour Record
+    -> acceptance data.assetId selects one labour.assets[] result
+    -> labour.references[] identifies upstream input Assets
+    -> optional Runtime indexes remain rebuildable from these durable facts
 
 chain-state / accepted-Block access
     -> RecordId inclusion in independently accepted Blocks
     -> block-confirmed status and chain position
 ```
 
-The journal alone is not interpreted as a generic ordered history database: relation meaning comes from the exact Protocol semantics and, once #9 defines it, the concrete contribution-relation projection rebuilt from those facts.
+The journal alone is not interpreted as a generic ordered history database. The concrete relation meaning comes from exact `labour.record@0.1.0` and `repo.contribution@0.1.0` semantics, and any history projection is rebuilt from those facts.
 
 Runtime plugins may persist indexes, caches, projections or Snapshots that make history efficient to query. These derived data must:
 
