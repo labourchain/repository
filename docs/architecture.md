@@ -421,9 +421,8 @@ sequenceDiagram
     Labour-->>Cordis: validated labour + contributor + references[] + assets[]
     Cordis->>Accept: validate Repo acceptance + D -> L -> selected Asset relation
     Accept-->>Cordis: Repo + operator + labourRecordId + assetId
-    Cordis->>Assets: get every labour.references[] input Asset
     Cordis->>Assets: preserve/get selected result Asset
-    Assets-->>Cordis: required Assets durably retrievable
+    Assets-->>Cordis: selected result Asset durably retrievable
     Cordis->>RuntimeDB: durably accept labour Record idempotently
     RuntimeDB->>Journal: exact Record durability
     Cordis->>RuntimeDB: re-check singular key and accept Repo acceptance Record last
@@ -444,7 +443,7 @@ correctness。关系已经写在 durable signed facts 中：
 Repo acceptance Record
     -> labourRecordId
     -> labour.assets[] selected Asset
-    -> labour.references[] input dependencies
+    -> labour.references[] confirmed upstream references
 ```
 
 因此 #9 不建立 generic relation database。为了同一进程内 conflict check 或
@@ -465,7 +464,7 @@ Repository execution：
 ```mermaid
 stateDiagram-v2
     [*] --> STAGED
-    STAGED --> DOMAIN_CONFIRMED: exact labour/Repo facts + relations + required Asset availability valid
+    STAGED --> DOMAIN_CONFIRMED: exact labour/Repo facts + relations + selected Asset availability valid
     DOMAIN_CONFIRMED --> COMMITTED: labour durable + selected Asset durable + Repo acceptance Record durable last
 ```
 
@@ -477,19 +476,19 @@ stateDiagram-v2
 - Repo-signed `repo.contribution@0.1.0` 有效；
 - acceptance 的 `labourRecordId` 与 labour Record 一致；
 - acceptance 的 `assetId` 出现在 `labour.assets[]`；
-- `labour.references[]` 所有 input Assets 可持久读取；
+- `labour.references[]` 保持已确认的上游生产/引用关系；其本地缺失本身不阻断当前 #9 acceptance；
 - selected result Asset canonical-valid；
 - 不存在同一 `(Repo, labourRecordId, assetId)` 的 distinct accepted fact。
 
 它仍然不是 Repository acceptance，更不是 Block confirmation。
 
 `COMMITTED` 的 durable final marker 是 Repo acceptance Record。只有在 labour
-Record、所有 required input Assets 与 selected result Asset 已达到要求后，
+Record 与 selected result Asset 已达到当前 #9 的 durable 要求后，
 该 acceptance Record 才能被 durable accept。完成这一步后才可以向 caller
 报告 Repository accepted。
 
 一个 fresh Runtime 可以从 durable acceptance Record 出发，重新读取并验证
-labour Record、input Assets 与 selected Asset，确定同一 `COMMITTED` 结果；
+labour Record 与 selected Asset，并从 `labour.references[]` 重建上游关系，确定同一 `COMMITTED` 结果；
 不需要 process-local Contribution registry。
 
 如果 acceptance marker 已经存在，但其依赖的 durable storage 当前损坏或不可读，
