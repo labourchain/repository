@@ -1115,6 +1115,13 @@ test('exact service reflection remains bound to the captured generation', async 
       assert.notEqual(prototype, ExactService.prototype)
       assert.equal(Object.getPrototypeOf(boundService), prototype)
       assert.equal(Object.getPrototypeOf(prototype), Object.prototype)
+      assert.equal(Reflect.setPrototypeOf(boundService, prototype), true)
+      assert.equal(Reflect.setPrototypeOf(boundService, {}), false)
+      assert.equal(Object.getPrototypeOf(boundService), prototype)
+      assert.equal(
+        Object.getPrototypeOf(exactService),
+        ExactService.prototype,
+      )
       prototypeMethod = prototype.prototypeTouch
       reflectPrototypeMethod = reflectedPrototype.prototypeTouch
       assert.equal(prototypeMethod, reflectPrototypeMethod)
