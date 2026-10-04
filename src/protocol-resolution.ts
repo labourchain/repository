@@ -521,23 +521,28 @@ export class ProtocolResolutionService {
           )
           if (descriptor === undefined) continue
 
-          const mirrored: PropertyDescriptor =
-            'value' in descriptor
-              ? {
-                  ...descriptor,
-                  value: bind(descriptor.value),
-                }
-              : {
-                  ...descriptor,
-                  get:
-                    descriptor.get === undefined
-                      ? undefined
-                      : (bind(descriptor.get) as () => unknown),
-                  set:
-                    descriptor.set === undefined
-                      ? undefined
-                      : (bind(descriptor.set) as (value: unknown) => void),
-                }
+          let mirrored: PropertyDescriptor
+          if ('value' in descriptor) {
+            mirrored = {
+              configurable: descriptor.configurable,
+              enumerable: descriptor.enumerable,
+              writable: descriptor.writable,
+              value: bind(descriptor.value),
+            }
+          } else {
+            mirrored = {
+              configurable: descriptor.configurable,
+              enumerable: descriptor.enumerable,
+            }
+            if (descriptor.get !== undefined) {
+              mirrored.get = bind(descriptor.get) as () => unknown
+            }
+            if (descriptor.set !== undefined) {
+              mirrored.set = bind(descriptor.set) as (
+                value: unknown,
+              ) => void
+            }
+          }
 
           if (!Reflect.defineProperty(proxyTarget, property, mirrored)) {
             throw new ProtocolRuntimeError(
