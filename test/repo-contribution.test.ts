@@ -55,20 +55,22 @@ const VALID_KEYS = new Set([
   OTHER_OPERATOR_KEY,
 ])
 
+function validateTestEntityPublicKey(value: unknown): string {
+  if (typeof value !== 'string' || !VALID_KEYS.has(value)) {
+    throw new Error('invalid test EntityPublicKey')
+  }
+  return value
+}
+
 function coreEntityProvider(ctx: Context) {
   ctx.provide(CORE_ENTITY_PROTOCOL_SERVICE, {
-    validateEntityPublicKey(value: unknown) {
-      if (typeof value !== 'string' || !VALID_KEYS.has(value)) {
-        throw new Error('invalid test EntityPublicKey')
-      }
-      return value
-    },
+    validateEntityPublicKey: validateTestEntityPublicKey,
     validateEntity(value: unknown) {
       if (typeof value !== 'object' || value === null || Array.isArray(value)) {
         throw new Error('invalid test Entity')
       }
       const data = value as Record<string, unknown>
-      return { publicKey: this.validateEntityPublicKey(data.publicKey) }
+      return { publicKey: validateTestEntityPublicKey(data.publicKey) }
     },
   })
 }
