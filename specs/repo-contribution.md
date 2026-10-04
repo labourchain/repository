@@ -97,6 +97,32 @@ supplies that exact hash when mounting the verified implementation. Historical
 facts must resolve the exact referenced hash and must not fall back to another
 artifact or version.
 
+## Protocol dependencies
+
+`repo.contribution@0.1.0` has these semantic Protocol dependencies:
+
+```text
+core.entity@0.1.0
+core.record@0.1.0
+repo.establishment@0.1.0
+labour.record@0.1.0
+```
+
+The built Protocol descriptor binds the exact `ProtocolHash` of each dependency
+according to the existing Core/Repository exact-resolution contract. The
+implementation must not substitute another artifact merely because the
+human-readable reference/version looks compatible.
+
+`asset.content@0.1.0` is intentionally not a Protocol dependency of the pure
+Repo acceptance validator. The acceptance fact carries an AssetId selected from
+the already validated labour Record; actual Asset identity/integrity and durable
+availability are checked by Repository orchestration through the existing Asset
+capabilities.
+
+The concrete Protocol service does not inject `assetStorage`,
+`runtimeRecordDatabase`, staging, history or chain-state services. Those are
+Repository runtime concerns rather than acceptance-fact semantics.
+
 ## Record contract
 
 A positive Repo acceptance is one Core Record with exactly this Protocol data:
@@ -122,6 +148,13 @@ operator
     = Core EntityPublicKey of the human/entity actor who performed
       this concrete Repo action
 ```
+
+At the standalone data-shape boundary, `labourRecordId` and `assetId` must be
+non-empty strings. Their actual identity semantics are not reimplemented here:
+`labourRecordId` is confirmed by exact equality with the supplied validated
+labour Record's `id`, while `assetId` is confirmed by exact equality with the
+selected Asset and by membership in `labour.assets[]`. This avoids copying Core
+RecordId or AssetId algorithms into the Repo acceptance Protocol.
 
 The enclosing Record is:
 
