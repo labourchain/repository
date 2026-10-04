@@ -418,7 +418,10 @@ export class AssetStorageService {
           { cause },
         )
       }
-      throw cause
+      throw new AssetRetrievalError(
+        `Unable to verify exact Protocol semantics for durable Asset ${assetId}.`,
+        { cause },
+      )
     }
   }
 
