@@ -118,7 +118,7 @@ For one concrete contribution:
 
 ```text
 labour.references[]
-    -> required input Asset dependencies
+    -> confirmed upstream production/citation references
 
 acceptanceRecord.data.assetId
     -> selected result Asset accepted by this Repo
@@ -129,9 +129,10 @@ labour.assets[]
 
 The selected accepted Asset must occur in `labour.assets[]`.
 
-Every AssetId in `labour.references[]` must already be durably retrievable
-before Repository commit. These are the exact upstream inputs on which the
-accepted labour explicitly depends.
+The current labour Record schema does not distinguish mandatory execution
+inputs from contextual/citation references. Therefore current
+`repo.contribution@0.1.0` does not infer a local-durability prerequisite for
+every AssetId in `labour.references[]`.
 
 The selected result Asset must be durably retrievable before Repository commit.
 It may already exist in Asset storage or may be supplied by the current request
@@ -141,11 +142,15 @@ Other AssetIds in `labour.assets[]` are not automatically accepted and are
 not required to be locally durable for this specific contribution. A Repo may
 accept them separately.
 
-If one AssetId appears in both `references[]` and `assets[]`, one durable
-Asset satisfies both roles.
+If one AssetId appears in both `references[]` and `assets[]`, and the
+Repository initially lacks it, preserving/getting that submitted selected
+result Asset is sufficient for current #9 Asset availability. Its
+`references[]` occurrence does not require pre-existing local durability.
 
-Missing local Asset availability does not make the labour Record invalid. It
-prevents this contribution from becoming Repository `COMMITTED`.
+Missing local availability of an Asset mentioned only in `references[]` does
+not make the labour Record invalid and does not by itself block current
+Repository `COMMITTED`. A stronger referenced-Asset availability requirement
+belongs to a concrete Protocol that explicitly defines it.
 
 ## Patch boundary
 
@@ -170,9 +175,8 @@ DOMAIN_CONFIRMED
     -> labour Record is valid under exact semantics
     -> Repo acceptance Record is valid under exact semantics
     -> their labour/Asset relation agrees
-    -> required input Assets are retrievable
-    -> selected result Asset is canonical-valid
-    -> no conflicting accepted Repo/labour/Asset key exists
+    -> selected result Asset is canonical-valid and durably retrievable
+    -> Repository orchestration finds no conflicting accepted Repo/labour/Asset key
 
 COMMITTED
     -> all prerequisite durable state exists
@@ -207,13 +211,14 @@ acceptance Record D
 Repository `COMMITTED` requires:
 
 1. exact labour Record `L` is durably accepted;
-2. every AssetId in `L.data.references[]`, if any, is durably retrievable;
-3. exact selected Asset `A` is durably retrievable;
-4. `D` is a valid `repo.contribution@0.1.0` Record where:
+2. exact selected Asset `A` is durably retrievable;
+3. `D` is a valid `repo.contribution@0.1.0` Record where:
    - `D.createdBy = R`;
    - `D.data.labourRecordId = L.id`;
    - `D.data.assetId = A.id`;
    - `A.id` occurs in `L.data.assets[]`;
+4. Repository orchestration finds no distinct already accepted `D2` for the
+   same `(R, L.id, A.id)` logical key;
 5. `D` is durably accepted after the above prerequisites.
 
 The Repo establishment fact and Member declaration facts remain their existing
@@ -238,7 +243,6 @@ iff
   AND L validates as labour.record@0.1.0
   AND D.data.assetId is in L.data.assets
 
-  AND every AssetId in L.data.references is durably retrievable
   AND Asset D.data.assetId is durably retrievable
 
   AND no distinct accepted repo.contribution Record
@@ -266,13 +270,12 @@ Normal #9 ordering is:
 1. resolve/validate exact Protocols
 2. validate labour Record L
 3. validate Repo acceptance Record D and relation D -> L -> selected Asset A
-4. verify all referenced/input Assets are already durably retrievable
-5. durably preserve selected Asset A
-6. durably accept labour Record L, idempotently
-7. under the serialized Runtime Record database boundary:
+4. durably preserve/get selected Asset A
+5. durably accept labour Record L, idempotently
+6. under the serialized Runtime Record database boundary:
      - re-check singular acceptance key
      - durably accept Repo acceptance Record D last
-8. return COMMITTED
+7. return COMMITTED
 ```
 
 The request may contain a labour Record or selected Asset that is already
@@ -318,7 +321,7 @@ The durable signed facts already contain the concrete relationship:
 Repo acceptance Record
     -> labourRecordId
     -> labour.assets[] selected asset
-    -> labour.references[] input dependencies
+    -> labour.references[] confirmed upstream references
 ```
 
 #9 therefore does not require a generic relation database or graph structure.
@@ -371,8 +374,9 @@ durable acceptance Record D
     -> D.data.labourRecordId
     -> durable labour Record L
     -> exact labour Protocol validation
-    -> D.data.assetId + L.references[]
-    -> durable Asset retrieval
+    -> D.data.assetId
+    -> durable selected Asset retrieval
+    -> L.references[] remains signed lineage; local absence alone is not a #9 blocker
     -> COMMITTED
 ```
 
@@ -434,7 +438,6 @@ including:
 - invalid Repo acceptance Record or operator;
 - acceptance/labour relation mismatch;
 - selected Asset absent from `labour.assets[]`;
-- required input Asset missing/corrupt/unreadable;
 - selected Asset invalid, conflicting, missing, corrupt or not durably
   retrievable;
 - durable Record ingress failure;
@@ -456,7 +459,6 @@ Contribution orchestration
   -> resolve exact repo.contribution service
   -> validate acceptance Record + relation, including established Repo author
   -> derive Repo from acceptanceRecord.createdBy
-  -> get every labour.references[] Asset
   -> preserve/get submitted selected Asset
   -> accept labour Record through Runtime Record database
   -> under the same serialized ingress boundary:
@@ -482,7 +484,7 @@ One fixture should contain:
 - one Member EntityPublicKey;
 - one established Repo EntityPublicKey;
 - one operator EntityPublicKey;
-- one pre-existing input Asset `A0`;
+- one upstream referenced Asset `A0` (it may be absent from this Repo);
 - one Member-signed labour Record `L` with:
   - `references = [A0.id]`;
   - `assets = [A1.id]`;
@@ -517,13 +519,20 @@ vectors.
 
 At minimum:
 
-| Labour durable | Required Assets durable | Valid acceptance durable | Result |
+| Labour durable | Selected Asset durable | Valid acceptance durable | Result |
 | --- | --- | --- | --- |
 | yes | no | no | not committed |
 | yes | yes | no | not committed |
 | no | yes | no | not committed |
-| yes | yes | invalid/conflicting | not committed / explicit error |
+| yes | yes | invalid | not committed / explicit error |
 | yes | yes | yes | COMMITTED |
+
+In addition:
+
+- a valid unrelated `L.references[]` Asset missing locally may still commit;
+- invalid `D -> L -> selected Asset` relation is a semantic failure;
+- exact `D` replay is committed/idempotent;
+- a distinct `D2` with the same logical key is an orchestration conflict.
 
 A storage corruption/unavailability error after an acceptance marker exists is
 an explicit integrity/storage failure, not a healthy alternative state.
