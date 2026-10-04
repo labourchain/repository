@@ -454,9 +454,8 @@ Contribution orchestration
   -> validate labour Record through exact labour.record service
   -> derive contributor from labourRecord.createdBy
   -> resolve exact repo.contribution service
-  -> validate acceptance Record + relation
+  -> validate acceptance Record + relation, including established Repo author
   -> derive Repo from acceptanceRecord.createdBy
-  -> verify Repo establishment
   -> get every labour.references[] Asset
   -> preserve/get submitted selected Asset
   -> accept labour Record through Runtime Record database
