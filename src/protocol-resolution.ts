@@ -462,6 +462,17 @@ export class ProtocolResolutionService {
           )
         }
       }
+
+      if (
+        Reflect.isExtensible(candidate) &&
+        !Reflect.preventExtensions(candidate)
+      ) {
+        throw new ProtocolRuntimeError(
+          'Unable to seal exact Protocol dependency value: ' +
+            service +
+            '.',
+        )
+      }
     }
     const createShadowTarget = (candidate: object): object => {
       if (typeof candidate === 'function') {
