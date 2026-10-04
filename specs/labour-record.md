@@ -120,6 +120,14 @@ The Record must pass Core Record validation and signature verification, referenc
 the mounted exact `labour.record@0.1.0` ProtocolHash, and then pass the
 labour-data validation above.
 
+For the current Repository #9 contribution path, this valid Member-signed
+labour Record is also the complete Member-side confirmation. No second
+Member-confirmation Record is required. Its signed `references[]` and
+`assets[]` are the concrete Member-confirmed upstream-reference/result Asset
+relations consumed by `repo.contribution@0.1.0`. `references[]` does not by
+itself classify every referenced Asset as a mandatory locally durable execution
+input.
+
 ## Runtime contract
 
 The minimum runtime capability is equivalent to:

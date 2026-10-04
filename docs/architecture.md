@@ -112,8 +112,8 @@ Durable Record ingress / journal
 Runtime Record database
     -> 提供同一 Repository Runtime 的 serialized Record ingress boundary
     -> 复用 journal 的 exact Record durability
-    -> 具体关系、顺序/依赖和 pending packing state 由首个实际 Protocol consumer 定义
-    -> 不预设通用关系 schema、查询语言或状态容器
+    -> #9 的 concrete relation 保留在 signed labour / acceptance facts 中
+    -> 仅在实际需要时维护可重建的窄索引，不预设通用关系 schema、查询语言或状态容器
     -> 不是 canonical chain state
 
 Chain-state / Block-confirmation access
@@ -122,7 +122,7 @@ Chain-state / Block-confirmation access
     -> 用于状态升级、对账和 projection rebuild
 ```
 
-三者可以由同一个未来 node/runtime 实现，也可以作为不同 Cordis providers 组合；Architecture 不锁定 package、数据库或网络实现。当前 Runtime Record database 只实现最小共享写入边界；待 #9 出现第一个具体 contribution relation consumer 时，再按实际需要定义最小关系状态，不预设通用 DAG schema、SQL 模型、namespace state framework 或 packer API。
+三者可以由同一个未来 node/runtime 实现，也可以作为不同 Cordis providers 组合；Architecture 不锁定 package、数据库或网络实现。当前 Runtime Record database 维持最小共享写入边界；#9 已经给出第一个 concrete contribution consumer，而它的关系由 signed facts 自身表达，因此不新增 generic relation state。若实现确实需要，可增加由 durable facts 重建的窄索引，但不预设通用 DAG schema、SQL 模型、namespace state framework 或 packer API。
 
 Repository 领域插件消费这些运行能力，但不通过 `repo.records[]` 或第二套链来替代 Core Block / canonical-chain 语义。
 
@@ -289,7 +289,7 @@ flowchart LR
     ChainState --> Block
 ```
 
-Repository 不重新定义 Core 已有的 Protocol、Record、Entity identity、signature 或 Block 语义。Core Record 只是通用签名事实容器；劳动记录由上层 labour Protocol 把 `labourRecord` 作为 `Record.data` 解释。Member、Repo、Asset、confirmation、Repo establishment、Repo decision 与 contribution relation 等领域语义同样由各自适用的上层 Protocol 定义。
+Repository 不重新定义 Core 已有的 Protocol、Record、Entity identity、signature 或 Block 语义。Core Record 只是通用签名事实容器；劳动记录由 `labour.record@0.1.0` 把 `labourRecord` 作为 `Record.data` 解释。当前 #9 的 Repo 侧采纳事实由具体的 `repo.contribution@0.1.0` 定义，而不是继续依赖一个未指定的 generic confirmation / relation Protocol。未来其他领域事实仍由各自具体 Protocol 定义。
 
 Member 与 Repo 都是同一类组合原则：先有 Core Entity identity，再通过协议获得领域语义。一个 Entity identity/keypair 可以同时满足 Member 与 Repo 协议；这种组合不产生第二个 identity。Repo establishment 只保留创建事实与创建来源，不定义 Repo ownership，也不自动扩展为 Asset 或劳动成果的私人财产权。
 
@@ -369,57 +369,131 @@ Runtime Repo index 只是加速 lookup 的可替换数据。Repo identity 来自
 
 ## Contribution 数据流
 
-Repo contribution 不是普通 CRUD。Member 已经在 Repository 之外产生 Record，并可形成或修改 Asset；Repository 接收的是 Asset contribution，并参与该劳动的 Repo 侧确证。
+Repo contribution 不是普通 CRUD。Member 已经在 Repository 之外产生并签名
+`labour.record@0.1.0`；Repo 侧采纳同样以一个已经由 Repo identity
+签名的 `repo.contribution@0.1.0` Record 表达。#9 orchestration 消费这些
+signed facts，不接管 Member 或 Repo private key。
 
-当前流程为：
+当前请求只需要：
+
+```text
+selected Asset
++ Member-signed labour Record
++ Repo-signed acceptance Record
+```
+
+Member-side confirmation 就是 labour Record 本身。生产关系由
+`labour.references[] / labour.assets[]` 表达。Repo acceptance Record 只额外
+表达 Repo 独立采纳哪一个 result Asset，以及实际 operator：
+
+```text
+Record.createdBy
+= Repo EntityPublicKey
+
+Record.data
+= {
+    labourRecordId,
+    assetId,
+    operator
+  }
+```
+
+其中 `assetId` 必须出现在所引用 labour Record 的 `assets[]`。保留这个
+字段不是复制 production lineage，而是允许 Repo 在一个 labour Record
+包含多个结果时只采纳其中一个结果。
+
+正常 #9 数据流为：
 
 ```mermaid
 sequenceDiagram
     participant Consumer as Flow / Contributor
-    participant Cordis as Cordis
-    participant Protocol as Repository Protocol implementation
-    participant Stage as Runtime staging provider
+    participant Cordis as Cordis / Contribution orchestration
+    participant Resolve as Exact Protocol resolution
+    participant Labour as labour.record@0.1.0
+    participant Accept as repo.contribution@0.1.0
     participant Assets as Asset provider
+    participant RuntimeDB as Runtime Record database
     participant Journal as Durable Record journal
-    participant Chain as Chain-state adapter
 
-    Consumer->>Cordis: Asset + Record + relations
-    Cordis->>Protocol: execute applicable protocol semantics
-    Protocol->>Protocol: validate labourer, Asset and contribution relations
-    Protocol->>Stage: stage contribution
-    Protocol->>Protocol: verify required labour-subject and Repo confirmations; retain Repo operator trace
-    Protocol->>Journal: durably accept resulting Records
-    Journal-->>Protocol: accepted/pending-chain
-    Protocol->>Assets: preserve exact Asset durably
-    Assets-->>Protocol: exact Asset retrievable
-    Protocol->>Stage: reconcile / clear runtime state
-    Protocol-->>Consumer: Repository committed / accepted
+    Consumer->>Cordis: Asset + signed labour Record + signed Repo acceptance Record
+    Cordis->>Resolve: resolve exact labour / acceptance / Asset ProtocolHashes
+    Cordis->>Labour: validate Member-signed labour Record
+    Labour-->>Cordis: validated labour + contributor + references[] + assets[]
+    Cordis->>Accept: validate Repo acceptance + D -> L -> selected Asset relation
+    Accept-->>Cordis: Repo + operator + labourRecordId + assetId
+    Cordis->>Assets: preserve/get selected result Asset
+    Assets-->>Cordis: selected result Asset durably retrievable
+    Cordis->>RuntimeDB: durably accept labour Record idempotently
+    RuntimeDB->>Journal: exact Record durability
+    Cordis->>RuntimeDB: re-check singular key and accept Repo acceptance Record last
+    RuntimeDB->>Journal: exact acceptance Record durability
+    Cordis-->>Consumer: Repository COMMITTED
 
-    Note over Journal,Chain: Later, outside Repository acceptance and this MVP flow
-    Note over Journal,Chain: A future chain runtime may pack candidate Records and peers independently validate the resulting Block
-    Chain-->>Protocol: block-confirmed status only after accepted-chain evidence includes the Records
+    Note over Journal,Consumer: Block packing / peer validation remain later chain work
 ```
 
-Contribution 的协议语义由对应 Protocol 定义；其 implementation 由 Cordis 负责运行，不额外引入一个把状态机写死的 Repository Runner。Record ingress/journal、Runtime Record database 与 chain-state access 是三个不同职责：journal 保存 exact accepted Records；当前 Runtime Record database 提供共享 serialized ingress boundary；#9 出现首个具体 relation consumer 后，再由相应 Protocol 定义实际需要维护的关系、顺序/依赖和待打包状态；chain state 回答已收录 Block 的链确证状态。Runtime Record database 不是第二条 blockchain，也不取代 Core Block / canonical-chain 语义。
+`repo.contribution@0.1.0` 的 Protocol service 只负责该 signed fact 与
+cross-Record relation 的语义验证，不负责 Asset storage、Record persistence、
+staging、history 或 Block 状态。Repository orchestration 负责 durable ordering。
+
+当前 Runtime Record database 的 serialized ingress boundary 足以完成 #9
+correctness。关系已经写在 durable signed facts 中：
+
+```text
+Repo acceptance Record
+    -> labourRecordId
+    -> labour.assets[] selected Asset
+    -> labour.references[] confirmed upstream references
+```
+
+因此 #9 不建立 generic relation database。为了同一进程内 conflict check 或
+后续查询，可以维护一个可重建的窄索引：
+
+```text
+(Repo, labourRecordId, assetId) -> acceptance RecordId
+```
+
+该索引不是 acceptance truth，也不是 canonical-chain state。
 
 ## Contribution 状态
 
-Repository execution 与 chain confirmation 是两个不同维度，不再串成一个把“本地打包”误当作“链确证”的单一状态机。
+Repository execution 与 chain confirmation 是两个不同维度。
 
 Repository execution：
 
 ```mermaid
 stateDiagram-v2
     [*] --> STAGED
-    STAGED --> DOMAIN_CONFIRMED: required domain confirmations satisfied
-    DOMAIN_CONFIRMED --> COMMITTED: durable Record ingress + accepted Asset durable
+    STAGED --> DOMAIN_CONFIRMED: exact labour/Repo facts + relations + selected Asset availability valid
+    DOMAIN_CONFIRMED --> COMMITTED: labour durable + selected Asset durable + Repo acceptance Record durable last
 ```
 
-`STAGED` 是临时运行时处理状态，不是已接受 contribution。
+`STAGED` 只是当前请求正在处理，没有 durable Repo acceptance marker。
 
-`DOMAIN_CONFIRMED` 表示 contribution 已满足适用 Protocol 要求的领域确认条件，但仍未达到 Repository acceptance。这个名称明确区别于链上的 Block confirmation。
+`DOMAIN_CONFIRMED` 在当前 #9 中有具体含义：
 
-`COMMITTED` 是 Repository 的 durable acceptance 边界：所需 Records 已进入可跨重启恢复的 durable journal，accepted Asset 已可持久读取。
+- Member-signed `labour.record@0.1.0` 有效；
+- Repo-signed `repo.contribution@0.1.0` 有效；
+- acceptance 的 `labourRecordId` 与 labour Record 一致；
+- acceptance 的 `assetId` 出现在 `labour.assets[]`；
+- `labour.references[]` 保持已确认的上游生产/引用关系；其本地缺失本身不阻断当前 #9 acceptance；
+- selected result Asset canonical-valid；
+- 不存在同一 `(Repo, labourRecordId, assetId)` 的 distinct accepted fact。
+
+它仍然不是 Repository acceptance，更不是 Block confirmation。
+
+`COMMITTED` 的 durable final marker 是 Repo acceptance Record。只有在 labour
+Record 与 selected result Asset 已达到当前 #9 的 durable 要求后，
+该 acceptance Record 才能被 durable accept。完成这一步后才可以向 caller
+报告 Repository accepted。
+
+一个 fresh Runtime 可以从 durable acceptance Record 出发，重新读取并验证
+labour Record 与 selected Asset，并从 `labour.references[]` 重建上游关系，确定同一 `COMMITTED` 结果；
+不需要 process-local Contribution registry。
+
+如果 acceptance marker 已经存在，但其依赖的 durable storage 当前损坏或不可读，
+Runtime 必须显式暴露 integrity/storage failure，而不能把它伪装成健康的
+`COMMITTED` 或“从未接受”。
 
 Chain confirmation 另行表示：
 
@@ -428,9 +502,12 @@ pending-chain
     -> block-confirmed
 ```
 
-`pending-chain` 表示 Repository 已接受但尚无 accepted-chain evidence。只有 chain-state / accepted Block evidence 表明相关 Records 已进入一个经过独立验证并被接受的 Block，才能标记为 `block-confirmed`。
+`pending-chain` 表示 Repository 已接受但尚无 accepted-chain evidence。只有
+future chain-state / accepted Block evidence 表明相关 Records 已进入一个经过
+独立验证并被接受的 Block，才能标记为 `block-confirmed`。
 
-本地把 Records 放入 candidate Block、生成 Block 文件或完成打包动作本身都不构成这个状态跃迁。Block packing 是未来链运行过程中的生产步骤；peer validation / accepted-chain evidence 才决定链确证。
+本地把 Records 放入 candidate Block、生成 Block 文件或完成打包动作本身都不
+构成这个状态跃迁。
 
 ## 数据与投影
 
@@ -445,26 +522,26 @@ Repository 不以领域 service-owned state 复制链确证事实。
    - 不是 Block confirmation
 
 2. Runtime Record database
-   - 当前只提供 Repository 的 serialized Record ingress boundary
+   - 提供 Repository 的 serialized Record ingress boundary
    - 复用 durable Record journal 的 exact Record durability
-   - 不预设通用关系 schema、顺序/依赖容器或 pending-packing state
-   - #9 等首个真实 Protocol consumer 出现后，再按实际需要增加最小 relation state
+   - #9 的 concrete relations 已由 signed Records 表达，不建立 generic relation store
+   - 可选窄索引 (Repo, labourRecordId, assetId) -> acceptance RecordId 必须可重建
    - 不自行赋予 Block confirmation，也不是 canonical-chain 数据库
 
 3. staging
-   - contribution 处理中的临时/恢复状态
-   - 未达到 Repository acceptance
+   - #10 可用于 interrupted pre-commit recovery 的相关状态
+   - 不属于 #9 COMMITTED predicate，也不能创造 acceptance
 
 4. index / cache / projection
    - 查询与展示加速数据
-   - 可由 Runtime Record database、journal 与 chain state 派生或重建
+   - 可由 exact durable facts、Runtime Record database 与 chain state 派生或重建
 ```
 
 Runtime 还可以保存：
 
 - exact Asset descriptor + content bytes；
 - Repo identity -> establishment RecordId 等领域关系索引；
-- 在未来具体 Protocol consumer 需要时新增的最小 Record relationship / dependency indexes；
+- 从 signed labour/acceptance facts 重建的窄 contribution relation index（如果实现确实需要）；
 - 从 accepted contributions 派生的 Repo Asset / 查询 projection；
 - contribution history projection；
 - cache 和其他可重建运行数据。
@@ -476,21 +553,20 @@ Contribution history 可以同时展示 Repository committed/pending-chain 与 b
 Repository 不维护一个将所有链 Records 归 Repository 所有的规范 `repo.records[]`。
 
 
-Repo 中需要更新的事实状态沿用 Record + Patch 的演化方式，而不是把某个完整 Snapshot 反复写回事实历史。具体 Patch Protocol / schema 由相应领域 Spec 定义，但 Architecture 固定以下数据角色：
+当前 #9 labour + Asset contribution 不需要 Patch。其 durable fact source 已经是：
 
 ```text
-Record + Patch history
-    -> 可验证的事实与事实变更来源
-    -> 进入 Block 时按适用 Protocol 被独立验证
-
-Snapshot
-    -> 节点按当前可用事实和 exact Protocol semantics 物化出的运行时状态
-    -> 用于快速恢复、读取、索引或计算
-    -> 可以丢弃并重新计算
-    -> 不进入 Record history，也不作为新的事实来源
+Member-signed labour Record
++ Repo-signed repo.contribution acceptance Record
 ```
 
-Snapshot 因此不能反向覆盖 Record / Patch history，也不能仅因被某个 Repo Runtime 缓存就获得链上权威。节点升级、插件切换或缓存重建时，可以重新从事实历史计算 Snapshot，而不改写已经存在的事实。
+Patch 继续作为未来某个具体 Protocol 的状态演化能力保留，只有实际 Requirement
+进入范围后才定义对应 schema；Architecture 不为 #9 预设 generic Patch framework。
+
+Snapshot 仍是节点基于 durable facts 与 exact Protocol semantics 物化出的
+Runtime 状态，可用于恢复、读取、索引或计算，可以丢弃并重新计算。Snapshot
+不进入 Record history，也不能反向覆盖 signed facts 或因为被 Runtime 缓存就
+获得链上权威。
 
 ## Cordis 生命周期
 

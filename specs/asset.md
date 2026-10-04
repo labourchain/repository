@@ -177,10 +177,14 @@ Record/Asset production graph is reconstructed from signed
 `labour.record.references[]` and `labour.record.assets[]` facts.
 
 Missing Asset references continue to be legal while a labour Record is being
-created. `labour.record@0.1.0` records a confirmed reference string; it does
-not require local Asset resolution. Whether a later contribution requires a
-referenced Asset to be locally available is a Contribution/applicable-Protocol
-decision, not an Asset identity rule.
+created. `labour.record@0.1.0` records a confirmed upstream production/citation
+reference; it does not require local Asset resolution. The current #9
+contribution contract requires the selected accepted result Asset to be durably
+retrievable before the Repo acceptance Record becomes the commit marker. Local
+absence of another Asset mentioned only in `labour.references[]` does not by
+itself block current `repo.contribution@0.1.0` acceptance. A future concrete
+Protocol may define a stronger referenced-Asset availability rule explicitly;
+that rule is not inferred from Asset identity or from `references[]` alone.
 
 ## Validation, immutability and conflict
 

@@ -20,7 +20,8 @@ The Specs are engineering projections of the current Requirements and Architectu
 | [`protocol-resolution.md`](./protocol-resolution.md) | exact ProtocolHash / verified artifact resolution |
 | [`asset.md`](./asset.md) | minimum immutable Asset identity, integrity and labour-reference semantics |
 | [`asset-storage.md`](./asset-storage.md) | exact durable preservation and retrieval of Asset content |
-| [`contribution.md`](./contribution.md) | Asset contribution, confirmation, Repository commit, staging and recovery |
+| [`repo-contribution.md`](./repo-contribution.md) | `repo.contribution@0.1.0` positive Repo acceptance fact and operator trace |
+| [`contribution.md`](./contribution.md) | concrete Asset contribution orchestration and Repository commit boundary |
 | [`contribution-history.md`](./contribution-history.md) | contribution-history view and derived projection |
 
 These boundaries are capability boundaries, not Story or Task boundaries. A Story may depend on several Specs, and one Spec may be implemented through several Stories and Tasks.
@@ -34,11 +35,13 @@ start Repository node
   -> recognize/load human Member identity
   -> establish or load Repo
   -> resolve exact ProtocolHash / verified implementations
-  -> receive Asset + Member-produced Record + relations
-  -> validate required Protocol semantics
-  -> satisfy Member and Repo confirmations
-  -> durably accept exact resulting Records
-  -> durably retrieve accepted Asset
+  -> receive selected Asset + Member-produced labour Record + Repo-signed acceptance Record
+  -> validate exact labour.record and repo.contribution semantics
+  -> derive Member confirmation from the signed labour Record
+  -> derive Asset relations from labour references[] / assets[]
+  -> durably preserve the selected Asset
+  -> durably accept the labour Record
+  -> durably accept the Repo acceptance Record last
   -> report Repository COMMITTED / accepted
   -> later observe Block-confirmation status when available
   -> expose contribution history with pending-chain vs block-confirmed state
@@ -70,7 +73,7 @@ Labourer and Repo remain independent identities. The MVP does not create a `repo
 
 Repo-accepted contributions are the durable relationship between them. A product may derive contributor/member lists from contribution history, and may store groups, tags or filters as local software data. These organization views are not chain validity inputs.
 
-Repo decisions that are represented on chain are signed by the Repo identity and record the actual operator in signed Protocol data. Organization authorization and governance remain outside the Repository MVP.
+The MVP contribution decision is concretely `repo.contribution@0.1.0`: the Repo identity signs one positive acceptance Record that references one Member-signed labour Record, selects one result Asset from that labour Record, and records the actual operator in signed Protocol data. Organization authorization and governance remain outside the Repository MVP.
 
 ### Historical Protocol semantics are exact
 
@@ -147,11 +150,20 @@ Successful durable ingress means the Record can survive restart and continue tow
 
 Repository execution and chain confirmation are separate status dimensions.
 
+For the current MVP, Member-side confirmation is the valid Member-signed
+`labour.record@0.1.0` itself. Repo-side confirmation is one valid
+`repo.contribution@0.1.0` Record.
+
 A contribution reaches Repository `COMMITTED` only when:
 
-- the applicable contribution requirements and domain confirmations are satisfied;
-- every required exact Record is durably accepted by the Record journal; and
-- the accepted Asset can be durably retrieved.
+- the exact labour Record is durably accepted;
+- `labour.references[]` remains the signed upstream production/citation
+  relation and is not a generic local-durability prerequisite;
+- the selected result Asset is durably retrievable and occurs in `labour.assets[]`;
+- the Repo acceptance Record references that labour Record and selected Asset,
+  has a valid Repo author/signature and operator, and is durably accepted last;
+- no distinct accepted Repo acceptance Record conflicts with the same
+  `(Repo, labourRecordId, assetId)` key.
 
 The Repository execution path is:
 
@@ -159,7 +171,10 @@ The Repository execution path is:
 STAGED -> DOMAIN_CONFIRMED -> COMMITTED
 ```
 
-`COMMITTED` is the Repository product acceptance boundary.
+`DOMAIN_CONFIRMED` means the concrete labour/acceptance relation, selected
+Asset availability and Repository-owned same-key check have passed validation. `COMMITTED` is the Repository
+product acceptance boundary, with the Repo acceptance Record acting as the
+durable final marker.
 
 Its chain status is separately `pending-chain` until accepted-chain evidence shows that the relevant Records are included in an independently validated Block, at which point it may be represented as `block-confirmed`. Merely producing or locally packing a candidate Block is not chain confirmation.
 
@@ -175,8 +190,8 @@ accepted Record journal
 Runtime Record database
     -> serialized Repository Record ingress boundary
     -> delegates exact Record durability to the journal
-    -> concrete Protocol-owned relationship / ordering / pending-packing state is added only when a real consumer requires it
-    -> any such state remains rebuildable/reconcilable from durable Records + exact Protocol semantics
+    -> #9 relationship/dependency facts remain explicit in signed Records
+    -> a narrow rebuildable (Repo, labourRecordId, assetId) -> acceptance RecordId index is optional, not acceptance truth
     -> not itself canonical-chain or Block confirmation
 
 staging
@@ -187,10 +202,9 @@ index/cache/projection
     -> rebuildable from durable facts, concrete Protocol-owned relation state when present, and other durable sources
 ```
 
-The Runtime Record database is not a query cache, but #31 deliberately exposes only the serialized ingress boundary. The first concrete consumer, currently #9 Contribution, may add only the relationship state it actually needs. Persistence alone does not turn Runtime database, staging, index/cache/projection, or journal state into chain-confirmed facts.
+The Runtime Record database is not a query cache. #9 does not require a generic relation store: the acceptance Record's `labourRecordId` plus the labour Record's `references[] / assets[]` are the concrete signed relationship facts. A narrow derived index may accelerate lookup but must be rebuildable. Persistence alone does not turn Runtime database, staging, index/cache/projection, or journal state into chain-confirmed facts.
 
-
-Repo state evolution uses Record + Patch facts. Runtime Snapshot is a materialized cache/projection derived from those facts under exact Protocol semantics: it may accelerate recovery and reads, may be discarded and rebuilt, and must not be written back as a substitute for the Record + Patch history or treated as an independent chain fact.
+The current #9 path does not require a Patch fact. Patch remains an extension hook for a future Protocol that actually defines mutable state evolution. Runtime Snapshot remains only a materialized cache/projection derived from durable facts under exact Protocol semantics.
 
 ### Recovery converges to durable Repository state
 
@@ -232,7 +246,7 @@ Runtime Record database
   -> Runtime/composition dependency
   -> serializes validated Repository Record ingress in one node
   -> delegates exact Record durability to the journal
-  -> does not define generic relationship state before the first concrete consumer
+  -> #9 relationships remain in signed labour/acceptance facts; no generic relation state is required
 
 chain-state / Block-confirmation access
   -> Runtime/composition dependency
@@ -257,10 +271,16 @@ asset-storage
   -> preserves exact Asset descriptor + bytes by AssetId
   -> does not own Repo acceptance or a Repo->Asset registry
 
+repo-contribution
+  -> defines `repo.contribution@0.1.0`
+  -> Repo-signed positive acceptance of one labour Record / selected result Asset
+  -> records operator without duplicating Repo or contributor identity
+
 contribution
   -> uses protocol resolution + durable Record ingress + Asset storage
+  -> uses Member-signed labour.record as Member confirmation
+  -> uses repo.contribution acceptance Record as the final durable marker
   -> reaches Repository COMMITTED before Block packing
-  -> derives Repo/Asset acceptance from contribution semantics
 
 contribution-history
   -> projects Repository-committed contributions
@@ -278,9 +298,9 @@ Implementation must:
 - persist exact accepted Records through an explicit Runtime/composition dependency rather than a Repository-domain `records[]` model;
 - preserve Assets by deterministic AssetId without turning provider-native keys into identity or maintaining a parallel lineage registry;
 - derive Record/Asset lineage from signed labour Record references rather than `pid`/`previous` metadata;
-- use the Repository Runtime database as the serialized ingress boundary; concrete Protocol-owned relationship / pending-packing state is added only when a real consumer such as #9 requires it, without turning that runtime state into a second blockchain or canonical-chain authority;
+- use the Repository Runtime database as the serialized ingress boundary; #9 keeps its concrete relationship in signed labour and Repo acceptance facts and does not introduce a generic relation store;
 - treat Repository Runtime validation as the normal producer path rather than a chain trust root; peer validation of a future Block must recompute the Record-derived `vroot`, resolve exact ProtocolHashes from the actual Records, and independently validate their semantics and relations;
-- keep Repo fact evolution in Record + Patch history while treating Snapshot only as rebuildable Runtime materialization;
+- keep Patch outside the current #9 path until a concrete Protocol requires it, while treating Snapshot only as rebuildable Runtime materialization;
 - distinguish durable pending-chain acceptance from actual Block confirmation;
 - fail closed when required durable ingress, Core primitive or exact ProtocolHash / verified implementation is unavailable;
 - keep concrete database, filesystem and transport choices behind Runtime/plugin boundaries;
@@ -301,7 +321,7 @@ In addition to the acceptance tests defined by each capability Spec, the MVP int
 5. the minimum labourRecord Protocol can produce/validate a real Member-signed labour fact before the labour / Asset contribution path is integrated;
 6. the minimum Asset Protocol deterministically derives and verifies AssetId from exact Protocol semantics and content, enforces the 16 MiB raw-content boundary, and classifies invalid incoming identity before any durable identity conflict;
 7. a labour / Asset contribution resolves and verifies the exact required ProtocolHash / implementation artifacts;
-8. valid confirmations, durable Record ingress and durable Asset retrieval produce Repository `COMMITTED` / accepted state;
+8. a valid Member-signed labour Record plus a valid Repo-signed `repo.contribution@0.1.0` Record, a durable selected result Asset, durable Record ingress and acceptance-Record-last ordering produce Repository `COMMITTED` even when an unrelated confirmed upstream reference is not locally stored;
 9. the accepted Asset remains retrievable with the same AssetId and exact bytes after restart;
 10. an interrupted contribution recovers without false acceptance or duplicate durable Record acceptance;
 11. a Repository-committed contribution appears in contribution history as pending-chain before Block inclusion;
