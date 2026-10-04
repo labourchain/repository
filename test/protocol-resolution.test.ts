@@ -671,6 +671,18 @@ test('exact dependency reachable values remain bound to the captured generation'
     rejectAsync(): Promise<never>
   }
 
+  interface ConsumerService {
+    getNested(): NestedService
+    getAlias(): NestedService
+    getFromGetter(): NestedService
+    getNestedMethod(): () => void
+    createNested(): NestedService
+    createCallable(): CallableService
+    createNestedAsync(): Promise<NestedService>
+    createCallableAsync(): Promise<CallableService>
+    rejectAsync(): Promise<never>
+  }
+
   const nested: NestedService = {
     count: 0,
     touch() {
@@ -738,8 +750,21 @@ test('exact dependency reachable values remain bound to the captured generation'
                 provide: consumerService,
                 inject: [dependencyService],
                 apply(ctx: Context) {
+                  const exactDependency = ctx.get(
+                    dependencyService,
+                  ) as DependencyService
                   ctx.provide(consumerService, {
-                    dependency: ctx.get(dependencyService),
+                    getNested: () => exactDependency.nested,
+                    getAlias: () => exactDependency.alias,
+                    getFromGetter: () => exactDependency.fromGetter,
+                    getNestedMethod: () => exactDependency.nested.touch,
+                    createNested: () => exactDependency.createNested(),
+                    createCallable: () => exactDependency.createCallable(),
+                    createNestedAsync: () =>
+                      exactDependency.createNestedAsync(),
+                    createCallableAsync: () =>
+                      exactDependency.createCallableAsync(),
+                    rejectAsync: () => exactDependency.rejectAsync(),
                   })
                 },
               },
@@ -752,36 +777,42 @@ test('exact dependency reachable values remain bound to the captured generation'
   })
 
   const resolver = node.context[PROTOCOL_RESOLUTION_SERVICE]
-  const boundDependency = await resolver.withExactService(
+  const handles = await resolver.withExactService(
     'test.consumer@1.0.0',
     HASH_B,
-    (value) =>
-      (value as { dependency: DependencyService }).dependency,
+    async (value) => {
+      const service = value as ConsumerService
+      const result = {
+        nested: service.getNested(),
+        alias: service.getAlias(),
+        getter: service.getFromGetter(),
+        nestedMethod: service.getNestedMethod(),
+        returnedNested: service.createNested(),
+        returnedCallable: service.createCallable(),
+        asyncNested: await service.createNestedAsync(),
+        asyncCallable: await service.createCallableAsync(),
+        getFromGetter: service.getFromGetter,
+      }
+      await assert.rejects(
+        service.rejectAsync(),
+        (error: unknown) => error === rejection,
+      )
+      return result
+    },
   )
 
-  const nestedHandle = boundDependency.nested
-  const nestedMethod = nestedHandle.touch
-  const returnedNested = boundDependency.createNested()
-  const returnedCallable = boundDependency.createCallable()
-  const asyncNested = await boundDependency.createNestedAsync()
-  const asyncCallable = await boundDependency.createCallableAsync()
-
-  assert.equal(boundDependency.alias, nestedHandle)
-  assert.equal(boundDependency.fromGetter, nestedHandle)
+  assert.equal(handles.alias, handles.nested)
+  assert.equal(handles.getter, handles.nested)
   assert.equal(getterReads, 1)
-  assert.equal(nestedHandle.self, nestedHandle)
-  assert.equal(returnedNested, nestedHandle)
-  assert.equal(asyncNested, nestedHandle)
-  assert.equal(returnedCallable, asyncCallable)
-  assert.equal(returnedCallable.nested, nestedHandle)
-  assert.equal(nestedHandle.increment(), 1)
-  nestedMethod()
-  assert.equal(returnedCallable(), 2)
+  assert.equal(handles.nested.self, handles.nested)
+  assert.equal(handles.returnedNested, handles.nested)
+  assert.equal(handles.asyncNested, handles.nested)
+  assert.equal(handles.returnedCallable, handles.asyncCallable)
+  assert.equal(handles.returnedCallable.nested, handles.nested)
+  assert.equal(handles.nested.increment(), 1)
+  handles.nestedMethod()
+  assert.equal(handles.returnedCallable(), 2)
   assert.equal(exactInvocations, 2)
-  await assert.rejects(
-    boundDependency.rejectAsync(),
-    (error: unknown) => error === rejection,
-  )
 
   const exactDependency = node.context.reflect._getImpl(dependencyService)
   const exactConsumer = node.context.reflect._getImpl(consumerService)
@@ -807,13 +838,13 @@ test('exact dependency reachable values remain bound to the captured generation'
 
   assert.equal(node.context.reflect._getImpl(consumerService), exactConsumer)
 
-  assert.throws(() => nestedHandle.touch(), ProtocolRuntimeError)
-  assert.throws(() => nestedMethod(), ProtocolRuntimeError)
-  assert.throws(() => returnedNested.touch(), ProtocolRuntimeError)
-  assert.throws(() => returnedCallable(), ProtocolRuntimeError)
-  assert.throws(() => asyncNested.touch(), ProtocolRuntimeError)
-  assert.throws(() => asyncCallable(), ProtocolRuntimeError)
-  assert.throws(() => boundDependency.fromGetter, ProtocolRuntimeError)
+  assert.throws(() => handles.nested.touch(), ProtocolRuntimeError)
+  assert.throws(() => handles.nestedMethod(), ProtocolRuntimeError)
+  assert.throws(() => handles.returnedNested.touch(), ProtocolRuntimeError)
+  assert.throws(() => handles.returnedCallable(), ProtocolRuntimeError)
+  assert.throws(() => handles.asyncNested.touch(), ProtocolRuntimeError)
+  assert.throws(() => handles.asyncCallable(), ProtocolRuntimeError)
+  assert.throws(() => handles.getFromGetter(), ProtocolRuntimeError)
   assert.equal(exactInvocations, 2)
   assert.equal(foreignInvocations, 0)
   assert.equal(getterReads, 1)
