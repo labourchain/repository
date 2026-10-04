@@ -585,6 +585,22 @@ export class ProtocolResolutionService {
         }
         return bindDescriptor(descriptor)
       }
+      const ownKeys = () => {
+        assertCurrent()
+        return Reflect.ownKeys(proxyTarget)
+      }
+      const has = (property: PropertyKey) => {
+        assertCurrent()
+        return Reflect.has(proxyTarget, property)
+      }
+      const deleteProperty = (property: PropertyKey) => {
+        assertCurrent()
+        return Reflect.deleteProperty(proxyTarget, property)
+      }
+      const isExtensible = () => {
+        assertCurrent()
+        return Reflect.isExtensible(proxyTarget)
+      }
       const getPrototypeOf = (): object | null => {
         assertCurrent()
         if (shadowed) return Reflect.getPrototypeOf(proxyTarget)
@@ -648,6 +664,11 @@ export class ProtocolResolutionService {
             set(property, nextValue),
           getOwnPropertyDescriptor: (_target, property) =>
             getOwnPropertyDescriptor(property),
+          ownKeys: () => ownKeys(),
+          has: (_target, property) => has(property),
+          deleteProperty: (_target, property) =>
+            deleteProperty(property),
+          isExtensible: () => isExtensible(),
           getPrototypeOf: () => getPrototypeOf(),
           defineProperty: () => defineProperty(),
           setPrototypeOf: (_target, prototype) =>
@@ -661,6 +682,11 @@ export class ProtocolResolutionService {
             set(property, nextValue),
           getOwnPropertyDescriptor: (_target, property) =>
             getOwnPropertyDescriptor(property),
+          ownKeys: () => ownKeys(),
+          has: (_target, property) => has(property),
+          deleteProperty: (_target, property) =>
+            deleteProperty(property),
+          isExtensible: () => isExtensible(),
           getPrototypeOf: () => getPrototypeOf(),
           defineProperty: () => defineProperty(),
           setPrototypeOf: (_target, prototype) =>
