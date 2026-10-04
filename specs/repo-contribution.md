@@ -263,12 +263,13 @@ The Protocol does not require Asset bytes or durable storage during pure
 Record/relation validation. Durable Asset availability is a Repository
 orchestration precondition described in `contribution.md`.
 
-## Input Asset policy
+## Upstream reference and selected Asset policy
 
-For the current #9 vertical slice, every AssetId in
-`labour.references[]` is a required input dependency of the accepted
-contribution and must already be durably retrievable by the Repository before
-the acceptance Record may become the durable commit marker.
+`labour.references[]` preserves confirmed upstream production/citation
+relations: the labour explicitly builds on or cites those AssetIds. The field
+does not distinguish a mandatory execution input from a contextual reference,
+so current `repo.contribution@0.1.0` does not infer that every referenced Asset
+must already be durably retrievable by this Repository.
 
 The selected `data.assetId` must be durably retrievable and must match the
 exact submitted/preserved Asset.
@@ -279,11 +280,16 @@ contribution. They may be accepted separately by their own Repo acceptance
 Records.
 
 If the same AssetId appears in both `references[]` and `assets[]`, as in an
-unchanged maintenance result, one durable Asset satisfies both roles.
+unchanged maintenance result, and the Repository does not already store it, the
+current request may preserve it as the selected result Asset. That one durable
+Asset satisfies the current acceptance requirement; the `references[]`
+occurrence does not independently require it to have existed before preserve.
 
-Missing local Asset availability does not retroactively invalidate the
-`labour.record@0.1.0` fact. It prevents this Repository contribution from
-reaching its acceptance boundary.
+Missing local availability of an Asset mentioned only in `references[]` does
+not retroactively invalidate the `labour.record@0.1.0` fact and does not by
+itself block current #9 acceptance. A future concrete Protocol may impose a
+stronger referenced-Asset availability rule when it can express that rule
+explicitly.
 
 ## Positive-fact semantics
 
@@ -320,7 +326,9 @@ accepted state.
   idempotency.
 
 This singularity keeps the positive acceptance action and its operator trace
-unambiguous without inventing a ContributionId.
+unambiguous without inventing a ContributionId. It is enforced by Repository
+Contribution orchestration, which can inspect already accepted durable facts;
+the stateless Protocol service does not perform that lookup.
 
 A Runtime implementation may use a rebuildable key-to-RecordId index for
 efficiency, but the exact durable Records remain the source from which that
@@ -412,9 +420,7 @@ caller, including:
 - invalid operator EntityPublicKey;
 - referenced labour Record invalid;
 - `labourRecordId` mismatch;
-- selected `assetId` absent from `labour.assets[]`;
-- conflicting already accepted logical key when checking Repository relation
-  state.
+- selected `assetId` absent from `labour.assets[]`.
 
 Asset not-found/corruption/persistence errors remain Asset-storage /
 Contribution-orchestration failures rather than labour Record validity errors.
@@ -434,10 +440,14 @@ The Protocol implementation must cover at least:
 - one input Asset referenced by multiple later labour Records;
 - one labour Record containing multiple result Assets with separate Repo
   acceptance facts for selected results;
-- exact acceptance replay idempotency;
-- distinct acceptance Record conflict for one logical key;
 - no `previous`, `pid`, generic relation, generic confirmation or
   ContributionId requirement.
 
-Storage ordering, restart and Repository `COMMITTED` tests belong to
-`contribution.md` and the future #9 orchestration implementation.
+The Protocol service tests must not require Runtime Record database state,
+existing logical-key lookup or an acceptance index. Exact acceptance replay
+idempotency, distinct same-key conflict, serialized conflict checking and
+restart reconstruction are Repository orchestration tests owned by
+`contribution.md` and the future #9 implementation.
+
+Storage ordering and Repository `COMMITTED` tests likewise belong to
+`contribution.md`.
