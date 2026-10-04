@@ -79,8 +79,8 @@ function doubleSha256Hex(bytes: Uint8Array): string {
 
 function canonicalAsset(
   content: Uint8Array,
-  protocol = ASSET_CONTENT_PROTOCOL_REFERENCE,
-  protocolHash = PROTOCOL_HASH,
+  protocol: string = ASSET_CONTENT_PROTOCOL_REFERENCE,
+  protocolHash: string = PROTOCOL_HASH,
 ): Asset {
   const bytes = Uint8Array.from(content)
   const contentHash = doubleSha256Hex(bytes)
