@@ -1212,6 +1212,101 @@ test('exact service reflection remains bound to the captured generation', async 
   await node.dispose()
 })
 
+test('exact service binding seals fixed extensible capability namespaces', async () => {
+  const alpha = descriptor('test.alpha', '1.0.0')
+  const serviceName = 'protocol:test.alpha@1.0.0'
+  const values = new Map([
+    [HASH_A, { protocol: alpha, artifact: artifact() }],
+  ])
+  let exactInvocations = 0
+
+  const touch = () => {
+    exactInvocations += 1
+  }
+  const namespace = {}
+  Object.defineProperty(namespace, 'touch', {
+    configurable: false,
+    enumerable: true,
+    get() {
+      return touch
+    },
+  })
+  assert.equal(Object.isExtensible(namespace), true)
+
+  const node = await createRepositoryNode({
+    plugins: [
+      {
+        plugin: protocolResolutionPlugin,
+        config: {
+          host: host(values, async () => ({
+            plugin: {
+              name: 'test.alpha@1.0.0',
+              provide: serviceName,
+              inject: [],
+              apply(ctx: Context) {
+                ctx.provide(serviceName, namespace)
+              },
+            },
+          })),
+        },
+      },
+      { plugin: coreProtocolProvider },
+    ],
+  })
+  const resolver = node.context[PROTOCOL_RESOLUTION_SERVICE]
+
+  let capturedMethod!: () => void
+  let capturedGetter!: () => unknown
+  let boundService!: { readonly touch: () => void }
+
+  await resolver.withExactService(
+    'test.alpha@1.0.0',
+    HASH_A,
+    (value) => {
+      boundService = value as { readonly touch: () => void }
+      assert.equal(Object.isExtensible(boundService), false)
+      assert.deepEqual(Object.keys(boundService), ['touch'])
+
+      const descriptor = Object.getOwnPropertyDescriptor(
+        boundService,
+        'touch',
+      )
+      assert.ok(descriptor)
+      assert.equal(descriptor.configurable, false)
+      assert.equal(descriptor.enumerable, true)
+      assert.ok(descriptor.get)
+      assert.equal(descriptor.set, undefined)
+
+      capturedGetter = descriptor.get
+      capturedMethod = descriptor.get.call(boundService) as () => void
+      assert.equal(capturedMethod, boundService.touch)
+      capturedMethod()
+
+      assert.equal(
+        Reflect.set(boundService, 'added', 1),
+        false,
+      )
+      assert.equal('added' in boundService, false)
+      assert.deepEqual(Object.keys(boundService), ['touch'])
+    },
+  )
+
+  assert.equal(exactInvocations, 1)
+  assert.equal(Reflect.has(namespace, 'added'), false)
+
+  const exact = node.context.reflect._getImpl(serviceName)
+  assert.ok(exact)
+  await exact.fiber.dispose()
+
+  assert.throws(() => capturedMethod(), ProtocolRuntimeError)
+  assert.throws(
+    () => capturedGetter.call(boundService),
+    ProtocolRuntimeError,
+  )
+  assert.equal(exactInvocations, 1)
+  await node.dispose()
+})
+
 test('exact service binding fails closed for mixed mutable shadow shapes', async () => {
   const alpha = descriptor('test.alpha', '1.0.0')
   const serviceName = 'protocol:test.alpha@1.0.0'
@@ -1266,7 +1361,7 @@ test('exact service binding fails closed for mixed mutable shadow shapes', async
     ),
     (error: unknown) =>
       error instanceof ProtocolRuntimeError &&
-      error.message.includes('fixed bindable properties'),
+      error.message.includes('shadow binding requires fixed own properties'),
   )
 
   assert.equal(callbackRan, false)
