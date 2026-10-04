@@ -438,18 +438,10 @@ export class ProtocolResolutionService {
         assertCurrent()
         return bind(Reflect.get(target, property, target))
       }
-      const set = (
-        target: object,
-        property: PropertyKey,
-        nextValue: unknown,
-      ) => {
-        assertCurrent()
-        return Reflect.set(target, property, unwrap(nextValue), target)
-      }
-
       let bound: object
       if (typeof candidate === 'function') {
-        bound = new Proxy(candidate, {
+        const callable = candidate as Function
+        bound = new Proxy(callable, {
           apply: (target, thisArg, args) => {
             assertCurrent()
             const result = Reflect.apply(
@@ -459,20 +451,10 @@ export class ProtocolResolutionService {
             )
             return bind(result)
           },
-          construct: (target, args, newTarget) => {
-            assertCurrent()
-            const result = Reflect.construct(
-              target,
-              args.map(unwrap),
-              unwrap(newTarget) as Function,
-            )
-            return bind(result) as object
-          },
           get,
-          set,
         })
       } else {
-        bound = new Proxy(candidate, { get, set })
+        bound = new Proxy(candidate, { get })
       }
 
       boundByRaw.set(candidate, bound)
