@@ -242,6 +242,69 @@ test('canonical-valid incoming Asset fails closed on incompatible durable state'
   await node.dispose()
 })
 
+test('interrupted temporary state is never visible through get or has', async (t) => {
+  const directory = await tempDirectory()
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const asset = canonicalAsset(Buffer.from('interrupted'))
+  const descriptor = Buffer.from(
+    `${JSON.stringify({
+      id: asset.id,
+      protocol: asset.protocol,
+      protocolHash: asset.protocolHash,
+      contentHash: asset.contentHash,
+    })}\n`,
+    'utf8',
+  )
+  await writeFile(
+    join(directory, '.asset-interrupted.tmp'),
+    Buffer.concat([descriptor, Buffer.from(asset.content)]),
+  )
+
+  const node = await createAssetStorageNode(directory)
+  assert.equal(await node.context[ASSET_STORAGE_SERVICE].has(asset.id), false)
+  await assert.rejects(
+    node.context[ASSET_STORAGE_SERVICE].get(asset.id),
+    AssetNotFoundError,
+  )
+  await node.dispose()
+})
+
+test('durable bytes with unavailable exact Protocol fail as retrieval, not not-found', async (t) => {
+  const directory = await tempDirectory()
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const asset = canonicalAsset(Buffer.from('needs exact protocol'))
+
+  const first = await createAssetStorageNode(directory)
+  await first.context[ASSET_STORAGE_SERVICE].preserve(asset)
+  await first.dispose()
+
+  const unavailableHost: ProtocolResolutionHost = {
+    async resolveArtifact() {
+      return undefined
+    },
+    async evaluateRuntime() {
+      throw new Error('unreachable test runtime')
+    },
+  }
+  const second = await createRepositoryNode({
+    plugins: [
+      { plugin: assetStoragePlugin, config: { directory } },
+      { plugin: protocolResolutionPlugin, config: { host: unavailableHost } },
+      { plugin: coreProtocolProvider },
+    ],
+  })
+
+  await assert.rejects(
+    second.context[ASSET_STORAGE_SERVICE].get(asset.id),
+    AssetRetrievalError,
+  )
+  await assert.rejects(
+    second.context[ASSET_STORAGE_SERVICE].has(asset.id),
+    AssetRetrievalError,
+  )
+  await second.dispose()
+})
+
 test('persistence failure before publication exposes no successful Asset', async (t) => {
   const root = await tempDirectory()
   t.after(() => rm(root, { recursive: true, force: true }))
