@@ -606,14 +606,7 @@ export class ProtocolResolutionService {
         if (shadowed) {
           return prototype === Reflect.getPrototypeOf(proxyTarget)
         }
-        const rawPrototype = unwrap(prototype)
-        if (
-          rawPrototype !== null &&
-          typeof rawPrototype !== 'object'
-        ) {
-          return false
-        }
-        return Reflect.setPrototypeOf(candidate, rawPrototype)
+        return unwrap(prototype) === Reflect.getPrototypeOf(candidate)
       }
       const preventExtensions = () => {
         assertCurrent()
