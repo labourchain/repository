@@ -1,6 +1,6 @@
 # Repo Contribution Protocol Specification
 
-- **Status:** Draft
+- **Status:** Accepted
 - **Protocol:** `repo.contribution@0.1.0`
 - **Scope:** positive Repo acceptance of one Member-produced labour Record / result Asset pair
 - **Requirements:** [`../docs/requirements.md`](../docs/requirements.md)
@@ -425,7 +425,7 @@ caller, including:
 Asset not-found/corruption/persistence errors remain Asset-storage /
 Contribution-orchestration failures rather than labour Record validity errors.
 
-## Future implementation tests
+## Implementation acceptance tests
 
 The Protocol implementation must cover at least:
 
@@ -447,7 +447,7 @@ The Protocol service tests must not require Runtime Record database state,
 existing logical-key lookup or an acceptance index. Exact acceptance replay
 idempotency, distinct same-key conflict, serialized conflict checking and
 restart reconstruction are Repository orchestration tests owned by
-`contribution.md` and the future #9 implementation.
+`contribution.md` and the current #9 implementation.
 
 Storage ordering and Repository `COMMITTED` tests likewise belong to
 `contribution.md`.
