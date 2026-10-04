@@ -135,7 +135,7 @@ LabourFlow may build a personal product experience on top of this generic compos
 
 Repo establishment retains only the creator provenance carried by `Record.createdBy`. This answers who created/introduced the Repo identity fact; it is not an ownership relation.
 
-Repo-authored decision facts are a separate concern. When an applicable Protocol represents a Repo decision, the Record is signed by the Repo identity and its signed Protocol data must identify the actual `operator: EntityPublicKey`. The operator field records who performed that specific Repo action; it does not itself prove an organization role, delegation chain or political authority.
+Repo-authored decision facts are a separate concern. For the current contribution MVP, that fact is concretely `repo.contribution@0.1.0`: the Record is signed by the Repo identity and its signed Protocol data contains `labourRecordId`, the selected result `assetId`, and the actual `operator: EntityPublicKey`. The operator field records who performed that specific Repo action; it does not itself prove an organization role, delegation chain or political authority. The complete acceptance semantics live in [`repo-contribution.md`](./repo-contribution.md).
 
 Repository therefore preserves the distinction:
 
