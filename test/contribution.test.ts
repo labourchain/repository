@@ -17,6 +17,7 @@ import {
   CORE_ENTITY_PROTOCOL_SERVICE,
   CORE_RECORD_PROTOCOL_SERVICE,
   LABOUR_RECORD_PROTOCOL_REFERENCE,
+  LABOUR_RECORD_PROTOCOL_SERVICE,
   MEMBER_PROTOCOL_REFERENCE,
   MEMBER_PROTOCOL_SERVICE,
   PROTOCOL_RESOLUTION_SERVICE,
@@ -27,8 +28,10 @@ import {
   REPO_ESTABLISHMENT_PROTOCOL_SERVICE,
   AssetNotFoundError,
   InvalidAsset,
+  ProtocolBuildConflictError,
   RecordJournalConflictError,
   RecordJournalNotFoundError,
+  RecordJournalPublicationError,
   RecordJournalService,
   RepositoryContributionAssetMismatchError,
   RepositoryContributionConflictError,
@@ -41,6 +44,9 @@ import {
   type CoreRecordProtocolService,
   type CoreRecordValue,
 } from '../src/index.ts'
+import {
+  RECORD_JOURNAL_INTERNAL_RUN_EXCLUSIVE,
+} from '../src/internal-publication.ts'
 
 function digest(value: string): string {
   return createHash('sha256').update(value).digest('hex')
@@ -51,6 +57,9 @@ const REPO_PROTOCOL_HASH = digest('test/repo.establishment')
 const LABOUR_PROTOCOL_HASH = digest('test/labour.record')
 const ASSET_PROTOCOL_HASH = digest('test/asset.content')
 const CONTRIBUTION_PROTOCOL_HASH = digest('test/repo.contribution')
+const CONTRIBUTION_PROTOCOL_HASH_2 = digest(
+  'test/repo.contribution/independent-build',
+)
 
 const MEMBER_KEY = 'member-key'
 const REPO_KEY = 'repo-key'
@@ -115,32 +124,59 @@ function coreRecordProvider(ctx: Context) {
   ctx.provide(CORE_RECORD_PROTOCOL_SERVICE, coreRecordService)
 }
 
-function exactResolutionProvider(ctx: Context) {
-  ctx.provide(PROTOCOL_RESOLUTION_SERVICE, {
-    async resolve(reference: string, protocolHash: string) {
-      if (
-        reference === ASSET_CONTENT_PROTOCOL_REFERENCE &&
-        protocolHash === ASSET_PROTOCOL_HASH
-      ) {
-        return {
-          protocolHash,
-          reference,
-          service: ASSET_CONTENT_PROTOCOL_SERVICE,
+function exactResolutionProvider(
+  contributionHash = CONTRIBUTION_PROTOCOL_HASH,
+) {
+  return function provideExactResolution(ctx: Context) {
+    const service = {
+      async resolve(reference: string, protocolHash: string) {
+        if (
+          reference === ASSET_CONTENT_PROTOCOL_REFERENCE &&
+          protocolHash === ASSET_PROTOCOL_HASH
+        ) {
+          return {
+            protocolHash,
+            reference,
+            service: ASSET_CONTENT_PROTOCOL_SERVICE,
+          }
         }
-      }
-      if (
-        reference === REPO_CONTRIBUTION_PROTOCOL_REFERENCE &&
-        protocolHash === CONTRIBUTION_PROTOCOL_HASH
-      ) {
-        return {
-          protocolHash,
-          reference,
-          service: REPO_CONTRIBUTION_PROTOCOL_SERVICE,
+        if (
+          reference === LABOUR_RECORD_PROTOCOL_REFERENCE &&
+          protocolHash === LABOUR_PROTOCOL_HASH
+        ) {
+          return {
+            protocolHash,
+            reference,
+            service: LABOUR_RECORD_PROTOCOL_SERVICE,
+          }
         }
-      }
-      throw new Error('unexpected exact Protocol resolution')
-    },
-  } as never)
+        if (
+          reference === REPO_CONTRIBUTION_PROTOCOL_REFERENCE &&
+          protocolHash === contributionHash
+        ) {
+          return {
+            protocolHash,
+            reference,
+            service: REPO_CONTRIBUTION_PROTOCOL_SERVICE,
+          }
+        }
+        throw new Error('unexpected exact Protocol resolution')
+      },
+      async withExactService(
+        reference: string,
+        protocolHash: string,
+        operation: (value: unknown) => unknown | Promise<unknown>,
+      ) {
+        const resolved = await service.resolve(reference, protocolHash)
+        const value = ctx.get(resolved.service)
+        if (value === undefined) {
+          throw new Error('resolved Protocol service is unavailable')
+        }
+        return operation(value)
+      },
+    }
+    ctx.provide(PROTOCOL_RESOLUTION_SERVICE, service as never)
+  }
 }
 
 function memberRecord(): CoreRecordValue {
@@ -222,13 +258,16 @@ async function withRoot<T>(run: (root: string) => Promise<T>) {
   }
 }
 
-function composition(root: string) {
+function composition(
+  root: string,
+  contributionHash = CONTRIBUTION_PROTOCOL_HASH,
+) {
   return [
     { plugin: repositoryContributionPlugin },
     { plugin: assetStoragePlugin, config: { directory: join(root, 'assets') } },
     {
       plugin: repoContributionPlugin,
-      config: { protocolHash: CONTRIBUTION_PROTOCOL_HASH },
+      config: { protocolHash: contributionHash },
     },
     {
       plugin: assetContentPlugin,
@@ -246,7 +285,7 @@ function composition(root: string) {
       plugin: memberIdentityPlugin,
       config: { protocolHash: MEMBER_PROTOCOL_HASH },
     },
-    { plugin: exactResolutionProvider },
+    { plugin: exactResolutionProvider(contributionHash) },
     { plugin: coreEntityProvider },
     { plugin: coreRecordProvider },
     { plugin: runtimeRecordDatabasePlugin },
@@ -257,8 +296,13 @@ function composition(root: string) {
   ]
 }
 
-async function createNode(root: string) {
-  return createRepositoryNode({ plugins: composition(root) })
+async function createNode(
+  root: string,
+  contributionHash = CONTRIBUTION_PROTOCOL_HASH,
+) {
+  return createRepositoryNode({
+    plugins: composition(root, contributionHash),
+  })
 }
 
 async function establishBase(
@@ -492,6 +536,163 @@ test('restart reconstructs exact replay from durable A/L/D and preserves conflic
     await assertRecordMissing(second, conflicting.id)
     assert.equal((await acceptedContributions(second)).length, 1)
     await second.dispose()
+  })
+})
+
+test('fresh same-reference different-build runtime fails closed on durable H1 acceptance', async () => {
+  await withRoot(async (root) => {
+    const first = await createNode(root)
+    await establishBase(first)
+
+    const selected = createAsset(first, 'cross-build durable result')
+    const labour = labourRecord('labour-cross-build', [], [selected.id])
+    const acceptedH1 = acceptanceRecord(
+      'acceptance-cross-build-h1',
+      REPO_KEY,
+      labour.id,
+      selected.id,
+    )
+    await first.context[REPOSITORY_CONTRIBUTION_SERVICE].commit({
+      asset: selected,
+      labourRecord: labour,
+      acceptanceRecord: acceptedH1,
+    })
+    await first.dispose()
+
+    const second = await createNode(root, CONTRIBUTION_PROTOCOL_HASH_2)
+    await establishBase(second)
+    const candidateH2 = acceptanceRecord(
+      'acceptance-cross-build-h2',
+      REPO_KEY,
+      labour.id,
+      selected.id,
+      SECOND_OPERATOR_KEY,
+      { protocolHash: CONTRIBUTION_PROTOCOL_HASH_2 },
+    )
+
+    await assert.rejects(
+      second.context[REPOSITORY_CONTRIBUTION_SERVICE].commit({
+        asset: selected,
+        labourRecord: labour,
+        acceptanceRecord: candidateH2,
+      }),
+      ProtocolBuildConflictError,
+    )
+    await assertRecordMissing(second, candidateH2.id)
+    assert.deepEqual(
+      await second.context.recordJournal.get(acceptedH1.id),
+      acceptedH1,
+    )
+
+    await second.dispose()
+  })
+})
+
+test('same-reference durable acceptance with malformed ProtocolHash fails explicitly', async () => {
+  await withRoot(async (root) => {
+    const node = await createNode(root)
+    await establishBase(node)
+
+    const selected = createAsset(node, 'malformed durable hash')
+    const labour = labourRecord(
+      'labour-malformed-durable-hash',
+      [],
+      [selected.id],
+    )
+    const malformed = acceptanceRecord(
+      'acceptance-malformed-durable-hash',
+      REPO_KEY,
+      labour.id,
+      selected.id,
+      OPERATOR_KEY,
+      { protocolHash: 'malformed-hash' },
+    )
+    await node.context.recordJournal[
+      RECORD_JOURNAL_INTERNAL_RUN_EXCLUSIVE
+    ]((journal) => journal.accept(malformed))
+
+    const candidate = acceptanceRecord(
+      'acceptance-after-malformed-durable-hash',
+      REPO_KEY,
+      labour.id,
+      selected.id,
+      SECOND_OPERATOR_KEY,
+    )
+    await assert.rejects(
+      node.context[REPOSITORY_CONTRIBUTION_SERVICE].commit({
+        asset: selected,
+        labourRecord: labour,
+        acceptanceRecord: candidate,
+      }),
+      RepositoryContributionProtocolError,
+    )
+    await assertRecordMissing(node, candidate.id)
+
+    await node.dispose()
+  })
+})
+
+test('public generic ingress cannot publish repo.contribution directly', async () => {
+  await withRoot(async (root) => {
+    const node = await createNode(root)
+    await establishBase(node)
+
+    const selected = createAsset(node, 'guarded publication')
+    const labour = labourRecord(
+      'labour-guarded-publication',
+      [],
+      [selected.id],
+    )
+    const acceptance = acceptanceRecord(
+      'acceptance-guarded-publication',
+      REPO_KEY,
+      labour.id,
+      selected.id,
+    )
+
+    await assert.rejects(
+      node.context.recordJournal.accept(acceptance),
+      RecordJournalPublicationError,
+    )
+    await assert.rejects(
+      node.context.recordJournal.runExclusive(
+        (journal) => journal.accept(acceptance),
+      ),
+      RecordJournalPublicationError,
+    )
+    await assert.rejects(
+      node.context.runtimeRecordDatabase.runExclusive(
+        (database) => database.accept(acceptance),
+      ),
+      RecordJournalPublicationError,
+    )
+    await assertRecordMissing(node, acceptance.id)
+
+    const generic = { id: 'generic-record-ingress' }
+    await node.context.runtimeRecordDatabase.runExclusive(
+      (database) => database.accept(generic),
+    )
+    assert.deepEqual(
+      await node.context.recordJournal.get(generic.id),
+      generic,
+    )
+
+    assert.equal(
+      (
+        await node.context[REPOSITORY_CONTRIBUTION_SERVICE].commit({
+          asset: selected,
+          labourRecord: labour,
+          acceptanceRecord: acceptance,
+        })
+      ).status,
+      'COMMITTED',
+    )
+    assert.deepEqual(
+      await node.context.recordJournal.get(acceptance.id),
+      acceptance,
+    )
+
+    await node.dispose()
   })
 })
 

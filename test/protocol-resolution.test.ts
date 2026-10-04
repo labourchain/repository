@@ -520,6 +520,110 @@ test('cached exact resolution rejects a replacement Cordis provider', async () =
   await node.dispose()
 })
 
+test('exact service use rejects a foreign replacement of a Protocol dependency', async () => {
+  const dependency = descriptor('test.dep', '1.0.0')
+  const consumer = descriptor('test.consumer', '1.0.0', [
+    { name: 'test.dep', version: '1.0.0', protocolHash: HASH_A },
+  ])
+  const dependencyService = 'protocol:test.dep@1.0.0'
+  const consumerService = 'protocol:test.consumer@1.0.0'
+  const values = new Map([
+    [HASH_A, { protocol: dependency, artifact: artifact() }],
+    [HASH_B, { protocol: consumer, artifact: artifact() }],
+  ])
+  let exactInvocations = 0
+  let foreignInvocations = 0
+
+  const node = await createRepositoryNode({
+    plugins: [
+      {
+        plugin: protocolResolutionPlugin,
+        config: {
+          host: host(values, async (protocol) => {
+            if (protocol.name === 'test.dep') {
+              return {
+                plugin: {
+                  name: 'test.dep@1.0.0',
+                  provide: dependencyService,
+                  inject: [],
+                  apply(ctx: Context) {
+                    ctx.provide(dependencyService, {
+                      touch() {
+                        exactInvocations += 1
+                      },
+                    })
+                  },
+                },
+              }
+            }
+
+            return {
+              plugin: {
+                name: 'test.consumer@1.0.0',
+                provide: consumerService,
+                inject: [dependencyService],
+                apply(ctx: Context) {
+                  ctx.provide(consumerService, {
+                    touchDependency() {
+                      const service = ctx.get(dependencyService) as
+                        | { touch(): void }
+                        | undefined
+                      service?.touch()
+                    },
+                  })
+                },
+              },
+            }
+          }),
+        },
+      },
+      { plugin: coreProtocolProvider },
+    ],
+  })
+
+  const resolver = node.context[PROTOCOL_RESOLUTION_SERVICE]
+  await resolver.withExactService(
+    'test.consumer@1.0.0',
+    HASH_B,
+    (value) => {
+      ;(value as { touchDependency(): void }).touchDependency()
+    },
+  )
+  assert.equal(exactInvocations, 1)
+
+  const exactDependency = node.context.reflect._getImpl(dependencyService)
+  assert.ok(exactDependency)
+  await exactDependency.fiber.dispose()
+
+  const foreignFiber = node.context.plugin({
+    name: 'runtime.foreign-dependency',
+    provide: dependencyService,
+    inject: [],
+    apply(ctx: Context) {
+      ctx.provide(dependencyService, {
+        touch() {
+          foreignInvocations += 1
+        },
+      })
+    },
+  })
+  await foreignFiber
+
+  await assert.rejects(
+    resolver.withExactService(
+      'test.consumer@1.0.0',
+      HASH_B,
+      (value) => {
+        ;(value as { touchDependency(): void }).touchDependency()
+      },
+    ),
+    ProtocolRuntimeError,
+  )
+  assert.equal(foreignInvocations, 0)
+
+  await node.dispose()
+})
+
 test('failed Protocol mounts are disposed and can be retried cleanly', async () => {
   const alpha = descriptor('test.alpha', '1.0.0')
   const values = new Map([

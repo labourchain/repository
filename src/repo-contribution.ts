@@ -2,14 +2,18 @@ import type { Context } from '@deepseek-ai/cordis'
 import {
   CORE_ENTITY_PROTOCOL_SERVICE,
   CORE_RECORD_PROTOCOL_SERVICE,
+  type CoreEntityProtocolService,
+  type CoreRecordProtocolService,
   type CoreRecordValue,
 } from './member.ts'
 import {
   LABOUR_RECORD_PROTOCOL_SERVICE,
+  type LabourRecordService,
   type ValidatedLabourRecord,
 } from './labour-record.ts'
 import {
   REPO_ESTABLISHMENT_PROTOCOL_SERVICE,
+  type RepoEstablishmentService,
 } from './repo.ts'
 
 export const REPO_CONTRIBUTION_PROTOCOL_NAME = 'repo.contribution' as const
@@ -171,11 +175,17 @@ function view(
 }
 
 export class RepoContributionProtocolService {
-  private readonly ctx: Context
+  private readonly coreEntity: CoreEntityProtocolService
+  private readonly coreRecord: CoreRecordProtocolService
+  private readonly labour: LabourRecordService
+  private readonly repo: RepoEstablishmentService
   readonly protocolHash: string
 
   constructor(ctx: Context, protocolHash: string) {
-    this.ctx = ctx
+    this.coreEntity = ctx[CORE_ENTITY_PROTOCOL_SERVICE]
+    this.coreRecord = ctx[CORE_RECORD_PROTOCOL_SERVICE]
+    this.labour = ctx[LABOUR_RECORD_PROTOCOL_SERVICE]
+    this.repo = ctx[REPO_ESTABLISHMENT_PROTOCOL_SERVICE]
     this.protocolHash = protocolHash
   }
 
@@ -184,7 +194,7 @@ export class RepoContributionProtocolService {
   ): Promise<ValidatedRepoContributionRecord> {
     let record: CoreRecordValue
     try {
-      record = this.ctx[CORE_RECORD_PROTOCOL_SERVICE].validateRecord(value)
+      record = this.coreRecord.validateRecord(value)
     } catch (cause) {
       throw new RepoContributionValidationError(
         'Invalid Core Record for repo.contribution.',
@@ -208,7 +218,7 @@ export class RepoContributionProtocolService {
     let signatureValid: boolean
     try {
       signatureValid =
-        this.ctx[CORE_RECORD_PROTOCOL_SERVICE].verifySignature(record)
+        this.coreRecord.verifySignature(record)
     } catch (cause) {
       throw new RepoContributionValidationError(
         'Unable to verify Repo contribution signature.',
@@ -222,7 +232,7 @@ export class RepoContributionProtocolService {
     }
 
     try {
-      await this.ctx[REPO_ESTABLISHMENT_PROTOCOL_SERVICE].loadRepo(
+      await this.repo.loadRepo(
         record.createdBy,
       )
     } catch (cause) {
@@ -238,7 +248,7 @@ export class RepoContributionProtocolService {
     const rawData = requireData(record.data)
     let operator: string
     try {
-      operator = this.ctx[CORE_ENTITY_PROTOCOL_SERVICE]
+      operator = this.coreEntity
         .validateEntityPublicKey(rawData.operator)
     } catch (cause) {
       throw new RepoContributionValidationError(
@@ -263,9 +273,7 @@ export class RepoContributionProtocolService {
     const acceptance = await this.validateAcceptance(acceptanceValue)
     let labour: ValidatedLabourRecord
     try {
-      labour = await this.ctx[
-        LABOUR_RECORD_PROTOCOL_SERVICE
-      ].validateLabourRecord(labourRecordValue)
+      labour = await this.labour.validateLabourRecord(labourRecordValue)
     } catch (cause) {
       throw new RepoContributionRelationError(
         'Referenced labour Record is invalid.',

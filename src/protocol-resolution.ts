@@ -307,6 +307,10 @@ export class ProtocolResolutionService {
   private readonly resolvedByHash = new Map<string, ResolvedProtocolView>()
   private readonly providerByHash = new Map<string, Fiber>()
   private readonly hashByReference = new Map<string, string>()
+  private readonly dependenciesByHash = new Map<
+    string,
+    readonly ProtocolDependency[]
+  >()
   private readonly inFlight = new Map<
     string,
     {
@@ -329,6 +333,82 @@ export class ProtocolResolutionService {
     return this.resolveShared(reference, protocolHash, new Set())
   }
 
+  async withExactService<T>(
+    reference: string,
+    protocolHash: string,
+    operation: (service: unknown) => Promise<T> | T,
+  ): Promise<T> {
+    const resolved = await this.resolve(reference, protocolHash)
+    const service = this.requireExactService(resolved)
+
+    try {
+      const result = await operation(service)
+      this.assertExactProviderTree(protocolHash)
+      return result
+    } catch (cause) {
+      try {
+        this.assertExactProviderTree(protocolHash)
+      } catch (providerCause) {
+        throw new ProtocolRuntimeError(
+          `Verified Protocol provider changed during execution: ${resolved.service}.`,
+          { cause: providerCause },
+        )
+      }
+      throw cause
+    }
+  }
+
+  private requireExactService(resolved: ResolvedProtocolView): unknown {
+    this.assertExactProviderTree(resolved.protocolHash)
+    const service = this.ctx.get(resolved.service)
+    if (service === undefined) {
+      throw new ProtocolRuntimeError(
+        `Verified Protocol service is unavailable through Cordis: ${resolved.service}.`,
+      )
+    }
+    return service
+  }
+
+  private assertExactProviderTree(
+    protocolHash: string,
+    visited = new Set<string>(),
+  ): void {
+    if (visited.has(protocolHash)) return
+    visited.add(protocolHash)
+
+    const resolved = this.resolvedByHash.get(protocolHash)
+    const provider = this.providerByHash.get(protocolHash)
+    if (resolved === undefined || provider === undefined) {
+      throw new ProtocolRuntimeError(
+        `Verified Protocol provider is unavailable for ProtocolHash: ${protocolHash}.`,
+      )
+    }
+
+    const implementation = this.ctx.reflect._getImpl(resolved.service)
+    if (implementation?.fiber !== provider) {
+      throw new ProtocolRuntimeError(
+        `Verified Protocol provider is unavailable through Cordis: ${resolved.service}.`,
+      )
+    }
+
+    for (const dependency of this.dependenciesByHash.get(protocolHash) ?? []) {
+      const dependencyReference =
+        `${dependency.name}@${dependency.version}`
+      const dependencyResolved = this.resolvedByHash.get(
+        dependency.protocolHash,
+      )
+      if (
+        dependencyResolved === undefined ||
+        dependencyResolved.reference !== dependencyReference
+      ) {
+        throw new ProtocolRuntimeError(
+          `Verified Protocol dependency is unavailable: ${dependencyReference}.`,
+        )
+      }
+      this.assertExactProviderTree(dependency.protocolHash, visited)
+    }
+  }
+
   private async resolveShared(
     reference: string,
     protocolHash: string,
@@ -345,13 +425,7 @@ export class ProtocolResolutionService {
       if (resolved.reference !== reference) {
         throw new ProtocolReferenceMismatchError(reference, resolved.reference)
       }
-      const provider = this.providerByHash.get(protocolHash)
-      const implementation = this.ctx.reflect._getImpl(resolved.service)
-      if (provider === undefined || implementation?.fiber !== provider) {
-        throw new ProtocolRuntimeError(
-          `Verified Protocol provider is unavailable through Cordis: ${resolved.service}.`,
-        )
-      }
+      this.assertExactProviderTree(protocolHash)
       return resolved
     }
 
@@ -541,6 +615,10 @@ export class ProtocolResolutionService {
         service,
       })
       this.providerByHash.set(protocolHash, mountedFiber.ctx.fiber)
+      this.dependenciesByHash.set(
+        protocolHash,
+        Object.freeze([...protocol.dependencies]),
+      )
       this.resolvedByHash.set(protocolHash, view)
       return view
     } catch (cause) {

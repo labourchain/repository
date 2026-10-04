@@ -26,6 +26,7 @@ import {
   CORE_PROTOCOL_PROTOCOL_SERVICE,
   CORE_RECORD_PROTOCOL_SERVICE,
   LABOUR_RECORD_PROTOCOL_REFERENCE,
+  LABOUR_RECORD_PROTOCOL_SERVICE,
   MEMBER_PROTOCOL_REFERENCE,
   MEMBER_PROTOCOL_SERVICE,
   PROTOCOL_RESOLUTION_SERVICE,
@@ -34,6 +35,9 @@ import {
   REPO_CONTRIBUTION_PROTOCOL_SERVICE,
   REPO_ESTABLISHMENT_PROTOCOL_REFERENCE,
   REPO_ESTABLISHMENT_PROTOCOL_SERVICE,
+  ProtocolBuildConflictError,
+  ProtocolRuntimeError,
+  RecordJournalNotFoundError,
   RecordJournalService,
   RepositoryContributionConflictError,
   assetStoragePlugin,
@@ -175,9 +179,16 @@ async function buildProtocolArtifact(
   name: string,
   entry: string,
   dependencies: readonly ProtocolDependency[],
+  runtimeSuffix = '',
 ): Promise<BuiltProtocol> {
   const runtimeBytes = await bundleProtocolEntry(entry, root, name)
-  const artifactBytes = canonicalGzip(runtimeBytes)
+  const exactRuntimeBytes = runtimeSuffix.length === 0
+    ? runtimeBytes
+    : Buffer.concat([
+        Buffer.from(runtimeBytes),
+        Buffer.from(runtimeSuffix, 'utf8'),
+      ])
+  const artifactBytes = canonicalGzip(exactRuntimeBytes)
   const protocol = {
     name,
     version: '0.1.0',
@@ -325,17 +336,30 @@ test(
         resolve('src/protocols/asset.content.ts'),
         [],
       )
+      const contributionDependencies = [
+        dependency('core.entity', CORE_ENTITY_PROTOCOL_HASH),
+        dependency('core.record', CORE_RECORD_PROTOCOL_HASH),
+        dependency('repo.establishment', repo.protocolHash),
+        dependency('labour.record', labour.protocolHash),
+      ]
       const contribution = await buildProtocolArtifact(
         core,
         root,
         'repo.contribution',
         resolve('src/protocols/repo.contribution.ts'),
-        [
-          dependency('core.entity', CORE_ENTITY_PROTOCOL_HASH),
-          dependency('core.record', CORE_RECORD_PROTOCOL_HASH),
-          dependency('repo.establishment', repo.protocolHash),
-          dependency('labour.record', labour.protocolHash),
-        ],
+        contributionDependencies,
+      )
+      const contributionVariant = await buildProtocolArtifact(
+        core,
+        root,
+        'repo.contribution',
+        resolve('src/protocols/repo.contribution.ts'),
+        contributionDependencies,
+        '\n// independently built repo.contribution variant\n',
+      )
+      assert.notEqual(
+        contributionVariant.protocolHash,
+        contribution.protocolHash,
       )
       await builderNode.dispose()
 
@@ -361,6 +385,10 @@ test(
         [
           contribution.protocolHash,
           { protocol: contribution.protocol },
+        ],
+        [
+          contributionVariant.protocolHash,
+          { protocol: contributionVariant.protocol },
         ],
       ])
 
@@ -636,6 +664,154 @@ test(
       )
 
       await second.dispose()
+
+      const crossBuild = await createRuntime('cross-build')
+      const crossBuildResolver =
+        crossBuild.context[PROTOCOL_RESOLUTION_SERVICE]
+      await crossBuildResolver.resolve(
+        'core.record@0.1.0',
+        CORE_RECORD_PROTOCOL_HASH,
+      )
+      const crossBuildRecordService = crossBuild.context[
+        CORE_RECORD_PROTOCOL_SERVICE
+      ] as CoreRecordRuntimeService
+      const crossBuildAcceptance = signedRecord(
+        crossBuildRecordService,
+        repoKeys.privateKey,
+        {
+          protocol: REPO_CONTRIBUTION_PROTOCOL_REFERENCE,
+          protocolHash: contributionVariant.protocolHash,
+          createdBy: repoIdentity,
+          createdAt: '2026-10-04T01:02:02.000Z',
+          data: {
+            labourRecordId: labourRecord.id,
+            assetId: selected.id,
+            operator: secondOperatorIdentity,
+          },
+        },
+      )
+
+      await assert.rejects(
+        crossBuild.context[REPOSITORY_CONTRIBUTION_SERVICE].commit({
+          asset: selected,
+          labourRecord,
+          acceptanceRecord: crossBuildAcceptance,
+        }),
+        ProtocolBuildConflictError,
+      )
+      await assert.rejects(
+        crossBuild.context.recordJournal.get(crossBuildAcceptance.id),
+        RecordJournalNotFoundError,
+      )
+      assert.deepEqual(
+        await crossBuild.context.recordJournal.get(acceptance.id),
+        acceptance,
+      )
+      await crossBuild.dispose()
+
+      const replacement = await createRuntime('provider-replacement')
+      const replacementResolver =
+        replacement.context[PROTOCOL_RESOLUTION_SERVICE]
+      await replacementResolver.resolve(
+        'core.record@0.1.0',
+        CORE_RECORD_PROTOCOL_HASH,
+      )
+      const replacementRecordService = replacement.context[
+        CORE_RECORD_PROTOCOL_SERVICE
+      ] as CoreRecordRuntimeService
+      const replacementLabour = signedRecord(
+        replacementRecordService,
+        memberKeys.privateKey,
+        {
+          protocol: LABOUR_RECORD_PROTOCOL_REFERENCE,
+          protocolHash: labour.protocolHash,
+          createdBy: memberIdentity,
+          createdAt: '2026-10-04T01:03:00.000Z',
+          data: {
+            content: '验证 exact labour provider replacement fail closed',
+            duration: 1,
+            references: [],
+            assets: [selected.id],
+          },
+        },
+      )
+      const replacementAcceptance = signedRecord(
+        replacementRecordService,
+        repoKeys.privateKey,
+        {
+          protocol: REPO_CONTRIBUTION_PROTOCOL_REFERENCE,
+          protocolHash: contribution.protocolHash,
+          createdBy: repoIdentity,
+          createdAt: '2026-10-04T01:03:01.000Z',
+          data: {
+            labourRecordId: replacementLabour.id,
+            assetId: selected.id,
+            operator: operatorIdentity,
+          },
+        },
+      )
+
+      const storage = replacement.context[ASSET_STORAGE_SERVICE] as {
+        preserve(asset: typeof selected): Promise<void>
+      }
+      const preserve = storage.preserve.bind(storage)
+      let foreignInvocations = 0
+      let replaced = false
+      storage.preserve = async (assetValue) => {
+        await preserve(assetValue)
+        if (replaced) return
+        replaced = true
+
+        const exactLabour =
+          replacement.context.reflect._getImpl(
+            LABOUR_RECORD_PROTOCOL_SERVICE,
+          )
+        assert.ok(exactLabour)
+        await exactLabour.fiber.dispose()
+        assert.equal(
+          replacement.context.get(LABOUR_RECORD_PROTOCOL_SERVICE),
+          undefined,
+        )
+
+        const foreignFiber = replacement.context.plugin({
+          name: 'runtime.foreign-labour',
+          provide: LABOUR_RECORD_PROTOCOL_SERVICE,
+          inject: [],
+          apply(ctx) {
+            ctx.provide(LABOUR_RECORD_PROTOCOL_SERVICE, {
+              protocolHash: labour.protocolHash,
+              async validateLabourRecord() {
+                foreignInvocations += 1
+                throw new Error('foreign labour validation executed')
+              },
+              async acceptLabourRecord() {
+                foreignInvocations += 1
+                throw new Error('foreign labour acceptance executed')
+              },
+              async loadLabourRecord() {
+                foreignInvocations += 1
+                throw new Error('foreign labour load executed')
+              },
+            })
+          },
+        })
+        await foreignFiber
+      }
+
+      await assert.rejects(
+        replacement.context[REPOSITORY_CONTRIBUTION_SERVICE].commit({
+          asset: selected,
+          labourRecord: replacementLabour,
+          acceptanceRecord: replacementAcceptance,
+        }),
+        ProtocolRuntimeError,
+      )
+      assert.equal(foreignInvocations, 0)
+      await assert.rejects(
+        replacement.context.recordJournal.get(replacementAcceptance.id),
+        RecordJournalNotFoundError,
+      )
+      await replacement.dispose()
     } finally {
       await rm(root, { recursive: true, force: true })
     }

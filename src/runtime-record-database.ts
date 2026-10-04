@@ -1,4 +1,8 @@
 import type { Context } from '@deepseek-ai/cordis'
+import {
+  RECORD_JOURNAL_INTERNAL_RUN_EXCLUSIVE,
+  RUNTIME_RECORD_DATABASE_INTERNAL_RUN_EXCLUSIVE,
+} from './internal-publication.ts'
 import type {
   JournalRecord,
   RecordJournalExclusiveSession,
@@ -34,6 +38,14 @@ export class RuntimeRecordDatabaseService {
   ): Promise<T> {
     return this.ctx.recordJournal.runExclusive((journal) =>
       operation(this.createSession(journal)),
+    )
+  }
+
+  async [RUNTIME_RECORD_DATABASE_INTERNAL_RUN_EXCLUSIVE]<T>(
+    operation: (database: RuntimeRecordDatabaseSession) => Promise<T>,
+  ): Promise<T> {
+    return this.ctx.recordJournal[RECORD_JOURNAL_INTERNAL_RUN_EXCLUSIVE](
+      (journal) => operation(this.createSession(journal)),
     )
   }
 

@@ -4,12 +4,13 @@ import {
 } from './asset-storage.ts'
 import type { Asset } from './asset-identity.ts'
 import {
-  LABOUR_RECORD_PROTOCOL_SERVICE,
+  LABOUR_RECORD_PROTOCOL_REFERENCE,
   type LabourRecordService,
 } from './labour-record.ts'
 import type { CoreRecordValue } from './member.ts'
 import {
   PROTOCOL_RESOLUTION_SERVICE,
+  ProtocolBuildConflictError,
 } from './protocol-resolution.ts'
 import {
   REPO_CONTRIBUTION_PROTOCOL_REFERENCE,
@@ -25,6 +26,9 @@ import {
   RUNTIME_RECORD_DATABASE_SERVICE,
   type RuntimeRecordDatabaseSession,
 } from './runtime-record-database.ts'
+import {
+  RUNTIME_RECORD_DATABASE_INTERNAL_RUN_EXCLUSIVE,
+} from './internal-publication.ts'
 
 export const REPOSITORY_CONTRIBUTION_SERVICE =
   'repositoryContribution' as const
@@ -160,16 +164,28 @@ function requireProtocolService(value: unknown): RepoContributionProtocolService
 
 function isContributionCandidate(
   record: JournalRecord,
-  protocolHash: string,
 ): boolean {
   if (typeof record !== 'object' || record === null || Array.isArray(record)) {
     return false
   }
   const candidate = record as Partial<CoreRecordValue>
-  return (
-    candidate.protocol === REPO_CONTRIBUTION_PROTOCOL_REFERENCE &&
-    candidate.protocolHash === protocolHash
-  )
+  return candidate.protocol === REPO_CONTRIBUTION_PROTOCOL_REFERENCE
+}
+
+function requireDurableContributionProtocolHash(
+  record: JournalRecord,
+): string {
+  const protocolHash = (record as Partial<CoreRecordValue>).protocolHash
+  if (
+    typeof protocolHash !== 'string' ||
+    !/^[0-9a-f]{64}$/u.test(protocolHash)
+  ) {
+    throw new RepositoryContributionProtocolError(
+      'Durable repo.contribution Record has an invalid ProtocolHash: ' +
+        record.id,
+    )
+  }
+  return protocolHash
 }
 
 function sameLogicalKey(
@@ -200,20 +216,24 @@ export class RepositoryContributionService {
   async commit(
     request: ContributionRequest,
   ): Promise<RepositoryContributionCommit> {
+    const resolver = this.ctx[PROTOCOL_RESOLUTION_SERVICE]
     const protocolHash = requireProtocolHash(request.acceptanceRecord)
-    const resolved = await this.ctx[PROTOCOL_RESOLUTION_SERVICE].resolve(
+    const validated = await resolver.withExactService(
       REPO_CONTRIBUTION_PROTOCOL_REFERENCE,
       protocolHash,
+      async (service) => {
+        const protocol = requireProtocolService(service)
+        const acceptance = await protocol.validateAcceptance(
+          request.acceptanceRecord,
+        )
+        const relation = await protocol.validateRelation(
+          acceptance,
+          request.labourRecord,
+        )
+        return { acceptance, relation }
+      },
     )
-    const protocol = requireProtocolService(this.ctx.get(resolved.service))
-
-    const acceptance = await protocol.validateAcceptance(
-      request.acceptanceRecord,
-    )
-    const relation = await protocol.validateRelation(
-      acceptance,
-      request.labourRecord,
-    )
+    const { acceptance, relation } = validated
 
     const selectedAssetId = requireSelectedAssetId(request.asset)
     if (selectedAssetId !== relation.assetId) {
@@ -223,35 +243,40 @@ export class RepositoryContributionService {
       )
     }
 
-    const replay = await this.loadExactReplay(
-      acceptance,
-      protocol,
-    )
+    const replay = await this.loadExactReplay(acceptance, protocolHash)
     if (replay !== undefined) {
-      const durableRelation = await protocol.validateRelation(
-        acceptance,
-        replay.labourRecord,
-      )
-      await this.ctx[ASSET_STORAGE_SERVICE].get(durableRelation.assetId)
-      return committed(durableRelation)
+      await this.ctx[ASSET_STORAGE_SERVICE].get(replay.assetId)
+      return committed(replay)
     }
 
     await this.ctx[ASSET_STORAGE_SERVICE].preserve(request.asset)
     await this.ctx[ASSET_STORAGE_SERVICE].get(relation.assetId)
 
-    const labourProtocol = requireLabourRecordService(
-      this.ctx.get(LABOUR_RECORD_PROTOCOL_SERVICE),
+    const labourProtocolHash = requireProtocolHash(request.labourRecord)
+    await resolver.withExactService(
+      LABOUR_RECORD_PROTOCOL_REFERENCE,
+      labourProtocolHash,
+      async (service) => {
+        const labourProtocol = requireLabourRecordService(service)
+        await labourProtocol.acceptLabourRecord(request.labourRecord)
+      },
     )
-    await labourProtocol.acceptLabourRecord(request.labourRecord)
 
-    await this.ctx[RUNTIME_RECORD_DATABASE_SERVICE].runExclusive(
-      async (database) => {
-        await this.assertNoLogicalKeyConflict(
-          database,
-          protocol,
-          acceptance,
-        )
-        await database.accept(acceptance)
+    await resolver.withExactService(
+      REPO_CONTRIBUTION_PROTOCOL_REFERENCE,
+      protocolHash,
+      async (service) => {
+        const protocol = requireProtocolService(service)
+        await this.ctx[RUNTIME_RECORD_DATABASE_SERVICE][
+          RUNTIME_RECORD_DATABASE_INTERNAL_RUN_EXCLUSIVE
+        ](async (database) => {
+          await this.assertNoLogicalKeyConflict(
+            database,
+            protocol,
+            acceptance,
+          )
+          await database.accept(acceptance)
+        })
       },
     )
 
@@ -260,29 +285,34 @@ export class RepositoryContributionService {
 
   private async loadExactReplay(
     acceptance: ValidatedRepoContributionRecord,
-    protocol: RepoContributionProtocolService,
-  ): Promise<{ readonly labourRecord: JournalRecord } | undefined> {
-    return this.ctx[RUNTIME_RECORD_DATABASE_SERVICE].runExclusive(
-      async (database) => {
-        try {
-          await database.get(acceptance.id)
-        } catch (cause) {
-          if (cause instanceof RecordJournalNotFoundError) return undefined
-          throw cause
-        }
+    protocolHash: string,
+  ): Promise<RepoContributionView | undefined> {
+    return this.ctx[PROTOCOL_RESOLUTION_SERVICE].withExactService(
+      REPO_CONTRIBUTION_PROTOCOL_REFERENCE,
+      protocolHash,
+      async (service) => {
+        const protocol = requireProtocolService(service)
+        return this.ctx[RUNTIME_RECORD_DATABASE_SERVICE][
+          RUNTIME_RECORD_DATABASE_INTERNAL_RUN_EXCLUSIVE
+        ](async (database) => {
+          try {
+            await database.get(acceptance.id)
+          } catch (cause) {
+            if (cause instanceof RecordJournalNotFoundError) return undefined
+            throw cause
+          }
 
-        await database.accept(acceptance)
-        await this.assertNoLogicalKeyConflict(
-          database,
-          protocol,
-          acceptance,
-        )
-
-        return {
-          labourRecord: await database.get(
+          await this.assertNoLogicalKeyConflict(
+            database,
+            protocol,
+            acceptance,
+          )
+          await database.accept(acceptance)
+          const labourRecord = await database.get(
             acceptance.data.labourRecordId,
-          ),
-        }
+          )
+          return protocol.validateRelation(acceptance, labourRecord)
+        })
       },
     )
   }
@@ -293,7 +323,17 @@ export class RepositoryContributionService {
     candidate: ValidatedRepoContributionRecord,
   ): Promise<void> {
     for await (const record of database.iterateAccepted()) {
-      if (!isContributionCandidate(record, candidate.protocolHash)) continue
+      if (!isContributionCandidate(record)) continue
+
+      const acceptedProtocolHash =
+        requireDurableContributionProtocolHash(record)
+      if (acceptedProtocolHash !== candidate.protocolHash) {
+        throw new ProtocolBuildConflictError(
+          REPO_CONTRIBUTION_PROTOCOL_REFERENCE,
+          acceptedProtocolHash,
+          candidate.protocolHash,
+        )
+      }
 
       const accepted = await protocol.validateAcceptance(record)
       if (

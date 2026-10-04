@@ -3,6 +3,10 @@ import { link, mkdir, open, readFile, readdir, unlink } from 'node:fs/promises'
 import { resolve, join } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
 import { Service, type Context } from '@deepseek-ai/cordis'
+import {
+  RECORD_JOURNAL_INTERNAL_RUN_EXCLUSIVE,
+  isProtectedRepositoryPublication,
+} from './internal-publication.ts'
 
 export const RECORD_JOURNAL_SERVICE = 'recordJournal' as const
 const RECORD_FILE_SUFFIX = '.record.json'
@@ -78,6 +82,15 @@ export class RecordJournalStorageError extends RecordJournalError {
   constructor(message: string, options?: ErrorOptions) {
     super(message, options)
     this.name = 'RecordJournalStorageError'
+  }
+}
+
+export class RecordJournalPublicationError extends RecordJournalError {
+  constructor() {
+    super(
+      'repo.contribution Records must be published through RepositoryContributionService.',
+    )
+    this.name = 'RecordJournalPublicationError'
   }
 }
 
@@ -202,6 +215,19 @@ export class RecordJournalService extends Service {
   async runExclusive<T>(
     operation: (journal: RecordJournalExclusiveSession) => Promise<T>,
   ): Promise<T> {
+    return this.runExclusiveImpl(operation, false)
+  }
+
+  async [RECORD_JOURNAL_INTERNAL_RUN_EXCLUSIVE]<T>(
+    operation: (journal: RecordJournalExclusiveSession) => Promise<T>,
+  ): Promise<T> {
+    return this.runExclusiveImpl(operation, true)
+  }
+
+  private async runExclusiveImpl<T>(
+    operation: (journal: RecordJournalExclusiveSession) => Promise<T>,
+    allowProtectedPublication: boolean,
+  ): Promise<T> {
     const previousGate = this.operationGate
     let release!: () => void
     this.operationGate = new Promise<void>((resolve) => {
@@ -211,7 +237,15 @@ export class RecordJournalService extends Service {
     await previousGate
     try {
       const session: RecordJournalExclusiveSession = {
-        accept: (record) => this.acceptUnlocked(record),
+        accept: (record) => {
+          if (
+            !allowProtectedPublication &&
+            isProtectedRepositoryPublication(record)
+          ) {
+            throw new RecordJournalPublicationError()
+          }
+          return this.acceptUnlocked(record)
+        },
         get: (recordId) => this.get(recordId),
         iterateAccepted: () => this.iterateAccepted(),
       }
