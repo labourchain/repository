@@ -136,7 +136,7 @@ Record.data
 
 Repo identity 不重复写入 data，因为已经由 `Record.createdBy` 表达；
 劳动者 identity 不重复写入，因为已经由 labour Record 的 author 表达；
-输入 Asset 关系不重复写入，因为已经由 `labour.references[]` 表达。
+上游生产/引用关系不重复写入，因为已经由 `labour.references[]` 表达。
 
 显式保留 `assetId` 是必要的 Repo 独立断言：一个 labour Record 可以产生多个
 Asset，而 Repo 可以只采纳其中一个结果，不因此断言自己同时采纳了所有结果。
@@ -150,23 +150,31 @@ EntityPublicKey，可以与 Repo identity 相同，但当前 Protocol 不要求�
 Member capability，也不把它解释为 membership、role、delegation 或治理授权。
 谁能够实际使 Repo key 完成签名属于 Runtime/signer 与未来组织治理问题。
 
-一次 contribution 的 Asset 依赖规则为：
+一次 contribution 的 Asset 可用性规则为：
 
-- `labour.references[]` 中的每个输入 Asset 在 commit 前必须已经能够由当前
-  Repository 持久读取；
+- `labour.references[]` 保留 labour 已明确建立在其上或引用的 confirmed
+  upstream Asset 关系；当前 `repo.contribution@0.1.0` 不从该字段泛化推出
+  “每个引用都必须已在本 Repo 本地持久化”的前置条件；
 - `Record.data.assetId` 选中的结果 Asset 必须能够持久读取，并且必须出现在
   `labour.assets[]`；
 - 同一 labour Record 中其他未被该 acceptance Record 选中的结果 Asset
   不会因此自动被该 Repo 接受，也不要求为了这一条 contribution 一并持久化；
-- 一个 Asset 同时出现在 `references[]` 与 `assets[]` 时，同一份持久
-  Asset 即可同时满足输入与结果角色。
+- 一个 Asset 同时出现在 `references[]` 与 `assets[]` 时，如果它正是本次
+  selected result，则当前请求对该 Asset 的 preserve/get 足以满足当前
+  acceptance 的 Asset 可用性要求，不要求它因为 `references[]` 的出现而预先存在。
 
-因此一个 input Asset 可以被多个后续 labour Records 引用，一个 labour Record
+如果未来某个 concrete Protocol 确实需要某类 referenced Asset 作为本地执行
+前置条件，该 Protocol 必须显式定义这条可用性语义，Repository 不从
+`references[]` 本身统一推导。
+
+因此一个上游 Asset 可以被多个后续 labour Records 引用，一个 labour Record
 也可以产生多个结果 Asset，而无需 `previous`、`pid`、reverse edge 或 generic
 relation Protocol。
 
-缺失本地 Asset 不会使原本有效的 `labour.record@0.1.0` 失效；它只会阻止
-依赖该 Asset 的具体 contribution 达到 Repository committed。
+缺失某个仅出现在 `labour.references[]` 的本地 Asset，不会使原本有效的
+`labour.record@0.1.0` 失效，也不会仅凭这一点阻止当前
+`repo.contribution@0.1.0` 达到 Repository committed。当前 acceptance
+明确要求本地可用的是被 `Record.data.assetId` 选中的结果 Asset。
 
 当前 labour + Asset contribution 不需要 Patch。Patch 继续作为未来某个具体
 Protocol 的状态演化机制保留，但 #9 不定义 generic Patch schema，也不以
