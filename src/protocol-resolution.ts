@@ -301,11 +301,22 @@ function sameReference(
   }
 }
 
+interface ExactServiceImplementation {
+  readonly fiber: Fiber
+}
+
+interface ExactServiceBinding {
+  readonly implementation: ExactServiceImplementation
+  readonly value: unknown
+}
+
 export class ProtocolResolutionService {
   private readonly ctx: Context
   private readonly host: ProtocolResolutionHost
   private readonly resolvedByHash = new Map<string, ResolvedProtocolView>()
   private readonly providerByHash = new Map<string, Fiber>()
+  private readonly implementationByHash =
+    new Map<string, ExactServiceImplementation>()
   private readonly hashByReference = new Map<string, string>()
   private readonly dependenciesByHash = new Map<
     string,
@@ -360,13 +371,144 @@ export class ProtocolResolutionService {
 
   private requireExactService(resolved: ResolvedProtocolView): unknown {
     this.assertExactProviderTree(resolved.protocolHash)
+    const implementation = this.implementationByHash.get(
+      resolved.protocolHash,
+    )
+    if (implementation === undefined) {
+      throw new ProtocolRuntimeError(
+        `Verified Protocol service is unavailable through Cordis: ${resolved.service}.`,
+      )
+    }
+
     const service = this.ctx.get(resolved.service)
     if (service === undefined) {
       throw new ProtocolRuntimeError(
         `Verified Protocol service is unavailable through Cordis: ${resolved.service}.`,
       )
     }
-    return service
+    return this.bindExactServiceValue(
+      resolved.service,
+      implementation,
+      service,
+    )
+  }
+
+  private assertExactImplementation(
+    service: string,
+    expected: ExactServiceImplementation,
+  ): void {
+    const current = this.ctx.reflect._getImpl(service)
+    if (current !== expected) {
+      throw new ProtocolRuntimeError(
+        `Verified Protocol provider generation changed: ${service}.`,
+      )
+    }
+  }
+
+  private bindExactServiceValue(
+    service: string,
+    expected: ExactServiceImplementation,
+    value: unknown,
+  ): unknown {
+    const assertCurrent = () =>
+      this.assertExactImplementation(service, expected)
+    const wrapMember = (target: object, member: Function) =>
+      (...args: unknown[]) => {
+        assertCurrent()
+        return Reflect.apply(member, target, args)
+      }
+
+    assertCurrent()
+    if (typeof value === 'function') {
+      return new Proxy(value, {
+        apply: (target, thisArg, args) => {
+          assertCurrent()
+          return Reflect.apply(target, thisArg, args)
+        },
+        get: (target, property, receiver) => {
+          assertCurrent()
+          const member = Reflect.get(target, property, receiver)
+          return typeof member === 'function'
+            ? wrapMember(target, member)
+            : member
+        },
+      })
+    }
+    if (typeof value !== 'object' || value === null) return value
+
+    return new Proxy(value, {
+      get: (target, property, receiver) => {
+        assertCurrent()
+        const member = Reflect.get(target, property, receiver)
+        return typeof member === 'function'
+          ? wrapMember(target, member)
+          : member
+      },
+    })
+  }
+
+  private createExactRuntimeContext(protocol: ProtocolDescriptor): Context {
+    const bindings = new Map<string, ExactServiceBinding>()
+    const meta: Record<string, unknown> = {}
+
+    for (const dependency of protocol.dependencies) {
+      const reference = `${dependency.name}@${dependency.version}`
+      const resolved = this.resolvedByHash.get(dependency.protocolHash)
+      const implementation = this.implementationByHash.get(
+        dependency.protocolHash,
+      )
+      if (
+        resolved === undefined ||
+        resolved.reference !== reference ||
+        implementation === undefined
+      ) {
+        throw new ProtocolRuntimeError(
+          `Verified Protocol dependency is unavailable: ${reference}.`,
+        )
+      }
+
+      this.assertExactImplementation(resolved.service, implementation)
+      const value = this.ctx.get(resolved.service)
+      if (value === undefined) {
+        throw new ProtocolRuntimeError(
+          `Verified Protocol dependency is unavailable: ${reference}.`,
+        )
+      }
+      bindings.set(
+        resolved.service,
+        Object.freeze({
+          implementation,
+          value: this.bindExactServiceValue(
+            resolved.service,
+            implementation,
+            value,
+          ),
+        }),
+      )
+    }
+
+    meta.get = (name: string, strict = true) => {
+      const binding = bindings.get(name)
+      if (binding === undefined) return this.ctx.get(name, strict)
+      this.assertExactImplementation(name, binding.implementation)
+      return binding.value
+    }
+
+    for (const [service, binding] of bindings) {
+      Object.defineProperty(meta, service, {
+        configurable: true,
+        enumerable: true,
+        get: () => {
+          this.assertExactImplementation(
+            service,
+            binding.implementation,
+          )
+          return binding.value
+        },
+      })
+    }
+
+    return this.ctx.extend(meta)
   }
 
   private assertExactProviderTree(
@@ -378,14 +520,24 @@ export class ProtocolResolutionService {
 
     const resolved = this.resolvedByHash.get(protocolHash)
     const provider = this.providerByHash.get(protocolHash)
-    if (resolved === undefined || provider === undefined) {
+    const expectedImplementation = this.implementationByHash.get(
+      protocolHash,
+    )
+    if (
+      resolved === undefined ||
+      provider === undefined ||
+      expectedImplementation === undefined
+    ) {
       throw new ProtocolRuntimeError(
         `Verified Protocol provider is unavailable for ProtocolHash: ${protocolHash}.`,
       )
     }
 
     const implementation = this.ctx.reflect._getImpl(resolved.service)
-    if (implementation?.fiber !== provider) {
+    if (
+      implementation !== expectedImplementation ||
+      implementation.fiber !== provider
+    ) {
       throw new ProtocolRuntimeError(
         `Verified Protocol provider is unavailable through Cordis: ${resolved.service}.`,
       )
@@ -598,12 +750,21 @@ export class ProtocolResolutionService {
         protocolHash,
       )
       const plugin = validateRuntimeModule(protocol, namespace)
+      const runtimeContext =
+        protocol.dependencies.length === 0
+          ? this.ctx
+          : this.createExactRuntimeContext(protocol)
 
-      mountedFiber = this.ctx.plugin(plugin, { protocolHash }) as Fiber &
+      mountedFiber = runtimeContext.plugin(plugin, { protocolHash }) as Fiber &
         PromiseLike<Fiber>
       await mountedFiber
 
-      if (this.ctx.get(service) === undefined) {
+      const implementation = this.ctx.reflect._getImpl(service)
+      if (
+        this.ctx.get(service) === undefined ||
+        implementation === undefined ||
+        implementation.fiber !== mountedFiber.ctx.fiber
+      ) {
         throw new ProtocolRuntimeError(
           `Protocol plugin did not provide ${service}.`,
         )
@@ -615,6 +776,7 @@ export class ProtocolResolutionService {
         service,
       })
       this.providerByHash.set(protocolHash, mountedFiber.ctx.fiber)
+      this.implementationByHash.set(protocolHash, implementation)
       this.dependenciesByHash.set(
         protocolHash,
         Object.freeze([...protocol.dependencies]),

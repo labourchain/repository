@@ -30,6 +30,7 @@ import {
   InvalidAsset,
   ProtocolBuildConflictError,
   RecordJournalConflictError,
+  RecordJournalInputError,
   RecordJournalNotFoundError,
   RecordJournalPublicationError,
   RecordJournalService,
@@ -691,6 +692,113 @@ test('public generic ingress cannot publish repo.contribution directly', async (
       await node.context.recordJournal.get(acceptance.id),
       acceptance,
     )
+
+    await node.dispose()
+  })
+})
+
+test('public publication guard classifies the one durable JSON snapshot', async () => {
+  await withRoot(async (root) => {
+    const node = await createNode(root)
+
+    let directSerializations = 0
+    const disguisedDirect = {
+      id: 'snapshot-protected-direct',
+      protocol: 'repo.test@0.1.0',
+      toJSON() {
+        directSerializations += 1
+        return {
+          id: this.id,
+          protocol: REPO_CONTRIBUTION_PROTOCOL_REFERENCE,
+        }
+      },
+    }
+
+    await assert.rejects(
+      node.context.recordJournal.accept(disguisedDirect),
+      RecordJournalPublicationError,
+    )
+    assert.equal(directSerializations, 1)
+    await assertRecordMissing(node, disguisedDirect.id)
+
+    let databaseSerializations = 0
+    const disguisedDatabase = {
+      id: 'snapshot-protected-database',
+      protocol: 'repo.test@0.1.0',
+      toJSON() {
+        databaseSerializations += 1
+        return {
+          id: this.id,
+          protocol: REPO_CONTRIBUTION_PROTOCOL_REFERENCE,
+        }
+      },
+    }
+
+    await assert.rejects(
+      node.context.runtimeRecordDatabase.runExclusive(
+        (database) => database.accept(disguisedDatabase),
+      ),
+      RecordJournalPublicationError,
+    )
+    assert.equal(databaseSerializations, 1)
+    await assertRecordMissing(node, disguisedDatabase.id)
+
+    let protocolReads = 0
+    const getterRecord = {
+      id: 'snapshot-getter-record',
+      get protocol() {
+        protocolReads += 1
+        return protocolReads === 1
+          ? 'repo.test@0.1.0'
+          : REPO_CONTRIBUTION_PROTOCOL_REFERENCE
+      },
+    }
+
+    await node.context.recordJournal.accept(getterRecord)
+    assert.equal(protocolReads, 1)
+    assert.deepEqual(
+      await node.context.recordJournal.get(getterRecord.id),
+      {
+        id: getterRecord.id,
+        protocol: 'repo.test@0.1.0',
+      },
+    )
+
+    let genericSerializations = 0
+    const genericRecord = {
+      id: 'snapshot-generic-record',
+      toJSON() {
+        genericSerializations += 1
+        return {
+          id: this.id,
+          protocol: 'repo.test@0.1.0',
+          data: { serialization: genericSerializations },
+        }
+      },
+    }
+    await node.context.recordJournal.accept(genericRecord)
+    assert.equal(genericSerializations, 1)
+    assert.deepEqual(
+      await node.context.recordJournal.get(genericRecord.id),
+      {
+        id: genericRecord.id,
+        protocol: 'repo.test@0.1.0',
+        data: { serialization: 1 },
+      },
+    )
+
+    const changedId = {
+      id: 'snapshot-live-id',
+      toJSON() {
+        return { id: 'snapshot-durable-id' }
+      },
+    }
+    await assert.rejects(
+      node.context.recordJournal.accept(changedId),
+      RecordJournalInputError,
+    )
+    await assertRecordMissing(node, changedId.id)
+    await assertRecordMissing(node, 'snapshot-durable-id')
 
     await node.dispose()
   })
