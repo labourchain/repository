@@ -750,21 +750,21 @@ test('exact dependency reachable values remain bound to the captured generation'
                 provide: consumerService,
                 inject: [dependencyService],
                 apply(ctx: Context) {
-                  const exactDependency = ctx.get(
-                    dependencyService,
-                  ) as DependencyService
+                  const exactDependency = () =>
+                    ctx.get(dependencyService) as DependencyService
                   ctx.provide(consumerService, {
-                    getNested: () => exactDependency.nested,
-                    getAlias: () => exactDependency.alias,
-                    getFromGetter: () => exactDependency.fromGetter,
-                    getNestedMethod: () => exactDependency.nested.touch,
-                    createNested: () => exactDependency.createNested(),
-                    createCallable: () => exactDependency.createCallable(),
+                    getNested: () => exactDependency().nested,
+                    getAlias: () => exactDependency().alias,
+                    getFromGetter: () => exactDependency().fromGetter,
+                    getNestedMethod: () => exactDependency().nested.touch,
+                    createNested: () => exactDependency().createNested(),
+                    createCallable: () =>
+                      exactDependency().createCallable(),
                     createNestedAsync: () =>
-                      exactDependency.createNestedAsync(),
+                      exactDependency().createNestedAsync(),
                     createCallableAsync: () =>
-                      exactDependency.createCallableAsync(),
-                    rejectAsync: () => exactDependency.rejectAsync(),
+                      exactDependency().createCallableAsync(),
+                    rejectAsync: () => exactDependency().rejectAsync(),
                   })
                 },
               },
