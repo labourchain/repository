@@ -421,20 +421,56 @@ export class ProtocolResolutionService {
       if (!isBindable(candidate)) return candidate
       return rawByBound.get(candidate) ?? candidate
     }
+    const descriptorNeedsShadow = (
+      descriptor: PropertyDescriptor | undefined,
+    ): boolean => {
+      if (descriptor === undefined || descriptor.configurable !== false) {
+        return false
+      }
+      if ('value' in descriptor) {
+        return descriptor.writable === false && isBindable(descriptor.value)
+      }
+      return descriptor.get !== undefined || descriptor.set !== undefined
+    }
+    const hasFixedBindableProperty = (candidate: object): boolean =>
+      Reflect.ownKeys(candidate).some((property) =>
+        descriptorNeedsShadow(
+          Reflect.getOwnPropertyDescriptor(candidate, property),
+        ),
+      )
     const needsShadowTarget = (candidate: object): boolean =>
-      Reflect.ownKeys(candidate).some((property) => {
+      hasFixedBindableProperty(candidate) ||
+      (!Reflect.isExtensible(candidate) &&
+        Reflect.getPrototypeOf(candidate) !== null)
+    const assertSupportedShadowShape = (candidate: object): void => {
+      if (Reflect.isExtensible(candidate)) {
+        throw new ProtocolRuntimeError(
+          'Unsupported exact Protocol dependency value shape for ' +
+            service +
+            ': fixed bindable properties require an immutable object.',
+        )
+      }
+
+      for (const property of Reflect.ownKeys(candidate)) {
         const descriptor = Reflect.getOwnPropertyDescriptor(
           candidate,
           property,
         )
-        return (
-          descriptor !== undefined &&
-          'value' in descriptor &&
-          descriptor.configurable === false &&
-          descriptor.writable === false &&
-          isBindable(descriptor.value)
-        )
-      })
+        if (
+          descriptor === undefined ||
+          descriptor.configurable !== false ||
+          ('value' in descriptor
+            ? descriptor.writable !== false
+            : descriptor.set !== undefined)
+        ) {
+          throw new ProtocolRuntimeError(
+            'Unsupported exact Protocol dependency value shape for ' +
+              service +
+              ': shadow binding requires fixed own properties.',
+          )
+        }
+      }
+    }
     const createShadowTarget = (candidate: object): object => {
       if (typeof candidate === 'function') {
         const shadow = (..._args: unknown[]) => undefined
@@ -443,6 +479,30 @@ export class ProtocolResolutionService {
       }
       if (Array.isArray(candidate)) return []
       return Object.create(Reflect.getPrototypeOf(candidate)) as object
+    }
+
+    const bindDescriptor = (
+      descriptor: PropertyDescriptor,
+    ): PropertyDescriptor => {
+      const boundDescriptor: PropertyDescriptor = {
+        configurable: descriptor.configurable ?? false,
+        enumerable: descriptor.enumerable ?? false,
+      }
+
+      if ('value' in descriptor) {
+        boundDescriptor.writable = descriptor.writable ?? false
+        boundDescriptor.value = bind(descriptor.value)
+      } else {
+        if (descriptor.get !== undefined) {
+          boundDescriptor.get = bind(descriptor.get) as () => unknown
+        }
+        if (descriptor.set !== undefined) {
+          boundDescriptor.set = bind(descriptor.set) as (
+            value: unknown,
+          ) => void
+        }
+      }
+      return boundDescriptor
     }
 
     const bind = (candidate: unknown): unknown => {
@@ -459,11 +519,23 @@ export class ProtocolResolutionService {
       }
 
       const shadowed = needsShadowTarget(candidate)
+      if (shadowed) assertSupportedShadowShape(candidate)
       const proxyTarget = shadowed
         ? createShadowTarget(candidate)
         : candidate
       const get = (property: PropertyKey) => {
         assertCurrent()
+        const descriptor = Reflect.getOwnPropertyDescriptor(
+          candidate,
+          property,
+        )
+        if (!shadowed && descriptorNeedsShadow(descriptor)) {
+          throw new ProtocolRuntimeError(
+            'Exact Protocol dependency value changed to an unsupported fixed shape: ' +
+              service +
+              '.',
+          )
+        }
         return bind(Reflect.get(candidate, property, candidate))
       }
       const set = (property: PropertyKey, nextValue: unknown) => {
@@ -474,6 +546,54 @@ export class ProtocolResolutionService {
           unwrap(nextValue),
           candidate,
         )
+      }
+      const getOwnPropertyDescriptor = (property: PropertyKey) => {
+        assertCurrent()
+        const descriptor = Reflect.getOwnPropertyDescriptor(
+          candidate,
+          property,
+        )
+        if (descriptor === undefined) return undefined
+        if (!shadowed && descriptorNeedsShadow(descriptor)) {
+          throw new ProtocolRuntimeError(
+            'Exact Protocol dependency value changed to an unsupported fixed shape: ' +
+              service +
+              '.',
+          )
+        }
+        return bindDescriptor(descriptor)
+      }
+      const getPrototypeOf = (): object | null => {
+        assertCurrent()
+        if (!shadowed && !Reflect.isExtensible(candidate)) {
+          throw new ProtocolRuntimeError(
+            'Exact Protocol dependency value changed to an unsupported non-extensible shape: ' +
+              service +
+              '.',
+          )
+        }
+        const prototype = Reflect.getPrototypeOf(candidate)
+        return prototype === null ? null : bind(prototype) as object
+      }
+      const defineProperty = () => {
+        assertCurrent()
+        return false
+      }
+      const setPrototypeOf = (prototype: object | null) => {
+        assertCurrent()
+        if (shadowed) return prototype === getPrototypeOf()
+        const rawPrototype = unwrap(prototype)
+        if (
+          rawPrototype !== null &&
+          typeof rawPrototype !== 'object'
+        ) {
+          return false
+        }
+        return Reflect.setPrototypeOf(candidate, rawPrototype)
+      }
+      const preventExtensions = () => {
+        assertCurrent()
+        return shadowed
       }
 
       let bound: object
@@ -489,15 +609,47 @@ export class ProtocolResolutionService {
             )
             return bind(result)
           },
+          construct: (_target, args, newTarget) => {
+            assertCurrent()
+            const rawNewTarget = unwrap(newTarget)
+            if (typeof rawNewTarget !== 'function') {
+              throw new ProtocolRuntimeError(
+                'Exact Protocol constructor target is unavailable: ' +
+                  service +
+                  '.',
+              )
+            }
+            return bind(
+              Reflect.construct(
+                callable,
+                args.map(unwrap),
+                rawNewTarget,
+              ),
+            ) as object
+          },
           get: (_target, property) => get(property),
           set: (_target, property, nextValue) =>
             set(property, nextValue),
+          getOwnPropertyDescriptor: (_target, property) =>
+            getOwnPropertyDescriptor(property),
+          getPrototypeOf: () => getPrototypeOf(),
+          defineProperty: () => defineProperty(),
+          setPrototypeOf: (_target, prototype) =>
+            setPrototypeOf(prototype),
+          preventExtensions: () => preventExtensions(),
         })
       } else {
         bound = new Proxy(proxyTarget, {
           get: (_target, property) => get(property),
           set: (_target, property, nextValue) =>
             set(property, nextValue),
+          getOwnPropertyDescriptor: (_target, property) =>
+            getOwnPropertyDescriptor(property),
+          getPrototypeOf: () => getPrototypeOf(),
+          defineProperty: () => defineProperty(),
+          setPrototypeOf: (_target, prototype) =>
+            setPrototypeOf(prototype),
+          preventExtensions: () => preventExtensions(),
         })
       }
 
@@ -521,30 +673,13 @@ export class ProtocolResolutionService {
           )
           if (descriptor === undefined) continue
 
-          let mirrored: PropertyDescriptor
-          if ('value' in descriptor) {
-            mirrored = {
-              configurable: descriptor.configurable ?? false,
-              enumerable: descriptor.enumerable ?? false,
-              writable: descriptor.writable ?? false,
-              value: bind(descriptor.value),
-            }
-          } else {
-            mirrored = {
-              configurable: descriptor.configurable ?? false,
-              enumerable: descriptor.enumerable ?? false,
-            }
-            if (descriptor.get !== undefined) {
-              mirrored.get = bind(descriptor.get) as () => unknown
-            }
-            if (descriptor.set !== undefined) {
-              mirrored.set = bind(descriptor.set) as (
-                value: unknown,
-              ) => void
-            }
-          }
-
-          if (!Reflect.defineProperty(proxyTarget, property, mirrored)) {
+          if (
+            !Reflect.defineProperty(
+              proxyTarget,
+              property,
+              bindDescriptor(descriptor),
+            )
+          ) {
             throw new ProtocolRuntimeError(
               'Unable to bind exact Protocol service value: ' +
                 service +
@@ -553,9 +688,17 @@ export class ProtocolResolutionService {
           }
         }
 
-        if (!Reflect.isExtensible(candidate)) {
-          Reflect.preventExtensions(proxyTarget)
+        const prototype = Reflect.getPrototypeOf(candidate)
+        const boundPrototype =
+          prototype === null ? null : bind(prototype) as object
+        if (!Reflect.setPrototypeOf(proxyTarget, boundPrototype)) {
+          throw new ProtocolRuntimeError(
+            'Unable to bind exact Protocol service prototype: ' +
+              service +
+              '.',
+          )
         }
+        Reflect.preventExtensions(proxyTarget)
       }
 
       return bound
