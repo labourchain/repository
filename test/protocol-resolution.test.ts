@@ -632,6 +632,195 @@ test('exact service use rejects a foreign replacement of a Protocol dependency',
   await node.dispose()
 })
 
+test('exact dependency reachable values remain bound to the captured generation', async () => {
+  const dependency = descriptor('test.dep', '1.0.0')
+  const consumer = descriptor('test.consumer', '1.0.0', [
+    { name: 'test.dep', version: '1.0.0', protocolHash: HASH_A },
+  ])
+  const dependencyService = 'protocol:test.dep@1.0.0'
+  const consumerService = 'protocol:test.consumer@1.0.0'
+  const values = new Map([
+    [HASH_A, { protocol: dependency, artifact: artifact() }],
+    [HASH_B, { protocol: consumer, artifact: artifact() }],
+  ])
+  let exactInvocations = 0
+  let foreignInvocations = 0
+  let getterReads = 0
+  const rejection = new Error('dependency rejection')
+
+  interface NestedService {
+    count: number
+    self?: NestedService
+    touch(): void
+    increment(): number
+  }
+
+  interface CallableService {
+    (): number
+    nested: NestedService
+  }
+
+  interface DependencyService {
+    nested: NestedService
+    alias: NestedService
+    readonly fromGetter: NestedService
+    createNested(): NestedService
+    createCallable(): CallableService
+    createNestedAsync(): Promise<NestedService>
+    createCallableAsync(): Promise<CallableService>
+    rejectAsync(): Promise<never>
+  }
+
+  const nested: NestedService = {
+    count: 0,
+    touch() {
+      exactInvocations += 1
+    },
+    increment() {
+      this.count += 1
+      return this.count
+    },
+  }
+  nested.self = nested
+
+  const callable = Object.assign(
+    () => {
+      exactInvocations += 1
+      return nested.increment()
+    },
+    { nested },
+  )
+
+  const node = await createRepositoryNode({
+    plugins: [
+      {
+        plugin: protocolResolutionPlugin,
+        config: {
+          host: host(values, async (protocol) => {
+            if (protocol.name === 'test.dep') {
+              return {
+                plugin: {
+                  name: 'test.dep@1.0.0',
+                  provide: dependencyService,
+                  inject: [],
+                  apply(ctx: Context) {
+                    ctx.provide(dependencyService, {
+                      nested,
+                      alias: nested,
+                      get fromGetter() {
+                        getterReads += 1
+                        return nested
+                      },
+                      createNested() {
+                        return nested
+                      },
+                      createCallable() {
+                        return callable
+                      },
+                      async createNestedAsync() {
+                        return nested
+                      },
+                      async createCallableAsync() {
+                        return callable
+                      },
+                      rejectAsync() {
+                        return Promise.reject(rejection)
+                      },
+                    })
+                  },
+                },
+              }
+            }
+
+            return {
+              plugin: {
+                name: 'test.consumer@1.0.0',
+                provide: consumerService,
+                inject: [dependencyService],
+                apply(ctx: Context) {
+                  ctx.provide(consumerService, {
+                    dependency: ctx.get(dependencyService),
+                  })
+                },
+              },
+            }
+          }),
+        },
+      },
+      { plugin: coreProtocolProvider },
+    ],
+  })
+
+  const resolver = node.context[PROTOCOL_RESOLUTION_SERVICE]
+  const boundDependency = await resolver.withExactService(
+    'test.consumer@1.0.0',
+    HASH_B,
+    (value) =>
+      (value as { dependency: DependencyService }).dependency,
+  )
+
+  const nestedHandle = boundDependency.nested
+  const nestedMethod = nestedHandle.touch
+  const returnedNested = boundDependency.createNested()
+  const returnedCallable = boundDependency.createCallable()
+  const asyncNested = await boundDependency.createNestedAsync()
+  const asyncCallable = await boundDependency.createCallableAsync()
+
+  assert.equal(boundDependency.alias, nestedHandle)
+  assert.equal(boundDependency.fromGetter, nestedHandle)
+  assert.equal(getterReads, 1)
+  assert.equal(nestedHandle.self, nestedHandle)
+  assert.equal(returnedNested, nestedHandle)
+  assert.equal(asyncNested, nestedHandle)
+  assert.equal(returnedCallable, asyncCallable)
+  assert.equal(returnedCallable.nested, nestedHandle)
+  assert.equal(nestedHandle.increment(), 1)
+  nestedMethod()
+  assert.equal(returnedCallable(), 2)
+  assert.equal(exactInvocations, 2)
+  await assert.rejects(
+    boundDependency.rejectAsync(),
+    (error: unknown) => error === rejection,
+  )
+
+  const exactDependency = node.context.reflect._getImpl(dependencyService)
+  const exactConsumer = node.context.reflect._getImpl(consumerService)
+  assert.ok(exactDependency)
+  assert.ok(exactConsumer)
+  await exactDependency.fiber.dispose()
+
+  const foreignFiber = node.context.plugin({
+    name: 'runtime.foreign-reachable-dependency',
+    provide: dependencyService,
+    inject: [],
+    apply(ctx: Context) {
+      ctx.provide(dependencyService, {
+        nested: {
+          touch() {
+            foreignInvocations += 1
+          },
+        },
+      })
+    },
+  })
+  await foreignFiber
+
+  assert.equal(node.context.reflect._getImpl(consumerService), exactConsumer)
+
+  assert.throws(() => nestedHandle.touch(), ProtocolRuntimeError)
+  assert.throws(() => nestedMethod(), ProtocolRuntimeError)
+  assert.throws(() => returnedNested.touch(), ProtocolRuntimeError)
+  assert.throws(() => returnedCallable(), ProtocolRuntimeError)
+  assert.throws(() => asyncNested.touch(), ProtocolRuntimeError)
+  assert.throws(() => asyncCallable(), ProtocolRuntimeError)
+  assert.throws(() => boundDependency.fromGetter, ProtocolRuntimeError)
+  assert.equal(exactInvocations, 2)
+  assert.equal(foreignInvocations, 0)
+  assert.equal(getterReads, 1)
+
+  await node.dispose()
+})
+
 test('exact async execution cannot switch to a foreign dependency mid-callback', async () => {
   const dependency = descriptor('test.dep', '1.0.0')
   const consumer = descriptor('test.consumer', '1.0.0', [
