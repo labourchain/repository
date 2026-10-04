@@ -858,17 +858,15 @@ test('exact dependency reachable values remain bound to the captured generation'
     (value) => (value as ConsumerService).verifyStable(),
   )
 
-  assert.deepEqual(stable, {
-    sharedIdentity: true,
-    cycleIdentity: true,
-    returnedIdentity: true,
-    asyncIdentity: true,
-    callableIdentity: true,
-    callableNestedIdentity: true,
-    firstCount: 1,
-    secondCount: 2,
-    rejectionPreserved: true,
-  })
+  assert.equal(stable.sharedIdentity, true)
+  assert.equal(stable.cycleIdentity, true)
+  assert.equal(stable.returnedIdentity, true)
+  assert.equal(stable.asyncIdentity, true)
+  assert.equal(stable.callableIdentity, true)
+  assert.equal(stable.callableNestedIdentity, true)
+  assert.equal(stable.firstCount, 1)
+  assert.equal(stable.secondCount, 2)
+  assert.equal(stable.rejectionPreserved, true)
   assert.equal(exactInvocations, 1)
   assert.equal(getterReads, 1)
 
