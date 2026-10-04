@@ -421,6 +421,30 @@ export class ProtocolResolutionService {
       if (!isBindable(candidate)) return candidate
       return rawByBound.get(candidate) ?? candidate
     }
+    const needsShadowTarget = (candidate: object): boolean =>
+      Reflect.ownKeys(candidate).some((property) => {
+        const descriptor = Reflect.getOwnPropertyDescriptor(
+          candidate,
+          property,
+        )
+        return (
+          descriptor !== undefined &&
+          'value' in descriptor &&
+          descriptor.configurable === false &&
+          descriptor.writable === false &&
+          isBindable(descriptor.value)
+        )
+      })
+    const createShadowTarget = (candidate: object): object => {
+      if (typeof candidate === 'function') {
+        const shadow = (..._args: unknown[]) => undefined
+        Reflect.setPrototypeOf(shadow, Reflect.getPrototypeOf(candidate))
+        return shadow
+      }
+      if (Array.isArray(candidate)) return []
+      return Object.create(Reflect.getPrototypeOf(candidate)) as object
+    }
+
     const bind = (candidate: unknown): unknown => {
       if (!isBindable(candidate)) return candidate
 
@@ -434,14 +458,28 @@ export class ProtocolResolutionService {
         return boundPromise
       }
 
-      const get = (target: object, property: PropertyKey) => {
+      const shadowed = needsShadowTarget(candidate)
+      const proxyTarget = shadowed
+        ? createShadowTarget(candidate)
+        : candidate
+      const get = (property: PropertyKey) => {
         assertCurrent()
-        return bind(Reflect.get(target, property, target))
+        return bind(Reflect.get(candidate, property, candidate))
       }
+      const set = (property: PropertyKey, nextValue: unknown) => {
+        assertCurrent()
+        return Reflect.set(
+          candidate,
+          property,
+          unwrap(nextValue),
+          candidate,
+        )
+      }
+
       let bound: object
       if (typeof candidate === 'function') {
         const callable = candidate as Function
-        bound = new Proxy(callable, {
+        bound = new Proxy(proxyTarget as Function, {
           apply: (_target, thisArg, args) => {
             assertCurrent()
             const result = Reflect.apply(
@@ -451,14 +489,70 @@ export class ProtocolResolutionService {
             )
             return bind(result)
           },
-          get: (_target, property) => get(callable, property),
+          get: (_target, property) => get(property),
+          set: (_target, property, nextValue) =>
+            set(property, nextValue),
         })
       } else {
-        bound = new Proxy(candidate, { get })
+        bound = new Proxy(proxyTarget, {
+          get: (_target, property) => get(property),
+          set: (_target, property, nextValue) =>
+            set(property, nextValue),
+        })
       }
 
       boundByRaw.set(candidate, bound)
       rawByBound.set(bound, candidate)
+
+      if (shadowed) {
+        const properties = Reflect.ownKeys(candidate)
+        if (Array.isArray(candidate)) {
+          const index = properties.indexOf('length')
+          if (index >= 0) {
+            properties.splice(index, 1)
+            properties.push('length')
+          }
+        }
+
+        for (const property of properties) {
+          const descriptor = Reflect.getOwnPropertyDescriptor(
+            candidate,
+            property,
+          )
+          if (descriptor === undefined) continue
+
+          const mirrored: PropertyDescriptor =
+            'value' in descriptor
+              ? {
+                  ...descriptor,
+                  value: bind(descriptor.value),
+                }
+              : {
+                  ...descriptor,
+                  get:
+                    descriptor.get === undefined
+                      ? undefined
+                      : (bind(descriptor.get) as () => unknown),
+                  set:
+                    descriptor.set === undefined
+                      ? undefined
+                      : (bind(descriptor.set) as (value: unknown) => void),
+                }
+
+          if (!Reflect.defineProperty(proxyTarget, property, mirrored)) {
+            throw new ProtocolRuntimeError(
+              'Unable to bind exact Protocol service value: ' +
+                service +
+                '.',
+            )
+          }
+        }
+
+        if (!Reflect.isExtensible(candidate)) {
+          Reflect.preventExtensions(proxyTarget)
+        }
+      }
+
       return bound
     }
 
