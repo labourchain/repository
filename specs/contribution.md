@@ -494,6 +494,14 @@ One fixture should contain:
 
 The final commit marker is `D.id`.
 
+`A0`, `A1`, `L` and `D` above are role names, not fake literal hashes.
+This design-only PR does not build the new `repo.contribution@0.1.0` artifact,
+so it must not invent a ProtocolHash or acceptance RecordId that would appear
+authoritative. The future implementation fixture must use the real verified
+artifact ProtocolHash and Core-derived literal RecordIds / AssetIds produced
+from the frozen fixture inputs. Those derived values then become regression
+vectors.
+
 ### Relation tests
 
 - valid `D -> L -> A1`;
