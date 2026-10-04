@@ -443,14 +443,6 @@ export class ProtocolResolutionService {
       (!Reflect.isExtensible(candidate) &&
         Reflect.getPrototypeOf(candidate) !== null)
     const assertSupportedShadowShape = (candidate: object): void => {
-      if (Reflect.isExtensible(candidate)) {
-        throw new ProtocolRuntimeError(
-          'Unsupported exact Protocol dependency value shape for ' +
-            service +
-            ': fixed bindable properties require an immutable object.',
-        )
-      }
-
       for (const property of Reflect.ownKeys(candidate)) {
         const descriptor = Reflect.getOwnPropertyDescriptor(
           candidate,
@@ -523,13 +515,17 @@ export class ProtocolResolutionService {
       const proxyTarget = shadowed
         ? createShadowTarget(candidate)
         : candidate
+      let bound: object
       const get = (property: PropertyKey) => {
         assertCurrent()
+        if (shadowed) {
+          return Reflect.get(proxyTarget, property, bound)
+        }
         const descriptor = Reflect.getOwnPropertyDescriptor(
           candidate,
           property,
         )
-        if (!shadowed && descriptorNeedsShadow(descriptor)) {
+        if (descriptorNeedsShadow(descriptor)) {
           throw new ProtocolRuntimeError(
             'Exact Protocol dependency value changed to an unsupported fixed shape: ' +
               service +
@@ -540,6 +536,7 @@ export class ProtocolResolutionService {
       }
       const set = (property: PropertyKey, nextValue: unknown) => {
         assertCurrent()
+        if (shadowed) return false
         return Reflect.set(
           candidate,
           property,
@@ -549,12 +546,15 @@ export class ProtocolResolutionService {
       }
       const getOwnPropertyDescriptor = (property: PropertyKey) => {
         assertCurrent()
+        if (shadowed) {
+          return Reflect.getOwnPropertyDescriptor(proxyTarget, property)
+        }
         const descriptor = Reflect.getOwnPropertyDescriptor(
           candidate,
           property,
         )
         if (descriptor === undefined) return undefined
-        if (!shadowed && descriptorNeedsShadow(descriptor)) {
+        if (descriptorNeedsShadow(descriptor)) {
           throw new ProtocolRuntimeError(
             'Exact Protocol dependency value changed to an unsupported fixed shape: ' +
               service +
@@ -565,7 +565,8 @@ export class ProtocolResolutionService {
       }
       const getPrototypeOf = (): object | null => {
         assertCurrent()
-        if (!shadowed && !Reflect.isExtensible(candidate)) {
+        if (shadowed) return Reflect.getPrototypeOf(proxyTarget)
+        if (!Reflect.isExtensible(candidate)) {
           throw new ProtocolRuntimeError(
             'Exact Protocol dependency value changed to an unsupported non-extensible shape: ' +
               service +
@@ -581,7 +582,9 @@ export class ProtocolResolutionService {
       }
       const setPrototypeOf = (prototype: object | null) => {
         assertCurrent()
-        if (shadowed) return prototype === getPrototypeOf()
+        if (shadowed) {
+          return prototype === Reflect.getPrototypeOf(proxyTarget)
+        }
         const rawPrototype = unwrap(prototype)
         if (
           rawPrototype !== null &&
@@ -596,7 +599,6 @@ export class ProtocolResolutionService {
         return shadowed
       }
 
-      let bound: object
       if (typeof candidate === 'function') {
         const callable = candidate as Function
         bound = new Proxy(proxyTarget as Function, {
