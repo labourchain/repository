@@ -62,7 +62,7 @@ The journal alone is not interpreted as a generic ordered history database. The 
 
 Runtime plugins may persist indexes, caches, projections or Snapshots that make history efficient to query. These derived data must:
 
-- remain distinguishable from the durable Record + Patch facts and Block-confirmation evidence;
+- remain distinguishable from the durable labour/acceptance facts and Block-confirmation evidence;
 - be repairable or rebuildable from accepted facts plus exact Protocol semantics and available chain state;
 - not silently alter the meaning of Records, Assets, confirmations or relations;
 - not become authoritative merely because they are persisted;
@@ -84,7 +84,7 @@ The exact presentation shape is not fixed, but it must preserve enough identity/
 
 A crash after Repository commit but before projection update must not permanently omit that contribution from history.
 
-The pending/accepted portion of the projection must be repairable from durable Record + Patch facts and the Protocol-defined contribution relationships. Runtime Record-database state and Snapshots may accelerate this reconstruction but are replaceable.
+The pending/accepted portion of the projection must be repairable from durable Member-signed labour Records plus Repo-signed `repo.contribution@0.1.0` acceptance Records. Runtime Record-database state and Snapshots may accelerate this reconstruction but are replaceable.
 
 When chain-state access is available, Block-confirmation status must be reconcilable from actual Block inclusion rather than from a stale local flag.
 
