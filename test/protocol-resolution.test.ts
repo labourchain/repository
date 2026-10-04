@@ -1084,6 +1084,10 @@ test('exact service reflection remains bound to the captured generation', async 
       assert.ok(nestedDescriptor)
       descriptorNested = nestedDescriptor.value as NestedService
       assert.equal(descriptorNested, boundService.nested)
+      assert.equal(
+        Object.getPrototypeOf(descriptorNested),
+        Object.prototype,
+      )
 
       const accessorDescriptor = Object.getOwnPropertyDescriptor(
         boundService,
@@ -1108,7 +1112,9 @@ test('exact service reflection remains bound to the captured generation', async 
         boundService,
       ) as ReflectedPrototype
       assert.equal(prototype, reflectedPrototype)
+      assert.notEqual(prototype, ExactService.prototype)
       assert.equal(Object.getPrototypeOf(boundService), prototype)
+      assert.equal(Object.getPrototypeOf(prototype), Object.prototype)
       prototypeMethod = prototype.prototypeTouch
       reflectPrototypeMethod = reflectedPrototype.prototypeTouch
       assert.equal(prototypeMethod, reflectPrototypeMethod)
@@ -1120,6 +1126,7 @@ test('exact service reflection remains bound to the captured generation', async 
 
       const frozen = boundService.frozen
       assert.equal(Object.isExtensible(frozen), false)
+      assert.equal(Object.getPrototypeOf(frozen), Object.prototype)
       assert.deepEqual(Object.keys(frozen), ['touch', 'nested'])
       const frozenDescriptor = Object.getOwnPropertyDescriptor(
         frozen,
