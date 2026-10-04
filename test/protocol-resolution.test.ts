@@ -1299,6 +1299,8 @@ test('exact service binding seals fixed extensible capability namespaces', async
   )
 
   assert.equal(exactInvocations, 1)
+  assert.equal(Object.isExtensible(namespace), false)
+  assert.deepEqual(Object.keys(namespace), ['touch'])
   assert.equal(Reflect.has(namespace, 'added'), false)
 
   const exact = node.context.reflect._getImpl(serviceName)
@@ -1373,6 +1375,7 @@ test('exact service binding fails closed for mixed mutable shadow shapes', async
 
   assert.equal(callbackRan, false)
   assert.equal(exactInvocations, 0)
+  assert.equal(Object.isExtensible(mixed), true)
   assert.equal(mixed.mutable, 1)
   await node.dispose()
 })
