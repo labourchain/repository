@@ -112,8 +112,8 @@ Durable Record ingress / journal
 Runtime Record database
     -> 提供同一 Repository Runtime 的 serialized Record ingress boundary
     -> 复用 journal 的 exact Record durability
-    -> 具体关系、顺序/依赖和 pending packing state 由首个实际 Protocol consumer 定义
-    -> 不预设通用关系 schema、查询语言或状态容器
+    -> #9 的 concrete relation 保留在 signed labour / acceptance facts 中
+    -> 仅在实际需要时维护可重建的窄索引，不预设通用关系 schema、查询语言或状态容器
     -> 不是 canonical chain state
 
 Chain-state / Block-confirmation access
@@ -122,7 +122,7 @@ Chain-state / Block-confirmation access
     -> 用于状态升级、对账和 projection rebuild
 ```
 
-三者可以由同一个未来 node/runtime 实现，也可以作为不同 Cordis providers 组合；Architecture 不锁定 package、数据库或网络实现。当前 Runtime Record database 只实现最小共享写入边界；待 #9 出现第一个具体 contribution relation consumer 时，再按实际需要定义最小关系状态，不预设通用 DAG schema、SQL 模型、namespace state framework 或 packer API。
+三者可以由同一个未来 node/runtime 实现，也可以作为不同 Cordis providers 组合；Architecture 不锁定 package、数据库或网络实现。当前 Runtime Record database 维持最小共享写入边界；#9 已经给出第一个 concrete contribution consumer，而它的关系由 signed facts 自身表达，因此不新增 generic relation state。若实现确实需要，可增加由 durable facts 重建的窄索引，但不预设通用 DAG schema、SQL 模型、namespace state framework 或 packer API。
 
 Repository 领域插件消费这些运行能力，但不通过 `repo.records[]` 或第二套链来替代 Core Block / canonical-chain 语义。
 
