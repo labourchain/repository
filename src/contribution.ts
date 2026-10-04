@@ -5,6 +5,7 @@ import {
 import type { Asset } from './asset-identity.ts'
 import {
   LABOUR_RECORD_PROTOCOL_SERVICE,
+  type LabourRecordProtocolService,
 } from './labour-record.ts'
 import type { CoreRecordValue } from './member.ts'
 import {
@@ -125,6 +126,22 @@ function requireSelectedAssetId(value: unknown): string | undefined {
   return typeof id === 'string' ? id : undefined
 }
 
+function requireLabourRecordService(
+  value: unknown,
+): LabourRecordProtocolService {
+  if (
+    typeof value !== 'object' ||
+    value === null ||
+    typeof (value as Partial<LabourRecordProtocolService>)
+      .acceptLabourRecord !== 'function'
+  ) {
+    throw new RepositoryContributionProtocolError(
+      'Resolved labour.record service does not expose durable acceptance.',
+    )
+  }
+  return value as LabourRecordProtocolService
+}
+
 function requireProtocolService(value: unknown): RepoContributionProtocolService {
   if (
     typeof value !== 'object' ||
@@ -222,9 +239,10 @@ export class RepositoryContributionService {
     await this.ctx[ASSET_STORAGE_SERVICE].preserve(request.asset)
     await this.ctx[ASSET_STORAGE_SERVICE].get(relation.assetId)
 
-    await this.ctx[LABOUR_RECORD_PROTOCOL_SERVICE].acceptLabourRecord(
-      request.labourRecord,
+    const labourProtocol = requireLabourRecordService(
+      this.ctx.get(LABOUR_RECORD_PROTOCOL_SERVICE),
     )
+    await labourProtocol.acceptLabourRecord(request.labourRecord)
 
     await this.ctx[RUNTIME_RECORD_DATABASE_SERVICE].runExclusive(
       async (database) => {
