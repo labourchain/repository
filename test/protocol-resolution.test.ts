@@ -505,6 +505,14 @@ test('cached exact resolution rejects a replacement Cordis provider', async () =
 
   await helperFiber.dispose()
   assert.equal(node.context.get(protocolService), undefined)
+  await assert.rejects(
+    service.withExactService(
+      'test.alpha@1.0.0',
+      HASH_A,
+      () => assert.fail('missing exact provider must not execute'),
+    ),
+    ProtocolRuntimeError,
+  )
 
   const foreignFiber = node.context.plugin(foreignPlugin)
   await foreignFiber
