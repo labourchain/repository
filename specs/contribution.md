@@ -1,6 +1,6 @@
 # Contribution Specification
 
-- **Status:** Draft
+- **Status:** Accepted
 - **Scope:** Repository orchestration for one concrete labour / Asset contribution
 - **Requirements:** [`../docs/requirements.md`](../docs/requirements.md)
 - **Architecture:** [`../docs/architecture.md`](../docs/architecture.md)
@@ -448,9 +448,9 @@ including:
 Missing local Asset availability must not be surfaced as
 `labour.record@0.1.0` semantic invalidity.
 
-## Future #9 implementation mapping
+## Current #9 implementation mapping
 
-A nonbinding mapping onto the current Runtime is:
+The current Runtime implementation follows this mapping:
 
 ```text
 Contribution orchestration
@@ -473,9 +473,9 @@ Record.
 No #10 recovery loop, #11 projection, Block packer or chain adapter is needed
 for this normal path.
 
-## Future implementation tests
+## Implementation acceptance tests
 
-The future implementation must cover:
+The implementation acceptance surface covers:
 
 ### Canonical fixture
 
@@ -497,12 +497,11 @@ One fixture should contain:
 The final commit marker is `D.id`.
 
 `A0`, `A1`, `L` and `D` above are role names, not fake literal hashes.
-This design-only PR does not build the new `repo.contribution@0.1.0` artifact,
-so it must not invent a ProtocolHash or acceptance RecordId that would appear
-authoritative. The future implementation fixture must use the real verified
-artifact ProtocolHash and Core-derived literal RecordIds / AssetIds produced
-from the frozen fixture inputs. Those derived values then become regression
-vectors.
+The runtime implementation builds and verifies the real `repo.contribution@0.1.0`
+artifact in integration coverage. Fixtures use the real verified artifact
+ProtocolHash and Core-derived RecordIds / AssetIds rather than design-time fake
+hashes; those derived values are the regression vectors for the implemented
+contract.
 
 ### Relation tests
 
