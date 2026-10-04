@@ -157,7 +157,8 @@ For the current MVP, Member-side confirmation is the valid Member-signed
 A contribution reaches Repository `COMMITTED` only when:
 
 - the exact labour Record is durably accepted;
-- every Asset in `labour.references[]` is durably retrievable;
+- `labour.references[]` remains the signed upstream production/citation
+  relation and is not a generic local-durability prerequisite;
 - the selected result Asset is durably retrievable and occurs in `labour.assets[]`;
 - the Repo acceptance Record references that labour Record and selected Asset,
   has a valid Repo author/signature and operator, and is durably accepted last;
@@ -170,8 +171,8 @@ The Repository execution path is:
 STAGED -> DOMAIN_CONFIRMED -> COMMITTED
 ```
 
-`DOMAIN_CONFIRMED` means the concrete labour/acceptance relation and required
-Asset availability have passed validation. `COMMITTED` is the Repository
+`DOMAIN_CONFIRMED` means the concrete labour/acceptance relation, selected
+Asset availability and Repository-owned same-key check have passed validation. `COMMITTED` is the Repository
 product acceptance boundary, with the Repo acceptance Record acting as the
 durable final marker.
 
@@ -320,7 +321,7 @@ In addition to the acceptance tests defined by each capability Spec, the MVP int
 5. the minimum labourRecord Protocol can produce/validate a real Member-signed labour fact before the labour / Asset contribution path is integrated;
 6. the minimum Asset Protocol deterministically derives and verifies AssetId from exact Protocol semantics and content, enforces the 16 MiB raw-content boundary, and classifies invalid incoming identity before any durable identity conflict;
 7. a labour / Asset contribution resolves and verifies the exact required ProtocolHash / implementation artifacts;
-8. a valid Member-signed labour Record plus a valid Repo-signed `repo.contribution@0.1.0` Record, required input Assets, selected result Asset, durable Record ingress and acceptance-Record-last ordering produce Repository `COMMITTED`;
+8. a valid Member-signed labour Record plus a valid Repo-signed `repo.contribution@0.1.0` Record, a durable selected result Asset, durable Record ingress and acceptance-Record-last ordering produce Repository `COMMITTED` even when an unrelated confirmed upstream reference is not locally stored;
 9. the accepted Asset remains retrievable with the same AssetId and exact bytes after restart;
 10. an interrupted contribution recovers without false acceptance or duplicate durable Record acceptance;
 11. a Repository-committed contribution appears in contribution history as pending-chain before Block inclusion;
