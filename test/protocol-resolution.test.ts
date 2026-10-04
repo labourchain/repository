@@ -672,6 +672,7 @@ test('exact dependency reachable values remain bound to the captured generation'
   interface DependencyService {
     nested: NestedService
     alias: NestedService
+    frozen: Readonly<{ nested: NestedService }>
     readonly fromGetter: NestedService
     createNested(): NestedService
     createCallable(): CallableService
@@ -687,6 +688,7 @@ test('exact dependency reachable values remain bound to the captured generation'
     readonly asyncIdentity: boolean
     readonly callableIdentity: boolean
     readonly callableNestedIdentity: boolean
+    readonly frozenIdentity: boolean
     readonly firstCount: number
     readonly secondCount: number
     readonly rejectionPreserved: boolean
@@ -716,6 +718,7 @@ test('exact dependency reachable values remain bound to the captured generation'
     },
     { nested },
   )
+  const frozen = Object.freeze({ nested })
 
   const node = await createRepositoryNode({
     plugins: [
@@ -733,6 +736,7 @@ test('exact dependency reachable values remain bound to the captured generation'
                     ctx.provide(dependencyService, {
                       nested,
                       alias: nested,
+                      frozen,
                       get fromGetter() {
                         getterReads += 1
                         return nested
@@ -797,6 +801,8 @@ test('exact dependency reachable values remain bound to the captured generation'
                           returnedCallable === asyncCallable,
                         callableNestedIdentity:
                           returnedCallable.nested === nestedHandle,
+                        frozenIdentity:
+                          service.frozen.nested === nestedHandle,
                         firstCount: nestedHandle.increment(),
                         secondCount: returnedCallable(),
                         rejectionPreserved,
@@ -814,6 +820,7 @@ test('exact dependency reachable values remain bound to the captured generation'
                       const asyncCallable =
                         await service.createCallableAsync()
                       const getterNested = service.fromGetter
+                      const frozenNested = service.frozen.nested
 
                       const invocations = [
                         () => nestedHandle.touch(),
@@ -823,6 +830,7 @@ test('exact dependency reachable values remain bound to the captured generation'
                         () => asyncNested.touch(),
                         () => asyncCallable(),
                         () => getterNested.touch(),
+                        () => frozenNested.touch(),
                         () => service.fromGetter.touch(),
                       ]
 
@@ -864,6 +872,7 @@ test('exact dependency reachable values remain bound to the captured generation'
   assert.equal(stable.asyncIdentity, true)
   assert.equal(stable.callableIdentity, true)
   assert.equal(stable.callableNestedIdentity, true)
+  assert.equal(stable.frozenIdentity, true)
   assert.equal(stable.firstCount, 1)
   assert.equal(stable.secondCount, 2)
   assert.equal(stable.rejectionPreserved, true)
@@ -901,7 +910,7 @@ test('exact dependency reachable values remain bound to the captured generation'
   resume()
 
   await assert.rejects(operation, ProtocolRuntimeError)
-  assert.equal(blockedInvocations, 8)
+  assert.equal(blockedInvocations, 9)
   assert.equal(exactInvocations, 1)
   assert.equal(foreignInvocations, 0)
   assert.equal(getterReads, 2)
