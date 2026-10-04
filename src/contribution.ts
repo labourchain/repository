@@ -5,7 +5,7 @@ import {
 import type { Asset } from './asset-identity.ts'
 import {
   LABOUR_RECORD_PROTOCOL_SERVICE,
-  type LabourRecordProtocolService,
+  type LabourRecordService,
 } from './labour-record.ts'
 import type { CoreRecordValue } from './member.ts'
 import {
@@ -128,18 +128,18 @@ function requireSelectedAssetId(value: unknown): string | undefined {
 
 function requireLabourRecordService(
   value: unknown,
-): LabourRecordProtocolService {
+): LabourRecordService {
   if (
     typeof value !== 'object' ||
     value === null ||
-    typeof (value as Partial<LabourRecordProtocolService>)
+    typeof (value as Partial<LabourRecordService>)
       .acceptLabourRecord !== 'function'
   ) {
     throw new RepositoryContributionProtocolError(
       'Resolved labour.record service does not expose durable acceptance.',
     )
   }
-  return value as LabourRecordProtocolService
+  return value as LabourRecordService
 }
 
 function requireProtocolService(value: unknown): RepoContributionProtocolService {
