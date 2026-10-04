@@ -299,6 +299,7 @@ test('raw content oversize rejection occurs before hashing, resolution or visibi
       protocolHash: PROTOCOL_HASH,
       contentHash: 'b'.repeat(64),
       content: Buffer.alloc(MAX_ASSET_CONTENT_BYTES + 1),
+      unexpected: 'must not outrank the resource bound',
     }),
     AssetContentTooLargeError,
   )
