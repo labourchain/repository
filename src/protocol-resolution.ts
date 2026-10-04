@@ -524,15 +524,15 @@ export class ProtocolResolutionService {
           let mirrored: PropertyDescriptor
           if ('value' in descriptor) {
             mirrored = {
-              configurable: descriptor.configurable,
-              enumerable: descriptor.enumerable,
-              writable: descriptor.writable,
+              configurable: descriptor.configurable ?? false,
+              enumerable: descriptor.enumerable ?? false,
+              writable: descriptor.writable ?? false,
               value: bind(descriptor.value),
             }
           } else {
             mirrored = {
-              configurable: descriptor.configurable,
-              enumerable: descriptor.enumerable,
+              configurable: descriptor.configurable ?? false,
+              enumerable: descriptor.enumerable ?? false,
             }
             if (descriptor.get !== undefined) {
               mirrored.get = bind(descriptor.get) as () => unknown
