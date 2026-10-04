@@ -442,16 +442,16 @@ export class ProtocolResolutionService {
       if (typeof candidate === 'function') {
         const callable = candidate as Function
         bound = new Proxy(callable, {
-          apply: (target, thisArg, args) => {
+          apply: (_target, thisArg, args) => {
             assertCurrent()
             const result = Reflect.apply(
-              target,
+              callable,
               unwrap(thisArg),
               args.map(unwrap),
             )
             return bind(result)
           },
-          get,
+          get: (_target, property) => get(callable, property),
         })
       } else {
         bound = new Proxy(candidate, { get })
