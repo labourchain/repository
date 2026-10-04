@@ -410,41 +410,78 @@ export class ProtocolResolutionService {
     expected: ExactServiceImplementation,
     value: unknown,
   ): unknown {
+    const boundByRaw = new WeakMap<object, unknown>()
+    const rawByBound = new WeakMap<object, object>()
     const assertCurrent = () =>
       this.assertExactImplementation(service, expected)
-    const wrapMember = (target: object, member: Function) =>
-      (...args: unknown[]) => {
-        assertCurrent()
-        return Reflect.apply(member, target, args)
+    const isBindable = (candidate: unknown): candidate is object | Function =>
+      (typeof candidate === 'object' && candidate !== null) ||
+      typeof candidate === 'function'
+    const unwrap = (candidate: unknown): unknown => {
+      if (!isBindable(candidate)) return candidate
+      return rawByBound.get(candidate) ?? candidate
+    }
+    const bind = (candidate: unknown): unknown => {
+      if (!isBindable(candidate)) return candidate
+
+      const cached = boundByRaw.get(candidate)
+      if (cached !== undefined) return cached
+
+      assertCurrent()
+      if (candidate instanceof Promise) {
+        const boundPromise = candidate.then((result) => bind(result))
+        boundByRaw.set(candidate, boundPromise)
+        return boundPromise
       }
 
-    assertCurrent()
-    if (typeof value === 'function') {
-      return new Proxy(value, {
-        apply: (target, thisArg, args) => {
-          assertCurrent()
-          return Reflect.apply(target, thisArg, args)
-        },
-        get: (target, property, receiver) => {
-          assertCurrent()
-          const member = Reflect.get(target, property, receiver)
-          return typeof member === 'function'
-            ? wrapMember(target, member)
-            : member
-        },
-      })
-    }
-    if (typeof value !== 'object' || value === null) return value
-
-    return new Proxy(value, {
-      get: (target, property, receiver) => {
+      const get = (target: object, property: PropertyKey) => {
         assertCurrent()
-        const member = Reflect.get(target, property, receiver)
-        return typeof member === 'function'
-          ? wrapMember(target, member)
-          : member
-      },
-    })
+        return bind(Reflect.get(target, property, target))
+      }
+      const set = (
+        target: object,
+        property: PropertyKey,
+        nextValue: unknown,
+      ) => {
+        assertCurrent()
+        return Reflect.set(target, property, unwrap(nextValue), target)
+      }
+
+      let bound: object
+      if (typeof candidate === 'function') {
+        bound = new Proxy(candidate, {
+          apply: (target, thisArg, args) => {
+            assertCurrent()
+            const result = Reflect.apply(
+              target,
+              unwrap(thisArg),
+              args.map(unwrap),
+            )
+            return bind(result)
+          },
+          construct: (target, args, newTarget) => {
+            assertCurrent()
+            const result = Reflect.construct(
+              target,
+              args.map(unwrap),
+              unwrap(newTarget) as Function,
+            )
+            return bind(result) as object
+          },
+          get,
+          set,
+        })
+      } else {
+        bound = new Proxy(candidate, { get, set })
+      }
+
+      boundByRaw.set(candidate, bound)
+      rawByBound.set(bound, candidate)
+      return bound
+    }
+
+    assertCurrent()
+    return bind(value)
   }
 
   private createExactRuntimeContext(protocol: ProtocolDescriptor): Context {
