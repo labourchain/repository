@@ -35,6 +35,7 @@ import {
   REPO_CONTRIBUTION_PROTOCOL_SERVICE,
   REPO_ESTABLISHMENT_PROTOCOL_REFERENCE,
   REPO_ESTABLISHMENT_PROTOCOL_SERVICE,
+  InvalidAsset,
   ProtocolBuildConflictError,
   ProtocolRuntimeError,
   RecordJournalNotFoundError,
@@ -638,6 +639,21 @@ test(
         REPOSITORY_CONTRIBUTION_SERVICE
       ].commit(request)
       assert.deepEqual(replayed, committed)
+
+      await assert.rejects(
+        second.context[REPOSITORY_CONTRIBUTION_SERVICE].commit({
+          ...request,
+          asset: {
+            ...selected,
+            content: Buffer.from('tampered replay content', 'utf8'),
+          },
+        }),
+        InvalidAsset,
+      )
+      assert.deepEqual(
+        await second.context[REPOSITORY_CONTRIBUTION_SERVICE].commit(request),
+        committed,
+      )
 
       assert.deepEqual(
         await second.context.recordJournal.get(labourRecord.id),

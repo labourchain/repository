@@ -489,6 +489,126 @@ test('exact request replay is idempotent', async () => {
   })
 })
 
+test('exact replay validates incoming Asset before durable lookup and preserves committed facts', async () => {
+  await withRoot(async (root) => {
+    const node = await createNode(root)
+    await establishBase(node)
+
+    const selected = createAsset(node, 'validated replay')
+    const labour = labourRecord('labour-validated-replay', [], [selected.id])
+    const acceptance = acceptanceRecord(
+      'acceptance-validated-replay',
+      REPO_KEY,
+      labour.id,
+      selected.id,
+    )
+    const request = {
+      asset: selected,
+      labourRecord: labour,
+      acceptanceRecord: acceptance,
+    }
+    const committed = await node.context[
+      REPOSITORY_CONTRIBUTION_SERVICE
+    ].commit(request)
+
+    const storage = node.context[ASSET_STORAGE_SERVICE]
+    const originalGet = storage.get.bind(storage)
+    let getCalls = 0
+    storage.get = async (assetId) => {
+      getCalls += 1
+      return originalGet(assetId)
+    }
+
+    const malformed = {
+      ...selected,
+      content: Buffer.from('tampered replay content', 'utf8'),
+    }
+
+    await assert.rejects(
+      node.context[REPOSITORY_CONTRIBUTION_SERVICE].commit({
+        ...request,
+        asset: malformed,
+      }),
+      InvalidAsset,
+    )
+    assert.equal(getCalls, 0)
+
+    assert.deepEqual(await originalGet(selected.id), selected)
+    assert.deepEqual(
+      await node.context.recordJournal.get(labour.id),
+      labour,
+    )
+    assert.deepEqual(
+      await node.context.recordJournal.get(acceptance.id),
+      acceptance,
+    )
+
+    assert.deepEqual(
+      await node.context[REPOSITORY_CONTRIBUTION_SERVICE].commit(request),
+      committed,
+    )
+    assert.equal(getCalls, 1)
+    assert.equal((await acceptedContributions(node)).length, 1)
+
+    await node.dispose()
+  })
+})
+
+test('exact replay does not repair an unavailable durable Asset', async () => {
+  await withRoot(async (root) => {
+    const node = await createNode(root)
+    await establishBase(node)
+
+    const selected = createAsset(node, 'missing replay asset')
+    const labour = labourRecord('labour-missing-replay-asset', [], [selected.id])
+    const acceptance = acceptanceRecord(
+      'acceptance-missing-replay-asset',
+      REPO_KEY,
+      labour.id,
+      selected.id,
+    )
+    const request = {
+      asset: selected,
+      labourRecord: labour,
+      acceptanceRecord: acceptance,
+    }
+    const committed = await node.context[
+      REPOSITORY_CONTRIBUTION_SERVICE
+    ].commit(request)
+
+    const storage = node.context[ASSET_STORAGE_SERVICE]
+    const originalGet = storage.get.bind(storage)
+    const originalPreserve = storage.preserve.bind(storage)
+    let preserveCalls = 0
+    storage.get = async (assetId) => {
+      if (assetId === selected.id) {
+        throw new AssetNotFoundError(assetId)
+      }
+      return originalGet(assetId)
+    }
+    storage.preserve = async (asset) => {
+      preserveCalls += 1
+      return originalPreserve(asset)
+    }
+
+    await assert.rejects(
+      node.context[REPOSITORY_CONTRIBUTION_SERVICE].commit(request),
+      AssetNotFoundError,
+    )
+    assert.equal(preserveCalls, 0)
+
+    storage.get = originalGet
+    storage.preserve = originalPreserve
+    assert.deepEqual(
+      await node.context[REPOSITORY_CONTRIBUTION_SERVICE].commit(request),
+      committed,
+    )
+    assert.equal((await acceptedContributions(node)).length, 1)
+
+    await node.dispose()
+  })
+})
+
 test('restart reconstructs exact replay from durable A/L/D and preserves conflict detection', async () => {
   await withRoot(async (root) => {
     const first = await createNode(root)
