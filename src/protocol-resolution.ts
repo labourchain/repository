@@ -301,22 +301,11 @@ function sameReference(
   }
 }
 
-interface ExactServiceImplementation {
-  readonly fiber: Fiber
-}
-
-interface ExactServiceBinding {
-  readonly implementation: ExactServiceImplementation
-  readonly value: unknown
-}
-
 export class ProtocolResolutionService {
   private readonly ctx: Context
   private readonly host: ProtocolResolutionHost
   private readonly resolvedByHash = new Map<string, ResolvedProtocolView>()
   private readonly providerByHash = new Map<string, Fiber>()
-  private readonly implementationByHash =
-    new Map<string, ExactServiceImplementation>()
   private readonly hashByReference = new Map<string, string>()
   private readonly dependenciesByHash = new Map<
     string,
@@ -350,15 +339,22 @@ export class ProtocolResolutionService {
     operation: (service: unknown) => Promise<T> | T,
   ): Promise<T> {
     const resolved = await this.resolve(reference, protocolHash)
-    const service = this.requireExactService(resolved)
+    const executionSet = this.captureExactExecutionSet(protocolHash)
+    const service = this.ctx.get(resolved.service)
+    if (service === undefined) {
+      throw new ProtocolRuntimeError(
+        `Verified Protocol service is unavailable through Cordis: ${resolved.service}.`,
+      )
+    }
+    this.assertExactExecutionSet(executionSet)
 
     try {
       const result = await operation(service)
-      this.assertExactProviderTree(protocolHash)
+      this.assertExactExecutionSet(executionSet)
       return result
     } catch (cause) {
       try {
-        this.assertExactProviderTree(protocolHash)
+        this.assertExactExecutionSet(executionSet)
       } catch (providerCause) {
         throw new ProtocolRuntimeError(
           `Verified Protocol provider changed during execution: ${resolved.service}.`,
@@ -369,468 +365,17 @@ export class ProtocolResolutionService {
     }
   }
 
-  private requireExactService(resolved: ResolvedProtocolView): unknown {
-    this.assertExactProviderTree(resolved.protocolHash)
-    const implementation = this.implementationByHash.get(
-      resolved.protocolHash,
-    )
-    if (implementation === undefined) {
-      throw new ProtocolRuntimeError(
-        `Verified Protocol service is unavailable through Cordis: ${resolved.service}.`,
-      )
-    }
-
-    const service = this.ctx.get(resolved.service)
-    if (service === undefined) {
-      throw new ProtocolRuntimeError(
-        `Verified Protocol service is unavailable through Cordis: ${resolved.service}.`,
-      )
-    }
-    return this.bindExactServiceValue(
-      resolved.service,
-      implementation,
-      service,
-    )
-  }
-
-  private assertExactImplementation(
-    service: string,
-    expected: ExactServiceImplementation,
-  ): void {
-    const current = this.ctx.reflect._getImpl(service)
-    if (current !== expected) {
-      throw new ProtocolRuntimeError(
-        `Verified Protocol provider generation changed: ${service}.`,
-      )
-    }
-  }
-
-  private bindExactServiceValue(
-    service: string,
-    expected: ExactServiceImplementation,
-    value: unknown,
-  ): unknown {
-    const boundByRaw = new WeakMap<object, unknown>()
-    const rawByBound = new WeakMap<object, object>()
-    const assertCurrent = () =>
-      this.assertExactImplementation(service, expected)
-    const isBindable = (candidate: unknown): candidate is object | Function =>
-      (typeof candidate === 'object' && candidate !== null) ||
-      typeof candidate === 'function'
-    const unwrap = (candidate: unknown): unknown => {
-      if (!isBindable(candidate)) return candidate
-      return rawByBound.get(candidate) ?? candidate
-    }
-    const descriptorNeedsShadow = (
-      descriptor: PropertyDescriptor | undefined,
-    ): boolean => {
-      if (descriptor === undefined || descriptor.configurable !== false) {
-        return false
-      }
-      if ('value' in descriptor) {
-        return descriptor.writable === false && isBindable(descriptor.value)
-      }
-      return descriptor.get !== undefined || descriptor.set !== undefined
-    }
-    const hasFixedBindableProperty = (candidate: object): boolean =>
-      Reflect.ownKeys(candidate).some((property) =>
-        descriptorNeedsShadow(
-          Reflect.getOwnPropertyDescriptor(candidate, property),
-        ),
-      )
-    const needsShadowTarget = (candidate: object): boolean =>
-      hasFixedBindableProperty(candidate) ||
-      (!Reflect.isExtensible(candidate) &&
-        Reflect.getPrototypeOf(candidate) !== null)
-    const assertSupportedShadowShape = (candidate: object): void => {
-      for (const property of Reflect.ownKeys(candidate)) {
-        const descriptor = Reflect.getOwnPropertyDescriptor(
-          candidate,
-          property,
-        )
-        if (
-          descriptor === undefined ||
-          descriptor.configurable !== false ||
-          ('value' in descriptor
-            ? descriptor.writable !== false
-            : descriptor.set !== undefined)
-        ) {
-          throw new ProtocolRuntimeError(
-            'Unsupported exact Protocol dependency value shape for ' +
-              service +
-              ': shadow binding requires fixed own properties.',
-          )
-        }
-      }
-
-      if (
-        Reflect.isExtensible(candidate) &&
-        !Reflect.preventExtensions(candidate)
-      ) {
-        throw new ProtocolRuntimeError(
-          'Unable to seal exact Protocol dependency value: ' +
-            service +
-            '.',
-        )
-      }
-    }
-    const createShadowTarget = (candidate: object): object => {
-      if (typeof candidate === 'function') {
-        const shadow = (..._args: unknown[]) => undefined
-        Reflect.setPrototypeOf(shadow, Reflect.getPrototypeOf(candidate))
-        return shadow
-      }
-      if (Array.isArray(candidate)) return []
-      return Object.create(Reflect.getPrototypeOf(candidate)) as object
-    }
-
-    const safeIntrinsicPrototypes = new Set<object>([
-      Object.prototype,
-      Function.prototype,
-      Array.prototype,
-      Uint8Array.prototype,
-    ])
-    const bindPrototype = (prototype: object | null): object | null =>
-      prototype === null || safeIntrinsicPrototypes.has(prototype)
-        ? prototype
-        : bind(prototype) as object
-
-    const bindDescriptor = (
-      descriptor: PropertyDescriptor,
-    ): PropertyDescriptor => {
-      const boundDescriptor: PropertyDescriptor = {
-        configurable: descriptor.configurable ?? false,
-        enumerable: descriptor.enumerable ?? false,
-      }
-
-      if ('value' in descriptor) {
-        boundDescriptor.writable = descriptor.writable ?? false
-        boundDescriptor.value = bind(descriptor.value)
-      } else {
-        if (descriptor.get !== undefined) {
-          boundDescriptor.get = bind(descriptor.get) as () => unknown
-        }
-        if (descriptor.set !== undefined) {
-          boundDescriptor.set = bind(descriptor.set) as (
-            value: unknown,
-          ) => void
-        }
-      }
-      return boundDescriptor
-    }
-
-    const bind = (candidate: unknown): unknown => {
-      if (!isBindable(candidate)) return candidate
-
-      const cached = boundByRaw.get(candidate)
-      if (cached !== undefined) return cached
-
-      assertCurrent()
-      if (candidate instanceof Promise) {
-        const boundPromise = candidate.then((result) => bind(result))
-        boundByRaw.set(candidate, boundPromise)
-        return boundPromise
-      }
-
-      const shadowed = needsShadowTarget(candidate)
-      if (shadowed) assertSupportedShadowShape(candidate)
-      const proxyTarget = shadowed
-        ? createShadowTarget(candidate)
-        : candidate
-      let bound: object
-      const get = (property: PropertyKey) => {
-        assertCurrent()
-        if (shadowed) {
-          return Reflect.get(proxyTarget, property, bound)
-        }
-        const descriptor = Reflect.getOwnPropertyDescriptor(
-          candidate,
-          property,
-        )
-        if (descriptorNeedsShadow(descriptor)) {
-          throw new ProtocolRuntimeError(
-            'Exact Protocol dependency value changed to an unsupported fixed shape: ' +
-              service +
-              '.',
-          )
-        }
-        return bind(Reflect.get(candidate, property, candidate))
-      }
-      const set = (property: PropertyKey, nextValue: unknown) => {
-        assertCurrent()
-        if (shadowed) return false
-        return Reflect.set(
-          candidate,
-          property,
-          unwrap(nextValue),
-          candidate,
-        )
-      }
-      const getOwnPropertyDescriptor = (property: PropertyKey) => {
-        assertCurrent()
-        if (shadowed) {
-          return Reflect.getOwnPropertyDescriptor(proxyTarget, property)
-        }
-        const descriptor = Reflect.getOwnPropertyDescriptor(
-          candidate,
-          property,
-        )
-        if (descriptor === undefined) return undefined
-        if (descriptorNeedsShadow(descriptor)) {
-          throw new ProtocolRuntimeError(
-            'Exact Protocol dependency value changed to an unsupported fixed shape: ' +
-              service +
-              '.',
-          )
-        }
-        return bindDescriptor(descriptor)
-      }
-      const ownKeys = () => {
-        assertCurrent()
-        return Reflect.ownKeys(proxyTarget)
-      }
-      const has = (property: PropertyKey) => {
-        assertCurrent()
-        return Reflect.has(proxyTarget, property)
-      }
-      const deleteProperty = (property: PropertyKey) => {
-        assertCurrent()
-        return Reflect.deleteProperty(proxyTarget, property)
-      }
-      const isExtensible = () => {
-        assertCurrent()
-        return Reflect.isExtensible(proxyTarget)
-      }
-      const getPrototypeOf = (): object | null => {
-        assertCurrent()
-        if (shadowed) return Reflect.getPrototypeOf(proxyTarget)
-        if (!Reflect.isExtensible(candidate)) {
-          throw new ProtocolRuntimeError(
-            'Exact Protocol dependency value changed to an unsupported non-extensible shape: ' +
-              service +
-              '.',
-          )
-        }
-        return bindPrototype(Reflect.getPrototypeOf(candidate))
-      }
-      const defineProperty = () => {
-        assertCurrent()
-        return false
-      }
-      const setPrototypeOf = (prototype: object | null) => {
-        assertCurrent()
-        if (shadowed) {
-          return prototype === Reflect.getPrototypeOf(proxyTarget)
-        }
-        return unwrap(prototype) === Reflect.getPrototypeOf(candidate)
-      }
-      const preventExtensions = () => {
-        assertCurrent()
-        return shadowed
-      }
-
-      if (typeof candidate === 'function') {
-        const callable = candidate as Function
-        bound = new Proxy(proxyTarget as Function, {
-          apply: (_target, thisArg, args) => {
-            assertCurrent()
-            const result = Reflect.apply(
-              callable,
-              unwrap(thisArg),
-              args.map(unwrap),
-            )
-            return bind(result)
-          },
-          construct: (_target, args, newTarget) => {
-            assertCurrent()
-            const rawNewTarget = unwrap(newTarget)
-            if (typeof rawNewTarget !== 'function') {
-              throw new ProtocolRuntimeError(
-                'Exact Protocol constructor target is unavailable: ' +
-                  service +
-                  '.',
-              )
-            }
-            return bind(
-              Reflect.construct(
-                callable,
-                args.map(unwrap),
-                rawNewTarget,
-              ),
-            ) as object
-          },
-          get: (_target, property) => get(property),
-          set: (_target, property, nextValue) =>
-            set(property, nextValue),
-          getOwnPropertyDescriptor: (_target, property) =>
-            getOwnPropertyDescriptor(property),
-          ownKeys: () => ownKeys(),
-          has: (_target, property) => has(property),
-          deleteProperty: (_target, property) =>
-            deleteProperty(property),
-          isExtensible: () => isExtensible(),
-          getPrototypeOf: () => getPrototypeOf(),
-          defineProperty: () => defineProperty(),
-          setPrototypeOf: (_target, prototype) =>
-            setPrototypeOf(prototype),
-          preventExtensions: () => preventExtensions(),
-        })
-      } else {
-        bound = new Proxy(proxyTarget, {
-          get: (_target, property) => get(property),
-          set: (_target, property, nextValue) =>
-            set(property, nextValue),
-          getOwnPropertyDescriptor: (_target, property) =>
-            getOwnPropertyDescriptor(property),
-          ownKeys: () => ownKeys(),
-          has: (_target, property) => has(property),
-          deleteProperty: (_target, property) =>
-            deleteProperty(property),
-          isExtensible: () => isExtensible(),
-          getPrototypeOf: () => getPrototypeOf(),
-          defineProperty: () => defineProperty(),
-          setPrototypeOf: (_target, prototype) =>
-            setPrototypeOf(prototype),
-          preventExtensions: () => preventExtensions(),
-        })
-      }
-
-      boundByRaw.set(candidate, bound)
-      rawByBound.set(bound, candidate)
-
-      if (shadowed) {
-        const properties = Reflect.ownKeys(candidate)
-        if (Array.isArray(candidate)) {
-          const index = properties.indexOf('length')
-          if (index >= 0) {
-            properties.splice(index, 1)
-            properties.push('length')
-          }
-        }
-
-        for (const property of properties) {
-          const descriptor = Reflect.getOwnPropertyDescriptor(
-            candidate,
-            property,
-          )
-          if (descriptor === undefined) continue
-
-          if (
-            !Reflect.defineProperty(
-              proxyTarget,
-              property,
-              bindDescriptor(descriptor),
-            )
-          ) {
-            throw new ProtocolRuntimeError(
-              'Unable to bind exact Protocol service value: ' +
-                service +
-                '.',
-            )
-          }
-        }
-
-        const boundPrototype = bindPrototype(
-          Reflect.getPrototypeOf(candidate),
-        )
-        if (!Reflect.setPrototypeOf(proxyTarget, boundPrototype)) {
-          throw new ProtocolRuntimeError(
-            'Unable to bind exact Protocol service prototype: ' +
-              service +
-              '.',
-          )
-        }
-        Reflect.preventExtensions(proxyTarget)
-      }
-
-      return bound
-    }
-
-    assertCurrent()
-    return bind(value)
-  }
-
-  private createExactRuntimeContext(protocol: ProtocolDescriptor): Context {
-    const bindings = new Map<string, ExactServiceBinding>()
-    const meta: Record<string, unknown> = {}
-
-    for (const dependency of protocol.dependencies) {
-      const reference = `${dependency.name}@${dependency.version}`
-      const resolved = this.resolvedByHash.get(dependency.protocolHash)
-      const implementation = this.implementationByHash.get(
-        dependency.protocolHash,
-      )
-      if (
-        resolved === undefined ||
-        resolved.reference !== reference ||
-        implementation === undefined
-      ) {
-        throw new ProtocolRuntimeError(
-          `Verified Protocol dependency is unavailable: ${reference}.`,
-        )
-      }
-
-      this.assertExactImplementation(resolved.service, implementation)
-      const value = this.ctx.get(resolved.service)
-      if (value === undefined) {
-        throw new ProtocolRuntimeError(
-          `Verified Protocol dependency is unavailable: ${reference}.`,
-        )
-      }
-      bindings.set(
-        resolved.service,
-        Object.freeze({
-          implementation,
-          value: this.bindExactServiceValue(
-            resolved.service,
-            implementation,
-            value,
-          ),
-        }),
-      )
-    }
-
-    meta.get = (name: string, strict = true) => {
-      const binding = bindings.get(name)
-      if (binding === undefined) return this.ctx.get(name, strict)
-      this.assertExactImplementation(name, binding.implementation)
-      return binding.value
-    }
-
-    for (const [service, binding] of bindings) {
-      Object.defineProperty(meta, service, {
-        configurable: true,
-        enumerable: true,
-        get: () => {
-          this.assertExactImplementation(
-            service,
-            binding.implementation,
-          )
-          return binding.value
-        },
-      })
-    }
-
-    return this.ctx.extend(meta)
-  }
-
-  private assertExactProviderTree(
+  private captureExactExecutionSet(
     protocolHash: string,
     visited = new Set<string>(),
-  ): void {
-    if (visited.has(protocolHash)) return
+    captured = new Map<string, unknown>(),
+  ): ReadonlyMap<string, unknown> {
+    if (visited.has(protocolHash)) return captured
     visited.add(protocolHash)
 
     const resolved = this.resolvedByHash.get(protocolHash)
     const provider = this.providerByHash.get(protocolHash)
-    const expectedImplementation = this.implementationByHash.get(
-      protocolHash,
-    )
-    if (
-      resolved === undefined ||
-      provider === undefined ||
-      expectedImplementation === undefined
-    ) {
+    if (resolved === undefined || provider === undefined) {
       throw new ProtocolRuntimeError(
         `Verified Protocol provider is unavailable for ProtocolHash: ${protocolHash}.`,
       )
@@ -838,13 +383,14 @@ export class ProtocolResolutionService {
 
     const implementation = this.ctx.reflect._getImpl(resolved.service)
     if (
-      implementation !== expectedImplementation ||
+      implementation === undefined ||
       implementation.fiber !== provider
     ) {
       throw new ProtocolRuntimeError(
         `Verified Protocol provider is unavailable through Cordis: ${resolved.service}.`,
       )
     }
+    captured.set(resolved.service, implementation)
 
     for (const dependency of this.dependenciesByHash.get(protocolHash) ?? []) {
       const dependencyReference =
@@ -860,8 +406,30 @@ export class ProtocolResolutionService {
           `Verified Protocol dependency is unavailable: ${dependencyReference}.`,
         )
       }
-      this.assertExactProviderTree(dependency.protocolHash, visited)
+      this.captureExactExecutionSet(
+        dependency.protocolHash,
+        visited,
+        captured,
+      )
     }
+
+    return captured
+  }
+
+  private assertExactExecutionSet(
+    executionSet: ReadonlyMap<string, unknown>,
+  ): void {
+    for (const [service, implementation] of executionSet) {
+      if (this.ctx.reflect._getImpl(service) !== implementation) {
+        throw new ProtocolRuntimeError(
+          `Verified Protocol provider changed during execution: ${service}.`,
+        )
+      }
+    }
+  }
+
+  private assertExactProviderTree(protocolHash: string): void {
+    this.captureExactExecutionSet(protocolHash)
   }
 
   private async resolveShared(
@@ -1053,12 +621,7 @@ export class ProtocolResolutionService {
         protocolHash,
       )
       const plugin = validateRuntimeModule(protocol, namespace)
-      const runtimeContext =
-        protocol.dependencies.length === 0
-          ? this.ctx
-          : this.createExactRuntimeContext(protocol)
-
-      mountedFiber = runtimeContext.plugin(plugin, { protocolHash }) as Fiber &
+      mountedFiber = this.ctx.plugin(plugin, { protocolHash }) as Fiber &
         PromiseLike<Fiber>
       await mountedFiber
 
@@ -1073,13 +636,16 @@ export class ProtocolResolutionService {
         )
       }
 
+      for (const dependency of protocol.dependencies) {
+        this.assertExactProviderTree(dependency.protocolHash)
+      }
+
       const view = Object.freeze({
         protocolHash,
         reference,
         service,
       })
       this.providerByHash.set(protocolHash, mountedFiber.ctx.fiber)
-      this.implementationByHash.set(protocolHash, implementation)
       this.dependenciesByHash.set(
         protocolHash,
         Object.freeze([...protocol.dependencies]),
