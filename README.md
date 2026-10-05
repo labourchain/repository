@@ -8,7 +8,7 @@
 
 Repository 采用 Cordis 的插件运行模型。仓库能力由多个 Cordis plugins 共同形成；其中需要被链上历史长期引用的稳定语义以版本化 LabourChain Protocol 声明，并由 Cordis plugin 实现。Repository 不建立独立于 Cordis 的 Runner、Hoster 或 mega-service 体系。
 
-Requirements、Architecture 与 MVP Specs 已完成当前轮次的重新投影。当前 `main` 已包含 Bootstrap、durable Record journal、最小 Member runtime、Repo establishment、Runtime Record database、`labour.record@0.1.0`、exact ProtocolHash resolution、`asset.content@0.1.0` 与 durable Asset storage，以及 `repo.contribution@0.1.0` / Repository Contribution commit path；Core Protocols v0.1.0 已发布。下一条 MVP 主线是 #10 interrupted-contribution recovery contract，#11 contribution history 仍待后续实现。
+Requirements、Architecture 与 MVP Specs 已完成当前轮次的重新投影。当前 `main` 已包含 Bootstrap、durable Record journal、最小 Member runtime、Repo establishment、Runtime Record database、`labour.record@0.1.0`、exact ProtocolHash resolution、`asset.content@0.1.0` 与 durable Asset storage，以及 `repo.contribution@0.1.0` / Repository Contribution commit path；Core Protocols v0.1.0 已发布。下一条 MVP 主线是 #10 bounded Runtime crash recovery / reconciliation：它基于 Repo-local 可持久 staging/correlation 与既有 durable Asset/Record facts 恢复本节点未完成工作，不引入新的链上 acceptance-intent；#11 contribution history 仍待后续实现。
 
 ## 文档
 
@@ -110,4 +110,4 @@ pnpm run package:check
 
 当前 package 保持 `private: true`。
 
-Bootstrap runtime、durable Record journal、`member.identity` runtime capability、`repo.establishment@0.1.0`、Runtime Record database、`labour.record@0.1.0`、#7 exact Protocol resolution、#8 Asset identity/storage 与 #9 Repository Contribution runtime 已完成并进入 `main`。#10 interrupted-contribution recovery 当前需要先完成 recovery intent / staging-correlation contract 收口；#11 contribution history 仍未实现。默认 CLI/bin 的 concrete MVP composition 与完整 integrated lifecycle acceptance 也仍待完成。链上 Repo membership 已从 MVP 移除。
+Bootstrap runtime、durable Record journal、`member.identity` runtime capability、`repo.establishment@0.1.0`、Runtime Record database、`labour.record@0.1.0`、#7 exact Protocol resolution、#8 Asset identity/storage 与 #9 Repository Contribution runtime 已完成并进入 `main`。#10 interrupted-contribution recovery 下一步是 bounded Runtime crash/reconciliation：staging/correlation 属于 Repo-local operational state，可持久但不是 Protocol / chain fact，也不改变 D-last `COMMITTED` 边界；#11 contribution history 仍未实现。默认 CLI/bin 的 concrete MVP composition 与完整 integrated lifecycle acceptance 也仍待完成。链上 Repo membership 已从 MVP 移除。
