@@ -276,11 +276,12 @@ export class RepositoryContributionService {
         incomingAsset.protocol,
       )
     }
-    const validatedAsset = await resolver.withExactService(
+    await resolver.withExactService(
       ASSET_CONTENT_PROTOCOL_REFERENCE,
       incomingAsset.protocolHash,
-      (service) =>
-        requireAssetProtocolService(service).validateAsset(incomingAsset),
+      (service) => {
+        requireAssetProtocolService(service).validateAsset(incomingAsset)
+      },
     )
 
     const replay = await this.loadExactReplay(acceptance, protocolHash)
@@ -288,13 +289,13 @@ export class RepositoryContributionService {
       const durableAsset = await this.ctx[ASSET_STORAGE_SERVICE].get(
         replay.assetId,
       )
-      if (!isDeepStrictEqual(durableAsset, validatedAsset)) {
+      if (!isDeepStrictEqual(durableAsset, incomingAsset)) {
         throw new AssetIdentityConflict(replay.assetId)
       }
       return committed(replay)
     }
 
-    await this.ctx[ASSET_STORAGE_SERVICE].preserve(validatedAsset)
+    await this.ctx[ASSET_STORAGE_SERVICE].preserve(incomingAsset)
     await this.ctx[ASSET_STORAGE_SERVICE].get(relation.assetId)
 
     const labourProtocolHash = requireProtocolHash(request.labourRecord)
