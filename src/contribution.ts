@@ -1,8 +1,17 @@
+import { isDeepStrictEqual } from 'node:util'
 import type { Context } from '@deepseek-ai/cordis'
 import {
+  ASSET_CONTENT_PROTOCOL_REFERENCE,
+  type AssetContentProtocolService,
+} from './asset-content.ts'
+import {
   ASSET_STORAGE_SERVICE,
+  AssetIdentityConflict,
 } from './asset-storage.ts'
-import type { Asset } from './asset-identity.ts'
+import {
+  validateAssetIdentity,
+  type Asset,
+} from './asset-identity.ts'
 import {
   LABOUR_RECORD_PROTOCOL_REFERENCE,
   type LabourRecordService,
@@ -11,6 +20,7 @@ import type { CoreRecordValue } from './member.ts'
 import {
   PROTOCOL_RESOLUTION_SERVICE,
   ProtocolBuildConflictError,
+  ProtocolReferenceMismatchError,
 } from './protocol-resolution.ts'
 import {
   REPO_CONTRIBUTION_PROTOCOL_REFERENCE,
@@ -130,6 +140,22 @@ function requireSelectedAssetId(value: unknown): string | undefined {
   return typeof id === 'string' ? id : undefined
 }
 
+function requireAssetProtocolService(
+  value: unknown,
+): AssetContentProtocolService {
+  if (
+    typeof value !== 'object' ||
+    value === null ||
+    typeof (value as Partial<AssetContentProtocolService>).validateAsset !==
+      'function'
+  ) {
+    throw new RepositoryContributionProtocolError(
+      'Resolved asset.content service does not expose semantic validation.',
+    )
+  }
+  return value as AssetContentProtocolService
+}
+
 function requireLabourRecordService(
   value: unknown,
 ): LabourRecordService {
@@ -243,13 +269,32 @@ export class RepositoryContributionService {
       )
     }
 
+    const incomingAsset = validateAssetIdentity(request.asset)
+    if (incomingAsset.protocol !== ASSET_CONTENT_PROTOCOL_REFERENCE) {
+      throw new ProtocolReferenceMismatchError(
+        ASSET_CONTENT_PROTOCOL_REFERENCE,
+        incomingAsset.protocol,
+      )
+    }
+    const validatedAsset = await resolver.withExactService(
+      ASSET_CONTENT_PROTOCOL_REFERENCE,
+      incomingAsset.protocolHash,
+      (service) =>
+        requireAssetProtocolService(service).validateAsset(incomingAsset),
+    )
+
     const replay = await this.loadExactReplay(acceptance, protocolHash)
     if (replay !== undefined) {
-      await this.ctx[ASSET_STORAGE_SERVICE].get(replay.assetId)
+      const durableAsset = await this.ctx[ASSET_STORAGE_SERVICE].get(
+        replay.assetId,
+      )
+      if (!isDeepStrictEqual(durableAsset, validatedAsset)) {
+        throw new AssetIdentityConflict(replay.assetId)
+      }
       return committed(replay)
     }
 
-    await this.ctx[ASSET_STORAGE_SERVICE].preserve(request.asset)
+    await this.ctx[ASSET_STORAGE_SERVICE].preserve(validatedAsset)
     await this.ctx[ASSET_STORAGE_SERVICE].get(relation.assetId)
 
     const labourProtocolHash = requireProtocolHash(request.labourRecord)
