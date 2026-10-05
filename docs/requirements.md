@@ -235,6 +235,12 @@ Block packing 与 peer validation 后续实现时必须满足：
 
 Member / Repo identity、Repo creation provenance 以及已接受 contribution 所需的 Repository 状态，在正常应用重启后必须能够恢复。Repo contributor 分组、标签和筛选条件属于产品软件数据，不构成链上恢复前提。
 
+Repository 可以为正常运行和恢复持久保存 Repo-local operational/business state，例如未完成 request/submission 的 staging、处理阶段、retry/correlation、待投递状态以及人工维护的组织管理数据。它们是节点本地软件状态，可以跨重启存在，但不是 Protocol fact、Repository acceptance truth 或 chain consensus。具体数据库、collection、document identity 和 schema 不由产品要求固定。
+
+对于 interrupted contribution，Runtime 可以用本地 staging/correlation 保存足以继续本节点原始操作的上下文，并在重启后与 durable Asset/Record facts 对账。只要最终 Repo acceptance Record `D` 尚未 durable accept，这些 staged state 都不能使 contribution 成为 Repository committed；`D` 已 durable 后，staging 清理或调用方回复失败也不能抹去已经成立的 committed。Runtime-local document identity 只用于本地存储/关联，不成为 canonical `ContributionId`。
+
+Block/message 的本地打包、broadcast pending/retry 属于后续 chain/network delivery，不是 contribution acceptance 或 #10 recovery。网络投递失败不能把已经成立的 Repository `COMMITTED` 重新解释为未接受。
+
 应用重启或运行时故障不得把尚未成功进入 Repository committed state 的 contribution 错误地暴露为已接受状态，也不得丢失已经 Repository committed、正在等待链收录的事实。
 
 Repository Runtime 必须维护经过适用 Protocol 验证的 Record 关系、顺序/依赖和待打包状态。新的 Repository 领域 Record 在进入正常 accepted/pending-chain 路径时，应在同一 Runtime 写入边界内完成关系验证并可靠持久接收；这些关系状态用于后续验证、追溯和 Block packing，但不因此成为链确证来源。
