@@ -100,9 +100,15 @@ Contribution history 属于事实的 view / projection。它可以由插件提�
 
 Core 当前同时明确：Block Chain 表达 Record 被这条链收录和确证的顺序；Runtime arrival / queue order 不具有链确证语义。因此 Repository 不把“本地持久接收 Record”和“Record 已被 Block 确认”混成一个 canonical 状态。
 
-Repository node 需要区分三类运行能力：
+Repository node 需要区分不同权威层级的运行能力：
 
 ```text
+Repo-local Runtime operational state
+    -> staging / request-submission correlation / processing phase / retry
+    -> organization-management data / local pending work / query support
+    -> 可以按产品需要持久化并跨重启恢复
+    -> 只描述本节点正在做什么，不是 Protocol fact 或 chain consensus
+
 Durable Record ingress / journal
     -> 持久保存 exact accepted Records
     -> 在 Block packing 之前跨重启保留 pending-chain Records
@@ -113,16 +119,21 @@ Runtime Record database
     -> 提供同一 Repository Runtime 的 serialized Record ingress boundary
     -> 复用 journal 的 exact Record durability
     -> #9 的 concrete relation 保留在 signed labour / acceptance facts 中
-    -> 仅在实际需要时维护可重建的窄索引，不预设通用关系 schema、查询语言或状态容器
-    -> 不是 canonical chain state
+    -> 仅在实际需要时维护可重建的窄索引，不预设通用业务状态容器
+    -> 不是 generic operational database，也不是 canonical chain state
 
 Chain-state / Block-confirmation access
     -> 查询哪些 Records 已经被有效 Block 收录
     -> 提供链确证顺序与 block reference
     -> 用于状态升级、对账和 projection rebuild
+
+Network delivery state
+    -> Block/message broadcast、delivery retry 与 pending delivery
+    -> 只描述技术投递进度
+    -> 不改变 Repository COMMITTED，也不构成 Contribution recovery
 ```
 
-三者可以由同一个未来 node/runtime 实现，也可以作为不同 Cordis providers 组合；Architecture 不锁定 package、数据库或网络实现。当前 Runtime Record database 维持最小共享写入边界；#9 已经给出第一个 concrete contribution consumer，而它的关系由 signed facts 自身表达，因此不新增 generic relation state。若实现确实需要，可增加由 durable facts 重建的窄索引，但不预设通用 DAG schema、SQL 模型、namespace state framework 或 packer API。
+这些能力可以由同一个未来 node/runtime 实现，也可以作为不同 Cordis providers 组合；Architecture 不锁定 package、MongoDB/PostgreSQL/filesystem 等数据库或网络实现。Runtime Record database 保持围绕 Record ingress 的窄边界；#10 若需要 durable staging/correlation，可以使用独立的普通 Runtime state provider，而不必把每个本地业务/流程状态提升为 Core Record 或 Protocol fact。#9 的关系由 signed facts 自身表达，因此仍不新增 generic relation state。若实现确实需要，可增加由 durable facts 重建的窄索引，但不预设通用 DAG schema、SQL 模型、namespace state framework 或 packer API。
 
 Repository 领域插件消费这些运行能力，但不通过 `repo.records[]` 或第二套链来替代 Core Block / canonical-chain 语义。
 
@@ -181,9 +192,13 @@ AssetIdentityConflict，并且绝不覆盖既有内容。
 Asset 的 durable existence 本身不是 Repository acceptance。Repo→Asset
 关系与 Asset 浏览列表来自 accepted contribution facts/state，而不是 Asset
 storage 内的 canonical registry。#9 Contribution 负责协调 durable Records、
-durable Asset 与 confirmations；两类 provider 不需要被强行塞进一个分布式
-transaction。Record 已持久但 Asset 尚未完成时，contribution 仍不能进入
-COMMITTED，恢复流程可以继续完成 Asset 持久化。
+durable Asset 与 acceptance fact；不同 provider 不需要被强行塞进一个分布式
+transaction。当前正常 #9 顺序明确先持久化 selected Asset，再持久化 labour
+Record，最后 durable accept Repo acceptance Record `D`。因此正常中断 seam
+是“只有 A”、“A + L”或“A + L + D = COMMITTED”；“L 已由本次 contribution
+持久化但 selected A 尚未完成”不是正常 #9 写序产生的状态。#10 只需用
+Repo-local staging/correlation 与这些 durable facts 做幂等对账，不需要为此
+发明新的链上 recovery fact。
 
 缺失 Asset reference 在 storage 层只表现为 explicit not-found。
 `labour.record@0.1.0` 的创建仍不要求本地 resolution；某个 Contribution
@@ -509,6 +524,8 @@ future chain-state / accepted Block evidence 表明相关 Records 已进入一�
 本地把 Records 放入 candidate Block、生成 Block 文件或完成打包动作本身都不
 构成这个状态跃迁。
 
+Block/message broadcast 与 delivery retry 也属于独立的 network delivery concern。一个已经 Repository `COMMITTED` 的 contribution 不会因为后续 Block 暂时无法广播而退回 pre-commit recovery；本地待广播 Block 可以保持 pending 并重试，而不把网络投递状态写回 Contribution 语义。
+
 ## 数据与投影
 
 Repository 不以领域 service-owned state 复制链确证事实。
@@ -528,9 +545,11 @@ Repository 不以领域 service-owned state 复制链确证事实。
    - 可选窄索引 (Repo, labourRecordId, assetId) -> acceptance RecordId 必须可重建
    - 不自行赋予 Block confirmation，也不是 canonical-chain 数据库
 
-3. staging
-   - #10 可用于 interrupted pre-commit recovery 的相关状态
-   - 不属于 #9 COMMITTED predicate，也不能创造 acceptance
+3. Repo-local operational state / staging
+   - #10 可用于 interrupted pre-commit recovery 的 request/submission、phase、retry/correlation 等状态
+   - 可以按节点可靠性需要持久化，但只具有本地 operational authority
+   - 不属于 #9 COMMITTED predicate，不是 Protocol fact，也不能创造 acceptance
+   - provider-native document/UUID/ObjectId 只作为本地存储 identity，不成为 ContributionId
 
 4. index / cache / projection
    - 查询与展示加速数据

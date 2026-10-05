@@ -183,6 +183,12 @@ Its chain status is separately `pending-chain` until accepted-chain evidence sho
 Repository Runtime may persist several kinds of state with different roles:
 
 ```text
+Repo-local operational state
+    -> staging / request-submission correlation / processing phase / retry
+    -> organization-management data and other node-local business state
+    -> may be durable when normal operation/recovery requires it
+    -> not a Protocol fact, Repository acceptance truth, or chain consensus
+
 accepted Record journal
     -> durable exact accepted Records until safe chain handoff/inclusion
     -> not itself Block confirmation
@@ -190,19 +196,17 @@ accepted Record journal
 Runtime Record database
     -> serialized Repository Record ingress boundary
     -> delegates exact Record durability to the journal
+    -> remains specialized around Record ingress rather than becoming the generic operational database
     -> #9 relationship/dependency facts remain explicit in signed Records
     -> a narrow rebuildable (Repo, labourRecordId, assetId) -> acceptance RecordId index is optional, not acceptance truth
     -> not itself canonical-chain or Block confirmation
-
-staging
-    -> in-flight processing/recovery before Repository commit
 
 index/cache/projection
     -> derived query/display acceleration
     -> rebuildable from durable facts, concrete Protocol-owned relation state when present, and other durable sources
 ```
 
-The Runtime Record database is not a query cache. #9 does not require a generic relation store: the acceptance Record's `labourRecordId` plus the labour Record's `references[] / assets[]` are the concrete signed relationship facts. A narrow derived index may accelerate lookup but must be rebuildable. Persistence alone does not turn Runtime database, staging, index/cache/projection, or journal state into chain-confirmed facts.
+The Runtime Record database is not a query cache or the only place where durable Repo-local state may live. #10 may use a separate replaceable Runtime state provider for staging/correlation without converting that state into Core Records. #9 does not require a generic relation store: the acceptance Record's `labourRecordId` plus the labour Record's `references[] / assets[]` are the concrete signed relationship facts. A narrow derived index may accelerate lookup but must be rebuildable. Persistence alone does not turn operational state, Runtime database, index/cache/projection, or journal state into chain-confirmed facts.
 
 The current #9 path does not require a Patch fact. Patch remains an extension hook for a future Protocol that actually defines mutable state evolution. Runtime Snapshot remains only a materialized cache/projection derived from durable facts under exact Protocol semantics.
 
@@ -210,9 +214,11 @@ The current #9 path does not require a Patch fact. Patch remains an extension ho
 
 Runtime restart or crash must not expose pre-commit work as accepted or lose already Repository-committed work.
 
-Recovery must reconcile exact Record-journal state, Asset durability and staging so repeated recovery does not create duplicate Record acceptance, singular confirmations or Asset finalization.
+#10 recovery is a bounded node-runtime reliability concern. Repo-local staging/correlation may durably preserve enough of this node's request/business operation to resume after restart, and recovery reconciles that operational state with exact Record-journal and Asset durability. The staging state is not consensus, does not replace the Repo acceptance Record, and does not require a canonical ContributionId; provider-native document identity remains local.
 
-Block-confirmation status is reconciled separately from chain state when that capability is available.
+The normal #9 durable order remains selected Asset -> labour Record -> Repo acceptance Record `D` last. Repeated recovery must reuse those immutable facts idempotently, preserve same-key conflict rules, and treat durable `D` as the final Repository acceptance marker even if staging cleanup or the original response failed.
+
+Block-confirmation and Block/message broadcast retry are reconciled separately from chain/network state. Network delivery failure does not reopen Contribution acceptance.
 
 ### Product boundaries remain external
 
