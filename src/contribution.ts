@@ -239,9 +239,79 @@ export class RepositoryContributionService {
     this.ctx = ctx
   }
 
+  /**
+   * Validate one complete request before durable local staging.
+   *
+   * This performs the same semantic checks as commit(), including exact replay
+   * integrity, but never publishes a missing A, L or D.
+   */
+  async validateForStaging(
+    request: ContributionRequest,
+  ): Promise<RepositoryContributionCommit | undefined> {
+    const validated = await this.validateRequest(request)
+    return validated.replay === undefined
+      ? undefined
+      : committed(validated.replay)
+  }
+
   async commit(
     request: ContributionRequest,
   ): Promise<RepositoryContributionCommit> {
+    const validated = await this.validateRequest(request)
+    const {
+      acceptance,
+      relation,
+      incomingAsset,
+      protocolHash,
+      replay,
+    } = validated
+
+    if (replay !== undefined) return committed(replay)
+
+    await this.ctx[ASSET_STORAGE_SERVICE].preserve(incomingAsset)
+    await this.ctx[ASSET_STORAGE_SERVICE].get(relation.assetId)
+
+    const resolver = this.ctx[PROTOCOL_RESOLUTION_SERVICE]
+    const labourProtocolHash = requireProtocolHash(request.labourRecord)
+    await resolver.withExactService(
+      LABOUR_RECORD_PROTOCOL_REFERENCE,
+      labourProtocolHash,
+      async (service) => {
+        const labourProtocol = requireLabourRecordService(service)
+        await labourProtocol.acceptLabourRecord(request.labourRecord)
+      },
+    )
+
+    await resolver.withExactService(
+      REPO_CONTRIBUTION_PROTOCOL_REFERENCE,
+      protocolHash,
+      async (service) => {
+        const protocol = requireProtocolService(service)
+        await this.ctx[RUNTIME_RECORD_DATABASE_SERVICE][
+          RUNTIME_RECORD_DATABASE_INTERNAL_RUN_EXCLUSIVE
+        ](async (database) => {
+          await this.assertNoLogicalKeyConflict(
+            database,
+            protocol,
+            acceptance,
+          )
+          await database.accept(acceptance)
+        })
+      },
+    )
+
+    return committed(relation)
+  }
+
+  private async validateRequest(
+    request: ContributionRequest,
+  ): Promise<{
+    readonly acceptance: ValidatedRepoContributionRecord
+    readonly relation: RepoContributionView
+    readonly incomingAsset: Asset
+    readonly protocolHash: string
+    readonly replay: RepoContributionView | undefined
+  }> {
     const resolver = this.ctx[PROTOCOL_RESOLUTION_SERVICE]
     const protocolHash = requireProtocolHash(request.acceptanceRecord)
     const validated = await resolver.withExactService(
@@ -292,41 +362,15 @@ export class RepositoryContributionService {
       if (!isDeepStrictEqual(durableAsset, incomingAsset)) {
         throw new AssetIdentityConflict(replay.assetId)
       }
-      return committed(replay)
     }
 
-    await this.ctx[ASSET_STORAGE_SERVICE].preserve(incomingAsset)
-    await this.ctx[ASSET_STORAGE_SERVICE].get(relation.assetId)
-
-    const labourProtocolHash = requireProtocolHash(request.labourRecord)
-    await resolver.withExactService(
-      LABOUR_RECORD_PROTOCOL_REFERENCE,
-      labourProtocolHash,
-      async (service) => {
-        const labourProtocol = requireLabourRecordService(service)
-        await labourProtocol.acceptLabourRecord(request.labourRecord)
-      },
-    )
-
-    await resolver.withExactService(
-      REPO_CONTRIBUTION_PROTOCOL_REFERENCE,
+    return {
+      acceptance,
+      relation,
+      incomingAsset,
       protocolHash,
-      async (service) => {
-        const protocol = requireProtocolService(service)
-        await this.ctx[RUNTIME_RECORD_DATABASE_SERVICE][
-          RUNTIME_RECORD_DATABASE_INTERNAL_RUN_EXCLUSIVE
-        ](async (database) => {
-          await this.assertNoLogicalKeyConflict(
-            database,
-            protocol,
-            acceptance,
-          )
-          await database.accept(acceptance)
-        })
-      },
-    )
-
-    return committed(relation)
+      replay,
+    }
   }
 
   private async loadExactReplay(
