@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -29,6 +29,7 @@ import {
   REPO_ESTABLISHMENT_PROTOCOL_REFERENCE,
   REPO_ESTABLISHMENT_PROTOCOL_SERVICE,
   AssetNotFoundError,
+  ContributionStagingCorruptionError,
   ContributionStagingStorageError,
   InvalidAsset,
   ProtocolBuildConflictError,
@@ -1565,6 +1566,113 @@ test('distinct same-key conflict remains staged and cannot replace durable D', a
     )
     await assertRecordMissing(node, candidate.id)
     assert.equal((await acceptedContributions(node)).length, 1)
+    await node.dispose()
+  })
+})
+
+
+test('corrupt staged request fails before recovery mutates A, L or D', async () => {
+  await withRoot(async (root) => {
+    const node = await createNode(root)
+    await establishBase(node)
+
+    const selected = createAsset(node, 'corrupt staged recovery')
+    const labour = labourRecord(
+      'labour-corrupt-staged-recovery',
+      [],
+      [selected.id],
+    )
+    const acceptance = acceptanceRecord(
+      'acceptance-corrupt-staged-recovery',
+      REPO_KEY,
+      labour.id,
+      selected.id,
+    )
+    const request = {
+      asset: selected,
+      labourRecord: labour,
+      acceptanceRecord: acceptance,
+    }
+
+    assert.equal(
+      await node.context[
+        REPOSITORY_CONTRIBUTION_SERVICE
+      ].validateForStaging(request),
+      undefined,
+    )
+    await node.context[CONTRIBUTION_STAGING_SERVICE].stage(request)
+
+    const stagingDirectory = join(root, 'staging')
+    const stagedFile = (await readdir(stagingDirectory)).find((name) =>
+      name.endsWith('.contribution.json'),
+    )
+    assert.ok(stagedFile)
+    await writeFile(
+      join(stagingDirectory, stagedFile),
+      '{"asset":',
+    )
+
+    await assert.rejects(
+      node.context[
+        REPOSITORY_CONTRIBUTION_RECOVERY_SERVICE
+      ].recoverPending(),
+      ContributionStagingCorruptionError,
+    )
+    assert.equal(
+      await node.context[ASSET_STORAGE_SERVICE].has(selected.id),
+      false,
+    )
+    await assertRecordMissing(node, labour.id)
+    await assertRecordMissing(node, acceptance.id)
+    await node.dispose()
+  })
+})
+
+test('concurrent exact recovery submit converges and clears staging', async () => {
+  await withRoot(async (root) => {
+    const node = await createNode(root)
+    await establishBase(node)
+
+    const selected = createAsset(node, 'concurrent recovery exact')
+    const labour = labourRecord(
+      'labour-concurrent-recovery-exact',
+      [],
+      [selected.id],
+    )
+    const acceptance = acceptanceRecord(
+      'acceptance-concurrent-recovery-exact',
+      REPO_KEY,
+      labour.id,
+      selected.id,
+    )
+    const request = {
+      asset: selected,
+      labourRecord: labour,
+      acceptanceRecord: acceptance,
+    }
+
+    const [first, second] = await Promise.all([
+      node.context[
+        REPOSITORY_CONTRIBUTION_RECOVERY_SERVICE
+      ].submit(request),
+      node.context[
+        REPOSITORY_CONTRIBUTION_RECOVERY_SERVICE
+      ].submit(request),
+    ])
+
+    assert.equal(first.status, 'COMMITTED')
+    assert.deepEqual(second, first)
+    assert.deepEqual(await stagedAcceptanceIds(node), [])
+    assert.equal((await acceptedContributions(node)).length, 1)
+    assert.deepEqual(
+      await node.context[ASSET_STORAGE_SERVICE].get(selected.id),
+      selected,
+    )
+    assert.deepEqual(await node.context.recordJournal.get(labour.id), labour)
+    assert.deepEqual(
+      await node.context.recordJournal.get(acceptance.id),
+      acceptance,
+    )
     await node.dispose()
   })
 })
