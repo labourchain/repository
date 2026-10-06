@@ -460,565 +460,122 @@ test('adding a newer version does not change an existing exact resolution', asyn
   await node.dispose()
 })
 
-test('cached exact resolution rejects a replacement Cordis provider', async () => {
-  const alpha = descriptor('test.alpha', '1.0.0')
-  const protocolService = 'protocol:test.alpha@1.0.0'
-  const runtimeService = 'runtime.helper'
-  const values = new Map([
-    [HASH_A, { protocol: alpha, artifact: artifact() }],
-  ])
-  const helperPlugin = {
-    name: 'runtime.helper',
-    provide: runtimeService,
-    inject: [],
-    apply(ctx: Context) {
-      ctx.provide(runtimeService, { helper: true })
-    },
-  }
-  const foreignPlugin = {
-    name: 'runtime.foreign-alpha',
-    provide: protocolService,
-    inject: [],
-    apply(ctx: Context) {
-      ctx.provide(protocolService, { protocol: 'foreign' })
-    },
-  }
-
-  const node = await createRepositoryNode({
-    plugins: [
-      {
-        plugin: protocolResolutionPlugin,
-        config: {
-          host: host(values, async (protocol) =>
-            pluginNamespace(protocol, [runtimeService]),
-          ),
-        },
-      },
-      { plugin: coreProtocolProvider },
-    ],
+function deferred() {
+  let resolve!: () => void
+  const promise = new Promise<void>((done) => {
+    resolve = done
   })
-  const helperFiber = node.context.plugin(helperPlugin)
-  await helperFiber
+  return { promise, resolve }
+}
 
-  const service = node.context[PROTOCOL_RESOLUTION_SERVICE]
-  await service.resolve('test.alpha@1.0.0', HASH_A)
+test('cached exact resolution rejects a foreign provider before a new operation', async () => {
+  const alpha = descriptor('test.alpha', '1.0.0')
+  const serviceName = 'protocol:test.alpha@1.0.0'
+  const node = await nodeWith(
+    new Map([[HASH_A, { protocol: alpha, artifact: artifact() }]]),
+  )
+  const resolver = node.context[PROTOCOL_RESOLUTION_SERVICE]
 
-  await helperFiber.dispose()
-  assert.equal(node.context.get(protocolService), undefined)
+  await resolver.resolve('test.alpha@1.0.0', HASH_A)
+  const exact = node.context.reflect._getImpl(serviceName)
+  assert.ok(exact)
+  await exact.fiber.dispose()
+
+  const foreign = node.context.plugin({
+    name: 'runtime.foreign-alpha',
+    provide: serviceName,
+    inject: [],
+    apply(ctx: Context) {
+      ctx.provide(serviceName, { protocol: 'foreign' })
+    },
+  })
+  await foreign
+
+  let callbackRan = false
   await assert.rejects(
-    service.withExactService(
+    resolver.withExactService(
       'test.alpha@1.0.0',
       HASH_A,
-      () => assert.fail('missing exact provider must not execute'),
+      () => {
+        callbackRan = true
+      },
     ),
     ProtocolRuntimeError,
   )
-
-  const foreignFiber = node.context.plugin(foreignPlugin)
-  await foreignFiber
-  assert.deepEqual(node.context.get(protocolService), {
-    protocol: 'foreign',
-  })
-
-  await assert.rejects(
-    service.resolve('test.alpha@1.0.0', HASH_A),
-    ProtocolRuntimeError,
-  )
-
+  assert.equal(callbackRan, false)
   await node.dispose()
 })
 
-test('exact service use rejects a foreign replacement of a Protocol dependency', async () => {
+test('exact service use rejects a foreign Protocol dependency before operation', async () => {
   const dependency = descriptor('test.dep', '1.0.0')
   const consumer = descriptor('test.consumer', '1.0.0', [
     { name: 'test.dep', version: '1.0.0', protocolHash: HASH_A },
   ])
   const dependencyService = 'protocol:test.dep@1.0.0'
-  const consumerService = 'protocol:test.consumer@1.0.0'
-  const values = new Map([
-    [HASH_A, { protocol: dependency, artifact: artifact() }],
-    [HASH_B, { protocol: consumer, artifact: artifact() }],
-  ])
-  let exactInvocations = 0
-  let foreignInvocations = 0
-
-  const node = await createRepositoryNode({
-    plugins: [
-      {
-        plugin: protocolResolutionPlugin,
-        config: {
-          host: host(values, async (protocol) => {
-            if (protocol.name === 'test.dep') {
-              return {
-                plugin: {
-                  name: 'test.dep@1.0.0',
-                  provide: dependencyService,
-                  inject: [],
-                  apply(ctx: Context) {
-                    ctx.provide(dependencyService, {
-                      touch() {
-                        exactInvocations += 1
-                      },
-                    })
-                  },
-                },
-              }
-            }
-
-            return {
-              plugin: {
-                name: 'test.consumer@1.0.0',
-                provide: consumerService,
-                inject: [dependencyService],
-                apply(ctx: Context) {
-                  ctx.provide(consumerService, {
-                    touchDependency() {
-                      const service = ctx.get(dependencyService) as
-                        | { touch(): void }
-                        | undefined
-                      service?.touch()
-                    },
-                  })
-                },
-              },
-            }
-          }),
-        },
-      },
-      { plugin: coreProtocolProvider },
-    ],
-  })
-
-  const resolver = node.context[PROTOCOL_RESOLUTION_SERVICE]
-  await resolver.withExactService(
-    'test.consumer@1.0.0',
-    HASH_B,
-    (value) => {
-      ;(value as { touchDependency(): void }).touchDependency()
-    },
+  const node = await nodeWith(
+    new Map([
+      [HASH_A, { protocol: dependency, artifact: artifact() }],
+      [HASH_B, { protocol: consumer, artifact: artifact() }],
+    ]),
   )
-  assert.equal(exactInvocations, 1)
+  const resolver = node.context[PROTOCOL_RESOLUTION_SERVICE]
 
+  await resolver.resolve('test.consumer@1.0.0', HASH_B)
   const exactDependency = node.context.reflect._getImpl(dependencyService)
   assert.ok(exactDependency)
   await exactDependency.fiber.dispose()
 
-  const foreignFiber = node.context.plugin({
+  const foreign = node.context.plugin({
     name: 'runtime.foreign-dependency',
     provide: dependencyService,
     inject: [],
     apply(ctx: Context) {
-      ctx.provide(dependencyService, {
-        touch() {
-          foreignInvocations += 1
-        },
-      })
+      ctx.provide(dependencyService, { protocol: 'foreign' })
     },
   })
-  await foreignFiber
+  await foreign
 
+  let callbackRan = false
   await assert.rejects(
     resolver.withExactService(
       'test.consumer@1.0.0',
       HASH_B,
-      (value) => {
-        ;(value as { touchDependency(): void }).touchDependency()
+      () => {
+        callbackRan = true
       },
     ),
     ProtocolRuntimeError,
   )
-  assert.equal(foreignInvocations, 0)
-
+  assert.equal(callbackRan, false)
   await node.dispose()
 })
 
-test('exact dependency reachable values remain bound to the captured generation', async () => {
-  const dependency = descriptor('test.dep', '1.0.0')
-  const consumer = descriptor('test.consumer', '1.0.0', [
-    { name: 'test.dep', version: '1.0.0', protocolHash: HASH_A },
-  ])
-  const dependencyService = 'protocol:test.dep@1.0.0'
-  const consumerService = 'protocol:test.consumer@1.0.0'
-  const values = new Map([
-    [HASH_A, { protocol: dependency, artifact: artifact() }],
-    [HASH_B, { protocol: consumer, artifact: artifact() }],
-  ])
-  let exactInvocations = 0
-  let foreignInvocations = 0
-  let getterReads = 0
-  let blockedInvocations = 0
-  let entered!: () => void
-  const enteredGate = new Promise<void>((resolve) => {
-    entered = resolve
-  })
-  let resume!: () => void
-  const resumeGate = new Promise<void>((resolve) => {
-    resume = resolve
-  })
-  const rejection = new Error('dependency rejection')
-
-  interface NestedService {
-    count: number
-    self?: NestedService
-    touch(): void
-    increment(): number
-  }
-
-  interface CallableService {
-    (): number
-    nested: NestedService
-  }
-
-  interface DependencyService {
-    nested: NestedService
-    alias: NestedService
-    frozen: Readonly<{ nested: NestedService }>
-    readonly fromGetter: NestedService
-    createNested(): NestedService
-    createCallable(): CallableService
-    createNestedAsync(): Promise<NestedService>
-    createCallableAsync(): Promise<CallableService>
-    rejectAsync(): Promise<never>
-  }
-
-  interface StableResult {
-    readonly sharedIdentity: boolean
-    readonly cycleIdentity: boolean
-    readonly returnedIdentity: boolean
-    readonly asyncIdentity: boolean
-    readonly callableIdentity: boolean
-    readonly callableNestedIdentity: boolean
-    readonly frozenIdentity: boolean
-    readonly firstCount: number
-    readonly secondCount: number
-    readonly rejectionPreserved: boolean
-  }
-
-  interface ConsumerService {
-    verifyStable(): Promise<StableResult>
-    useCapturedAfterGate(): Promise<void>
-  }
-
-  const nested: NestedService = {
-    count: 0,
-    touch() {
-      exactInvocations += 1
-    },
-    increment() {
-      this.count += 1
-      return this.count
-    },
-  }
-  nested.self = nested
-
-  const callable = Object.assign(
-    () => {
-      exactInvocations += 1
-      return nested.increment()
-    },
-    { nested },
-  )
-  const frozen = Object.freeze({ nested })
-
-  const node = await createRepositoryNode({
-    plugins: [
-      {
-        plugin: protocolResolutionPlugin,
-        config: {
-          host: host(values, async (protocol) => {
-            if (protocol.name === 'test.dep') {
-              return {
-                plugin: {
-                  name: 'test.dep@1.0.0',
-                  provide: dependencyService,
-                  inject: [],
-                  apply(ctx: Context) {
-                    ctx.provide(dependencyService, {
-                      nested,
-                      alias: nested,
-                      frozen,
-                      get fromGetter() {
-                        getterReads += 1
-                        return nested
-                      },
-                      createNested() {
-                        return nested
-                      },
-                      createCallable() {
-                        return callable
-                      },
-                      async createNestedAsync() {
-                        return nested
-                      },
-                      async createCallableAsync() {
-                        return callable
-                      },
-                      rejectAsync() {
-                        return Promise.reject(rejection)
-                      },
-                    })
-                  },
-                },
-              }
-            }
-
-            return {
-              plugin: {
-                name: 'test.consumer@1.0.0',
-                provide: consumerService,
-                inject: [dependencyService],
-                apply(ctx: Context) {
-                  const exactDependency = () =>
-                    ctx.get(dependencyService) as DependencyService
-
-                  ctx.provide(consumerService, {
-                    async verifyStable() {
-                      const service = exactDependency()
-                      const nestedHandle = service.nested
-                      const returnedCallable = service.createCallable()
-                      const asyncNested =
-                        await service.createNestedAsync()
-                      const asyncCallable =
-                        await service.createCallableAsync()
-                      let rejectionPreserved = false
-
-                      try {
-                        await service.rejectAsync()
-                      } catch (error) {
-                        rejectionPreserved = error === rejection
-                      }
-
-                      return {
-                        sharedIdentity:
-                          service.alias === nestedHandle &&
-                          service.fromGetter === nestedHandle,
-                        cycleIdentity:
-                          nestedHandle.self === nestedHandle,
-                        returnedIdentity:
-                          service.createNested() === nestedHandle,
-                        asyncIdentity: asyncNested === nestedHandle,
-                        callableIdentity:
-                          returnedCallable === asyncCallable,
-                        callableNestedIdentity:
-                          returnedCallable.nested === nestedHandle,
-                        frozenIdentity:
-                          service.frozen.nested === nestedHandle,
-                        firstCount: nestedHandle.increment(),
-                        secondCount: returnedCallable(),
-                        rejectionPreserved,
-                      }
-                    },
-
-                    async useCapturedAfterGate() {
-                      const service = exactDependency()
-                      const nestedHandle = service.nested
-                      const nestedMethod = nestedHandle.touch
-                      const returnedNested = service.createNested()
-                      const returnedCallable = service.createCallable()
-                      const asyncNested =
-                        await service.createNestedAsync()
-                      const asyncCallable =
-                        await service.createCallableAsync()
-                      const getterNested = service.fromGetter
-                      const frozenNested = service.frozen.nested
-
-                      const invocations = [
-                        () => nestedHandle.touch(),
-                        () => nestedMethod(),
-                        () => returnedNested.touch(),
-                        () => returnedCallable(),
-                        () => asyncNested.touch(),
-                        () => asyncCallable(),
-                        () => getterNested.touch(),
-                        () => frozenNested.touch(),
-                        () => service.fromGetter.touch(),
-                      ]
-
-                      entered()
-                      await resumeGate
-
-                      for (const invoke of invocations) {
-                        try {
-                          invoke()
-                        } catch (error) {
-                          if (!(error instanceof ProtocolRuntimeError)) {
-                            throw error
-                          }
-                          blockedInvocations += 1
-                        }
-                      }
-                    },
-                  })
-                },
-              },
-            }
-          }),
-        },
-      },
-      { plugin: coreProtocolProvider },
-    ],
-  })
-
-  const resolver = node.context[PROTOCOL_RESOLUTION_SERVICE]
-  const stable = await resolver.withExactService(
-    'test.consumer@1.0.0',
-    HASH_B,
-    (value) => (value as ConsumerService).verifyStable(),
-  )
-
-  assert.equal(stable.sharedIdentity, true)
-  assert.equal(stable.cycleIdentity, true)
-  assert.equal(stable.returnedIdentity, true)
-  assert.equal(stable.asyncIdentity, true)
-  assert.equal(stable.callableIdentity, true)
-  assert.equal(stable.callableNestedIdentity, true)
-  assert.equal(stable.frozenIdentity, true)
-  assert.equal(stable.firstCount, 1)
-  assert.equal(stable.secondCount, 2)
-  assert.equal(stable.rejectionPreserved, true)
-  assert.equal(exactInvocations, 1)
-  assert.equal(getterReads, 1)
-
-  const operation = resolver.withExactService(
-    'test.consumer@1.0.0',
-    HASH_B,
-    (value) => (value as ConsumerService).useCapturedAfterGate(),
-  )
-  await enteredGate
-  assert.equal(getterReads, 2)
-
-  const exactDependency = node.context.reflect._getImpl(dependencyService)
-  assert.ok(exactDependency)
-  await exactDependency.fiber.dispose()
-
-  const foreignFiber = node.context.plugin({
-    name: 'runtime.foreign-reachable-dependency',
-    provide: dependencyService,
-    inject: [],
-    apply(ctx: Context) {
-      ctx.provide(dependencyService, {
-        nested: {
-          touch() {
-            foreignInvocations += 1
-          },
-        },
-      })
-    },
-  })
-  await foreignFiber
-
-  resume()
-
-  await assert.rejects(operation, ProtocolRuntimeError)
-  assert.equal(blockedInvocations, 9)
-  assert.equal(exactInvocations, 1)
-  assert.equal(foreignInvocations, 0)
-  assert.equal(getterReads, 2)
-
-  await node.dispose()
-})
-
-test('exact service reflection remains bound to the captured generation', async () => {
+test('passes provider-owned class service values through without mutation', async () => {
   const alpha = descriptor('test.alpha', '1.0.0')
   const serviceName = 'protocol:test.alpha@1.0.0'
   const values = new Map([
     [HASH_A, { protocol: alpha, artifact: artifact() }],
   ])
-  let exactInvocations = 0
-  let foreignInvocations = 0
-  let getterInvocations = 0
-  let setterInvocations = 0
-
-  interface NestedService {
-    touch(): void
-  }
-
-  interface ReflectedService {
-    mutable: number
-    removable: number
-    ownMethod(): void
-    nested: NestedService
-    frozen: Readonly<{
-      touch(): void
-      nested: NestedService
-    }>
-    accessor: number
-    prototypeTouch(): void
-  }
-
-  interface ReflectedPrototype {
-    prototypeTouch(): void
-    prototypeNested: NestedService
-  }
-
-  const nested: NestedService = {
-    touch() {
-      exactInvocations += 1
-    },
-  }
-  const prototypeNested: NestedService = {
-    touch() {
-      exactInvocations += 1
-    },
-  }
 
   class ExactService {
-    mutable = 1
-    removable = 1
+    nested = { value: 2 }
 
-    prototypeTouch() {
-      exactInvocations += 1
+    get doubled() {
+      return this.nested.value * 2
+    }
+
+    touch() {
+      return this.nested.value
     }
   }
 
-  Object.defineProperty(ExactService.prototype, 'prototypeNested', {
-    configurable: true,
-    enumerable: true,
-    writable: true,
-    value: prototypeNested,
-  })
-
-  const exactService = new ExactService() as ExactService &
-    Omit<ReflectedService, 'mutable' | 'prototypeTouch'>
-  Object.defineProperties(exactService, {
-    ownMethod: {
-      configurable: true,
-      enumerable: true,
-      writable: true,
-      value() {
-        exactInvocations += 1
-      },
-    },
-    nested: {
-      configurable: true,
-      enumerable: true,
-      writable: true,
-      value: nested,
-    },
-    frozen: {
-      configurable: true,
-      enumerable: true,
-      writable: true,
-      value: Object.freeze({
-        touch() {
-          exactInvocations += 1
-        },
-        nested,
-      }),
-    },
-    accessor: {
-      configurable: true,
-      enumerable: false,
-      get() {
-        getterInvocations += 1
-        return exactService.mutable
-      },
-      set(value: number) {
-        setterInvocations += 1
-        exactService.mutable = value
-      },
-    },
-  })
+  const exactService = new ExactService()
+  const prototype = Object.getPrototypeOf(exactService)
+  const accessor = Object.getOwnPropertyDescriptor(
+    prototype,
+    'doubled',
+  )
+  assert.equal(Object.isExtensible(exactService), true)
 
   const node = await createRepositoryNode({
     plugins: [
@@ -1040,622 +597,333 @@ test('exact service reflection remains bound to the captured generation', async 
       { plugin: coreProtocolProvider },
     ],
   })
-  const resolver = node.context[PROTOCOL_RESOLUTION_SERVICE]
 
-  let boundService!: ReflectedService
-  let descriptorMethod!: () => void
-  let reflectDescriptorMethod!: () => void
-  let descriptorNested!: NestedService
-  let descriptorGetter!: () => number
-  let descriptorSetter!: (value: number) => void
-  let prototypeMethod!: () => void
-  let reflectPrototypeMethod!: () => void
-  let prototypeNestedHandle!: NestedService
-  let frozenMethod!: () => void
-  let frozenNested!: NestedService
-
-  await resolver.withExactService(
+  await node.context[PROTOCOL_RESOLUTION_SERVICE].withExactService(
     'test.alpha@1.0.0',
     HASH_A,
     (value) => {
-      boundService = value as ReflectedService
-      assert.equal(Object.isExtensible(boundService), true)
-      assert.equal(Reflect.has(boundService, 'removable'), true)
+      const service = value as ExactService
+      assert.equal(service, exactService)
+      assert.equal(Object.isExtensible(service), true)
+      assert.equal(Object.getPrototypeOf(service), prototype)
       assert.equal(
-        Reflect.ownKeys(boundService).includes('removable'),
-        true,
+        Object.getOwnPropertyDescriptor(
+          Object.getPrototypeOf(service),
+          'doubled',
+        )?.get,
+        accessor?.get,
       )
-      assert.equal(
-        Reflect.deleteProperty(boundService, 'removable'),
-        true,
-      )
-      assert.equal(Reflect.has(boundService, 'removable'), false)
-      assert.equal(Reflect.has(exactService, 'removable'), false)
-
-      const descriptor = Object.getOwnPropertyDescriptor(
-        boundService,
-        'ownMethod',
-      )
-      const reflectedDescriptor = Reflect.getOwnPropertyDescriptor(
-        boundService,
-        'ownMethod',
-      )
-      assert.ok(descriptor)
-      assert.ok(reflectedDescriptor)
-      assert.equal(descriptor.configurable, true)
-      assert.equal(descriptor.enumerable, true)
-      assert.equal(descriptor.writable, true)
-      descriptorMethod = descriptor.value as () => void
-      reflectDescriptorMethod =
-        reflectedDescriptor.value as () => void
-      assert.equal(descriptorMethod, reflectDescriptorMethod)
-      assert.equal(descriptorMethod, boundService.ownMethod)
-
-      const nestedDescriptor = Object.getOwnPropertyDescriptor(
-        boundService,
-        'nested',
-      )
-      assert.ok(nestedDescriptor)
-      descriptorNested = nestedDescriptor.value as NestedService
-      assert.equal(descriptorNested, boundService.nested)
-      assert.equal(
-        Object.getPrototypeOf(descriptorNested),
-        Object.prototype,
-      )
-
-      const accessorDescriptor = Object.getOwnPropertyDescriptor(
-        boundService,
-        'accessor',
-      )
-      assert.ok(accessorDescriptor)
-      assert.equal(accessorDescriptor.configurable, true)
-      assert.equal(accessorDescriptor.enumerable, false)
-      assert.ok(accessorDescriptor.get)
-      assert.ok(accessorDescriptor.set)
-      descriptorGetter = accessorDescriptor.get as () => number
-      descriptorSetter =
-        accessorDescriptor.set as (value: number) => void
-      assert.equal(descriptorGetter.call(boundService), 1)
-      descriptorSetter.call(boundService, 7)
-      assert.equal(boundService.mutable, 7)
-
-      const prototype = Object.getPrototypeOf(
-        boundService,
-      ) as ReflectedPrototype
-      const reflectedPrototype = Reflect.getPrototypeOf(
-        boundService,
-      ) as ReflectedPrototype
-      assert.equal(prototype, reflectedPrototype)
-      assert.notEqual(prototype, ExactService.prototype)
-      assert.equal(Object.getPrototypeOf(boundService), prototype)
-      assert.equal(Object.getPrototypeOf(prototype), Object.prototype)
-      assert.equal(Reflect.setPrototypeOf(boundService, prototype), true)
-      assert.equal(Reflect.setPrototypeOf(boundService, {}), false)
-      assert.equal(Object.getPrototypeOf(boundService), prototype)
-      assert.equal(
-        Object.getPrototypeOf(exactService),
-        ExactService.prototype,
-      )
-      prototypeMethod = prototype.prototypeTouch
-      reflectPrototypeMethod = reflectedPrototype.prototypeTouch
-      assert.equal(prototypeMethod, reflectPrototypeMethod)
-      prototypeNestedHandle = prototype.prototypeNested
-      assert.equal(
-        prototypeNestedHandle,
-        reflectedPrototype.prototypeNested,
-      )
-
-      const frozen = boundService.frozen
-      assert.equal(Object.isExtensible(frozen), false)
-      assert.equal(Object.getPrototypeOf(frozen), Object.prototype)
-      assert.deepEqual(Object.keys(frozen), ['touch', 'nested'])
-      const frozenDescriptor = Object.getOwnPropertyDescriptor(
-        frozen,
-        'touch',
-      )
-      const frozenNestedDescriptor =
-        Object.getOwnPropertyDescriptor(frozen, 'nested')
-      assert.ok(frozenDescriptor)
-      assert.ok(frozenNestedDescriptor)
-      assert.equal(frozenDescriptor.configurable, false)
-      assert.equal(frozenDescriptor.enumerable, true)
-      assert.equal(frozenDescriptor.writable, false)
-      frozenMethod = frozenDescriptor.value as () => void
-      frozenNested = frozenNestedDescriptor.value as NestedService
-      assert.equal(frozenNested, boundService.nested)
-
-      descriptorMethod()
-      descriptorNested.touch()
-      prototypeMethod()
-      prototypeNestedHandle.touch()
-      frozenMethod()
-      frozenNested.touch()
+      assert.equal(service.nested, exactService.nested)
+      assert.equal(service.touch(), 2)
+      assert.equal(service.doubled, 4)
     },
   )
 
-  assert.equal(exactInvocations, 6)
-  assert.equal(getterInvocations, 1)
-  assert.equal(setterInvocations, 1)
+  assert.equal(Object.isExtensible(exactService), true)
+  assert.equal(Object.getPrototypeOf(exactService), prototype)
+  await node.dispose()
+})
+
+test('passes ordinary function service values through without virtualization', async () => {
+  const alpha = descriptor('test.alpha', '1.0.0')
+  const serviceName = 'protocol:test.alpha@1.0.0'
+  const values = new Map([
+    [HASH_A, { protocol: alpha, artifact: artifact() }],
+  ])
+  const callable = Object.assign(
+    (value: number) => value + 1,
+    { nested: { exact: true } },
+  )
+
+  const node = await createRepositoryNode({
+    plugins: [
+      {
+        plugin: protocolResolutionPlugin,
+        config: {
+          host: host(values, async () => ({
+            plugin: {
+              name: 'test.alpha@1.0.0',
+              provide: serviceName,
+              inject: [],
+              apply(ctx: Context) {
+                ctx.provide(serviceName, callable)
+              },
+            },
+          })),
+        },
+      },
+      { plugin: coreProtocolProvider },
+    ],
+  })
+
+  await node.context[PROTOCOL_RESOLUTION_SERVICE].withExactService(
+    'test.alpha@1.0.0',
+    HASH_A,
+    (value) => {
+      assert.equal(value, callable)
+      const service = value as typeof callable
+      assert.equal(service(2), 3)
+      assert.equal(service.nested, callable.nested)
+    },
+  )
+
+  await node.dispose()
+})
+
+test('stable async exact operation succeeds', async () => {
+  const alpha = descriptor('test.alpha', '1.0.0')
+  const node = await nodeWith(
+    new Map([[HASH_A, { protocol: alpha, artifact: artifact() }]]),
+  )
+
+  const result = await node.context[
+    PROTOCOL_RESOLUTION_SERVICE
+  ].withExactService(
+    'test.alpha@1.0.0',
+    HASH_A,
+    async (value) => {
+      await Promise.resolve()
+      return (value as { protocol: string }).protocol
+    },
+  )
+
+  assert.equal(result, 'test.alpha')
+  await node.dispose()
+})
+
+test('root provider loss during an operation fails the result closed', async () => {
+  const alpha = descriptor('test.alpha', '1.0.0')
+  const serviceName = 'protocol:test.alpha@1.0.0'
+  const node = await nodeWith(
+    new Map([[HASH_A, { protocol: alpha, artifact: artifact() }]]),
+  )
+  const resolver = node.context[PROTOCOL_RESOLUTION_SERVICE]
+  const entered = deferred()
+  const resume = deferred()
+
+  const operation = resolver.withExactService(
+    'test.alpha@1.0.0',
+    HASH_A,
+    async () => {
+      entered.resolve()
+      await resume.promise
+      return 'completed'
+    },
+  )
+  await entered.promise
 
   const exact = node.context.reflect._getImpl(serviceName)
   assert.ok(exact)
   await exact.fiber.dispose()
+  resume.resolve()
 
-  const foreignFiber = node.context.plugin({
-    name: 'runtime.foreign-reflection-provider',
+  await assert.rejects(operation, ProtocolRuntimeError)
+  await node.dispose()
+})
+
+test('root provider replacement during an operation fails the result closed', async () => {
+  const alpha = descriptor('test.alpha', '1.0.0')
+  const serviceName = 'protocol:test.alpha@1.0.0'
+  const node = await nodeWith(
+    new Map([[HASH_A, { protocol: alpha, artifact: artifact() }]]),
+  )
+  const resolver = node.context[PROTOCOL_RESOLUTION_SERVICE]
+  const entered = deferred()
+  const resume = deferred()
+
+  const operation = resolver.withExactService(
+    'test.alpha@1.0.0',
+    HASH_A,
+    async () => {
+      entered.resolve()
+      await resume.promise
+      return 'completed'
+    },
+  )
+  await entered.promise
+
+  const exact = node.context.reflect._getImpl(serviceName)
+  assert.ok(exact)
+  await exact.fiber.dispose()
+  const foreign = node.context.plugin({
+    name: 'runtime.foreign-alpha-mid-operation',
     provide: serviceName,
     inject: [],
     apply(ctx: Context) {
-      ctx.provide(serviceName, {
-        ownMethod() {
-          foreignInvocations += 1
-        },
-        nested: {
-          touch() {
-            foreignInvocations += 1
-          },
-        },
-      })
+      ctx.provide(serviceName, { protocol: 'foreign' })
     },
   })
-  await foreignFiber
+  await foreign
+  resume.resolve()
 
-  const staleInvocations = [
-    () => descriptorMethod(),
-    () => reflectDescriptorMethod(),
-    () => descriptorNested.touch(),
-    () => descriptorGetter.call(boundService),
-    () => descriptorSetter.call(boundService, 8),
-    () => prototypeMethod(),
-    () => reflectPrototypeMethod(),
-    () => prototypeNestedHandle.touch(),
-    () => frozenMethod(),
-    () => frozenNested.touch(),
-  ]
-
-  for (const invoke of staleInvocations) {
-    assert.throws(invoke, ProtocolRuntimeError)
-  }
-  assert.throws(
-    () => Object.getOwnPropertyDescriptor(boundService, 'ownMethod'),
-    ProtocolRuntimeError,
-  )
-  assert.throws(
-    () => Reflect.getOwnPropertyDescriptor(boundService, 'ownMethod'),
-    ProtocolRuntimeError,
-  )
-  assert.throws(
-    () => Object.getPrototypeOf(boundService),
-    ProtocolRuntimeError,
-  )
-  assert.throws(
-    () => Reflect.getPrototypeOf(boundService),
-    ProtocolRuntimeError,
-  )
-  assert.throws(
-    () => Reflect.ownKeys(boundService),
-    ProtocolRuntimeError,
-  )
-  assert.throws(
-    () => Reflect.has(boundService, 'ownMethod'),
-    ProtocolRuntimeError,
-  )
-  assert.throws(
-    () => Reflect.deleteProperty(boundService, 'missing'),
-    ProtocolRuntimeError,
-  )
-  assert.throws(
-    () => Reflect.isExtensible(boundService),
-    ProtocolRuntimeError,
-  )
-
-  assert.equal(exactInvocations, 6)
-  assert.equal(getterInvocations, 1)
-  assert.equal(setterInvocations, 1)
-  assert.equal(foreignInvocations, 0)
+  await assert.rejects(operation, ProtocolRuntimeError)
   await node.dispose()
 })
 
-test('exact service binding seals fixed extensible capability namespaces', async () => {
-  const alpha = descriptor('test.alpha', '1.0.0')
-  const serviceName = 'protocol:test.alpha@1.0.0'
-  const values = new Map([
-    [HASH_A, { protocol: alpha, artifact: artifact() }],
+test('dependency loss during an operation fails the result closed', async () => {
+  const dependency = descriptor('test.dep', '1.0.0')
+  const consumer = descriptor('test.consumer', '1.0.0', [
+    { name: 'test.dep', version: '1.0.0', protocolHash: HASH_A },
   ])
-  let exactInvocations = 0
-
-  const touch = () => {
-    exactInvocations += 1
-  }
-  const namespace = {}
-  Object.defineProperty(namespace, 'touch', {
-    configurable: false,
-    enumerable: true,
-    get() {
-      return touch
-    },
-  })
-  assert.equal(Object.isExtensible(namespace), true)
-
-  const node = await createRepositoryNode({
-    plugins: [
-      {
-        plugin: protocolResolutionPlugin,
-        config: {
-          host: host(values, async () => ({
-            plugin: {
-              name: 'test.alpha@1.0.0',
-              provide: serviceName,
-              inject: [],
-              apply(ctx: Context) {
-                ctx.provide(serviceName, namespace)
-              },
-            },
-          })),
-        },
-      },
-      { plugin: coreProtocolProvider },
-    ],
-  })
+  const dependencyService = 'protocol:test.dep@1.0.0'
+  const node = await nodeWith(
+    new Map([
+      [HASH_A, { protocol: dependency, artifact: artifact() }],
+      [HASH_B, { protocol: consumer, artifact: artifact() }],
+    ]),
+  )
   const resolver = node.context[PROTOCOL_RESOLUTION_SERVICE]
+  const entered = deferred()
+  const resume = deferred()
 
-  let capturedMethod!: () => void
-  let capturedGetter!: () => unknown
-  let boundService!: { readonly touch: () => void }
-
-  await resolver.withExactService(
-    'test.alpha@1.0.0',
-    HASH_A,
-    (value) => {
-      boundService = value as { readonly touch: () => void }
-      assert.equal(Object.isExtensible(boundService), false)
-      assert.deepEqual(Object.keys(boundService), ['touch'])
-
-      const descriptor = Object.getOwnPropertyDescriptor(
-        boundService,
-        'touch',
-      )
-      assert.ok(descriptor)
-      assert.equal(descriptor.configurable, false)
-      assert.equal(descriptor.enumerable, true)
-      assert.ok(descriptor.get)
-      assert.equal(descriptor.set, undefined)
-
-      capturedGetter = descriptor.get
-      capturedMethod = descriptor.get.call(boundService) as () => void
-      assert.equal(capturedMethod, boundService.touch)
-      capturedMethod()
-
-      assert.equal(
-        Reflect.set(boundService, 'added', 1),
-        false,
-      )
-      assert.equal('added' in boundService, false)
-      assert.deepEqual(Object.keys(boundService), ['touch'])
+  const operation = resolver.withExactService(
+    'test.consumer@1.0.0',
+    HASH_B,
+    async () => {
+      entered.resolve()
+      await resume.promise
+      return 'completed'
     },
   )
+  await entered.promise
 
-  assert.equal(exactInvocations, 1)
-  assert.equal(Object.isExtensible(namespace), false)
-  assert.deepEqual(Object.keys(namespace), ['touch'])
-  assert.equal(Reflect.has(namespace, 'added'), false)
+  const exactDependency = node.context.reflect._getImpl(dependencyService)
+  assert.ok(exactDependency)
+  await exactDependency.fiber.dispose()
+  resume.resolve()
+
+  await assert.rejects(operation, ProtocolRuntimeError)
+  await node.dispose()
+})
+
+test('dependency replacement during an operation fails the result closed', async () => {
+  const dependency = descriptor('test.dep', '1.0.0')
+  const consumer = descriptor('test.consumer', '1.0.0', [
+    { name: 'test.dep', version: '1.0.0', protocolHash: HASH_A },
+  ])
+  const dependencyService = 'protocol:test.dep@1.0.0'
+  const node = await nodeWith(
+    new Map([
+      [HASH_A, { protocol: dependency, artifact: artifact() }],
+      [HASH_B, { protocol: consumer, artifact: artifact() }],
+    ]),
+  )
+  const resolver = node.context[PROTOCOL_RESOLUTION_SERVICE]
+  const entered = deferred()
+  const resume = deferred()
+
+  const operation = resolver.withExactService(
+    'test.consumer@1.0.0',
+    HASH_B,
+    async () => {
+      entered.resolve()
+      await resume.promise
+      return 'completed'
+    },
+  )
+  await entered.promise
+
+  const exactDependency = node.context.reflect._getImpl(dependencyService)
+  assert.ok(exactDependency)
+  await exactDependency.fiber.dispose()
+  const foreign = node.context.plugin({
+    name: 'runtime.foreign-dependency-mid-operation',
+    provide: dependencyService,
+    inject: [],
+    apply(ctx: Context) {
+      ctx.provide(dependencyService, { protocol: 'foreign' })
+    },
+  })
+  await foreign
+  resume.resolve()
+
+  await assert.rejects(operation, ProtocolRuntimeError)
+  await node.dispose()
+})
+
+test('same Fiber restart invalidates only operations spanning the restart', async () => {
+  const alpha = descriptor('test.alpha', '1.0.0')
+  const serviceName = 'protocol:test.alpha@1.0.0'
+  const node = await nodeWith(
+    new Map([[HASH_A, { protocol: alpha, artifact: artifact() }]]),
+  )
+  const resolver = node.context[PROTOCOL_RESOLUTION_SERVICE]
+  const entered = deferred()
+  const resume = deferred()
+
+  await resolver.resolve('test.alpha@1.0.0', HASH_A)
+  const before = node.context.reflect._getImpl(serviceName)
+  assert.ok(before)
+  const provider = before.fiber
+
+  const operation = resolver.withExactService(
+    'test.alpha@1.0.0',
+    HASH_A,
+    async () => {
+      entered.resolve()
+      await resume.promise
+      return 'completed'
+    },
+  )
+  await entered.promise
+
+  await provider.restart()
+  const after = node.context.reflect._getImpl(serviceName)
+  assert.ok(after)
+  assert.equal(after.fiber, provider)
+  assert.notEqual(after, before)
+
+  resume.resolve()
+  await assert.rejects(operation, ProtocolRuntimeError)
+
+  assert.equal(
+    await resolver.withExactService(
+      'test.alpha@1.0.0',
+      HASH_A,
+      (value) => (value as { protocol: string }).protocol,
+    ),
+    'test.alpha',
+  )
+
+  await node.dispose()
+})
+
+test('callback error plus execution-set change prefers fail-closed runtime error', async () => {
+  const alpha = descriptor('test.alpha', '1.0.0')
+  const serviceName = 'protocol:test.alpha@1.0.0'
+  const node = await nodeWith(
+    new Map([[HASH_A, { protocol: alpha, artifact: artifact() }]]),
+  )
+  const resolver = node.context[PROTOCOL_RESOLUTION_SERVICE]
+  const entered = deferred()
+  const resume = deferred()
+  const callbackError = new Error('callback failure')
+
+  const operation = resolver.withExactService(
+    'test.alpha@1.0.0',
+    HASH_A,
+    async () => {
+      entered.resolve()
+      await resume.promise
+      throw callbackError
+    },
+  )
+  await entered.promise
 
   const exact = node.context.reflect._getImpl(serviceName)
   assert.ok(exact)
   await exact.fiber.dispose()
-
-  assert.throws(() => capturedMethod(), ProtocolRuntimeError)
-  assert.throws(
-    () => capturedGetter.call(boundService),
-    ProtocolRuntimeError,
-  )
-  assert.equal(exactInvocations, 1)
-  await node.dispose()
-})
-
-test('exact service binding fails closed for mixed mutable shadow shapes', async () => {
-  const alpha = descriptor('test.alpha', '1.0.0')
-  const serviceName = 'protocol:test.alpha@1.0.0'
-  const values = new Map([
-    [HASH_A, { protocol: alpha, artifact: artifact() }],
-  ])
-  let exactInvocations = 0
-  let callbackRan = false
-
-  const mixed = { mutable: 1 } as {
-    mutable: number
-    fixed?: () => void
-  }
-  Object.defineProperty(mixed, 'fixed', {
-    configurable: false,
-    enumerable: true,
-    writable: false,
-    value() {
-      exactInvocations += 1
-    },
-  })
-
-  const node = await createRepositoryNode({
-    plugins: [
-      {
-        plugin: protocolResolutionPlugin,
-        config: {
-          host: host(values, async () => ({
-            plugin: {
-              name: 'test.alpha@1.0.0',
-              provide: serviceName,
-              inject: [],
-              apply(ctx: Context) {
-                ctx.provide(serviceName, mixed)
-              },
-            },
-          })),
-        },
-      },
-      { plugin: coreProtocolProvider },
-    ],
-  })
-  const resolver = node.context[PROTOCOL_RESOLUTION_SERVICE]
+  resume.resolve()
 
   await assert.rejects(
-    resolver.withExactService(
-      'test.alpha@1.0.0',
-      HASH_A,
-      () => {
-        callbackRan = true
-      },
-    ),
+    operation,
     (error: unknown) =>
-      error instanceof ProtocolRuntimeError &&
-      error.message.includes('shadow binding requires fixed own properties'),
+      error instanceof ProtocolRuntimeError && error !== callbackError,
   )
-
-  assert.equal(callbackRan, false)
-  assert.equal(exactInvocations, 0)
-  assert.equal(Object.isExtensible(mixed), true)
-  assert.equal(mixed.mutable, 1)
   await node.dispose()
 })
 
-test('exact async execution cannot switch to a foreign dependency mid-callback', async () => {
-  const dependency = descriptor('test.dep', '1.0.0')
-  const consumer = descriptor('test.consumer', '1.0.0', [
-    { name: 'test.dep', version: '1.0.0', protocolHash: HASH_A },
-  ])
-  const dependencyService = 'protocol:test.dep@1.0.0'
-  const consumerService = 'protocol:test.consumer@1.0.0'
-  const values = new Map([
-    [HASH_A, { protocol: dependency, artifact: artifact() }],
-    [HASH_B, { protocol: consumer, artifact: artifact() }],
-  ])
-  let foreignInvocations = 0
-  let entered!: () => void
-  const enteredGate = new Promise<void>((resolve) => {
-    entered = resolve
-  })
-  let resume!: () => void
-  const resumeGate = new Promise<void>((resolve) => {
-    resume = resolve
-  })
-
-  const node = await createRepositoryNode({
-    plugins: [
-      {
-        plugin: protocolResolutionPlugin,
-        config: {
-          host: host(values, async (protocol) => {
-            if (protocol.name === 'test.dep') {
-              return {
-                plugin: {
-                  name: 'test.dep@1.0.0',
-                  provide: dependencyService,
-                  inject: [],
-                  apply(ctx: Context) {
-                    ctx.provide(dependencyService, { touch() {} })
-                  },
-                },
-              }
-            }
-
-            return {
-              plugin: {
-                name: 'test.consumer@1.0.0',
-                provide: consumerService,
-                inject: [dependencyService],
-                apply(ctx: Context) {
-                  ctx.provide(consumerService, {
-                    async touchDependencyAfterGate() {
-                      entered()
-                      await resumeGate
-                      const service = ctx.get(dependencyService) as
-                        | { touch(): void }
-                        | undefined
-                      service?.touch()
-                    },
-                  })
-                },
-              },
-            }
-          }),
-        },
-      },
-      { plugin: coreProtocolProvider },
-    ],
-  })
-
-  const resolver = node.context[PROTOCOL_RESOLUTION_SERVICE]
-  await resolver.resolve('test.consumer@1.0.0', HASH_B)
-
-  const operation = resolver.withExactService(
-    'test.consumer@1.0.0',
-    HASH_B,
-    async (value) => {
-      await (
-        value as { touchDependencyAfterGate(): Promise<void> }
-      ).touchDependencyAfterGate()
-    },
-  )
-  await enteredGate
-
-  const exactDependency = node.context.reflect._getImpl(dependencyService)
-  assert.ok(exactDependency)
-  await exactDependency.fiber.dispose()
-
-  const foreignFiber = node.context.plugin({
-    name: 'runtime.foreign-dependency-mid-callback',
-    provide: dependencyService,
-    inject: [],
-    apply(ctx: Context) {
-      ctx.provide(dependencyService, {
-        touch() {
-          foreignInvocations += 1
-        },
-      })
-    },
-  })
-  await foreignFiber
-
-  resume()
-
-  await assert.rejects(operation, ProtocolRuntimeError)
-  assert.equal(foreignInvocations, 0)
-  await node.dispose()
-})
-
-test('exact async execution fails on dependency loss before invocation', async () => {
-  const dependency = descriptor('test.dep', '1.0.0')
-  const consumer = descriptor('test.consumer', '1.0.0', [
-    { name: 'test.dep', version: '1.0.0', protocolHash: HASH_A },
-  ])
-  const dependencyService = 'protocol:test.dep@1.0.0'
-  const consumerService = 'protocol:test.consumer@1.0.0'
-  const values = new Map([
-    [HASH_A, { protocol: dependency, artifact: artifact() }],
-    [HASH_B, { protocol: consumer, artifact: artifact() }],
-  ])
-  let dependencyInvocations = 0
-  let entered!: () => void
-  const enteredGate = new Promise<void>((resolve) => {
-    entered = resolve
-  })
-  let resume!: () => void
-  const resumeGate = new Promise<void>((resolve) => {
-    resume = resolve
-  })
-
-  const node = await createRepositoryNode({
-    plugins: [
-      {
-        plugin: protocolResolutionPlugin,
-        config: {
-          host: host(values, async (protocol) => {
-            if (protocol.name === 'test.dep') {
-              return {
-                plugin: {
-                  name: 'test.dep@1.0.0',
-                  provide: dependencyService,
-                  inject: [],
-                  apply(ctx: Context) {
-                    ctx.provide(dependencyService, {
-                      touch() {
-                        dependencyInvocations += 1
-                      },
-                    })
-                  },
-                },
-              }
-            }
-
-            return {
-              plugin: {
-                name: 'test.consumer@1.0.0',
-                provide: consumerService,
-                inject: [dependencyService],
-                apply(ctx: Context) {
-                  ctx.provide(consumerService, {
-                    async touchDependencyAfterGate() {
-                      entered()
-                      await resumeGate
-                      const service = ctx.get(dependencyService) as
-                        | { touch(): void }
-                        | undefined
-                      service?.touch()
-                    },
-                  })
-                },
-              },
-            }
-          }),
-        },
-      },
-      { plugin: coreProtocolProvider },
-    ],
-  })
-
-  const resolver = node.context[PROTOCOL_RESOLUTION_SERVICE]
-  await resolver.resolve('test.consumer@1.0.0', HASH_B)
-  const operation = resolver.withExactService(
-    'test.consumer@1.0.0',
-    HASH_B,
-    async (value) => {
-      await (
-        value as { touchDependencyAfterGate(): Promise<void> }
-      ).touchDependencyAfterGate()
-    },
-  )
-  await enteredGate
-
-  const exactDependency = node.context.reflect._getImpl(dependencyService)
-  assert.ok(exactDependency)
-  await exactDependency.fiber.dispose()
-  resume()
-
-  await assert.rejects(operation, ProtocolRuntimeError)
-  assert.equal(dependencyInvocations, 0)
-  await node.dispose()
-})
-
-test('same Fiber restart is a new exact provider generation', async () => {
-  const dependency = descriptor('test.dep', '1.0.0')
-  const consumer = descriptor('test.consumer', '1.0.0', [
-    { name: 'test.dep', version: '1.0.0', protocolHash: HASH_A },
-  ])
-  const dependencyService = 'protocol:test.dep@1.0.0'
-  const values = new Map([
-    [HASH_A, { protocol: dependency, artifact: artifact() }],
-    [HASH_B, { protocol: consumer, artifact: artifact() }],
-  ])
-  const node = await nodeWith(values)
-  const resolver = node.context[PROTOCOL_RESOLUTION_SERVICE]
-
-  await resolver.resolve('test.consumer@1.0.0', HASH_B)
-  const exactDependency = node.context.reflect._getImpl(dependencyService)
-  assert.ok(exactDependency)
-  const originalFiber = exactDependency.fiber
-
-  await originalFiber.restart()
-
-  const restartedDependency = node.context.reflect._getImpl(dependencyService)
-  assert.ok(restartedDependency)
-  assert.equal(restartedDependency.fiber, originalFiber)
-  assert.notEqual(restartedDependency, exactDependency)
-
-  let callbackRan = false
-  await assert.rejects(
-    resolver.withExactService(
-      'test.consumer@1.0.0',
-      HASH_B,
-      () => {
-        callbackRan = true
-      },
-    ),
-    ProtocolRuntimeError,
-  )
-  assert.equal(callbackRan, false)
-  await node.dispose()
-})
-
-test('stable exact callbacks remain concurrent and preserve callback errors', async () => {
+test('stable exact callbacks remain independent and preserve callback errors', async () => {
   const alpha = descriptor('test.alpha', '1.0.0')
   const serviceName = 'protocol:test.alpha@1.0.0'
   const values = new Map([
@@ -1690,17 +958,30 @@ test('stable exact callbacks remain concurrent and preserve callback errors', as
   })
   const resolver = node.context[PROTOCOL_RESOLUTION_SERVICE]
 
-  const results = await Promise.all([
-    resolver.withExactService('test.alpha@1.0.0', HASH_A, (value) =>
-      (value as { touch(): number }).touch(),
-    ),
-    resolver.withExactService('test.alpha@1.0.0', HASH_A, (value) =>
-      (value as { touch(): number }).touch(),
-    ),
-  ])
-  assert.deepEqual(results, [1, 2])
+  const firstEntered = deferred()
+  const releaseFirst = deferred()
+  const first = resolver.withExactService(
+    'test.alpha@1.0.0',
+    HASH_A,
+    async (value) => {
+      firstEntered.resolve()
+      await releaseFirst.promise
+      return (value as { touch(): number }).touch()
+    },
+  )
+  await firstEntered.promise
 
-  const callbackError = new Error('callback failure')
+  const second = await resolver.withExactService(
+    'test.alpha@1.0.0',
+    HASH_A,
+    (value) => (value as { touch(): number }).touch(),
+  )
+  assert.equal(second, 1)
+
+  releaseFirst.resolve()
+  assert.equal(await first, 2)
+
+  const callbackError = new Error('stable callback failure')
   await assert.rejects(
     resolver.withExactService(
       'test.alpha@1.0.0',
@@ -1712,14 +993,6 @@ test('stable exact callbacks remain concurrent and preserve callback errors', as
     (error: unknown) => error === callbackError,
   )
 
-  assert.equal(
-    await resolver.withExactService(
-      'test.alpha@1.0.0',
-      HASH_A,
-      (value) => (value as { touch(): number }).touch(),
-    ),
-    3,
-  )
   await node.dispose()
 })
 
