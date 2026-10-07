@@ -9,6 +9,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
+import { createAssetIdentity } from '../src/asset-identity.ts'
 import {
   ASSET_CONTENT_PROTOCOL_REFERENCE,
   CONTRIBUTION_STAGING_SERVICE,
@@ -16,7 +17,6 @@ import {
   ContributionStagingCorruptionError,
   ContributionStagingStorageError,
   contributionStagingPlugin,
-  createAssetIdentity,
   createRepositoryNode,
   type ContributionRequest,
   type CoreRecordValue,
