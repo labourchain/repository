@@ -556,14 +556,19 @@ test(
           protocolHash: labour.protocolHash,
           createdBy: memberIdentity,
           createdAt: '2026-10-04T01:01:00.000Z',
-          data: {
+          data: Object.assign(Object.create(null), {
             content: '实现 Repository Contribution 最小闭环',
             duration: 1,
             references: [upstream.id],
             assets: [selected.id],
-          },
+          }),
         },
       )
+      assert.equal(Object.getPrototypeOf(labourRecord.data), null)
+      const durableLabourRecord = JSON.parse(
+        JSON.stringify(labourRecord),
+      ) as CoreRecordValue
+
       const acceptance = signedRecord(
         recordService,
         repoKeys.privateKey,
@@ -641,7 +646,7 @@ test(
       )
       assert.deepEqual(
         await first.context.recordJournal.get(labourRecord.id),
-        labourRecord,
+        durableLabourRecord,
       )
       assert.deepEqual(
         await first.context.recordJournal.get(acceptance.id),
@@ -679,7 +684,7 @@ test(
 
       assert.deepEqual(
         await second.context.recordJournal.get(labourRecord.id),
-        labourRecord,
+        durableLabourRecord,
       )
       assert.deepEqual(
         await second.context.recordJournal.get(acceptance.id),

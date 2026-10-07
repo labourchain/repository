@@ -15,6 +15,7 @@ import {
   CONTRIBUTION_STAGING_SERVICE,
   ContributionStagingConflictError,
   ContributionStagingCorruptionError,
+  ContributionStagingInputError,
   ContributionStagingStorageError,
   contributionStagingPlugin,
   createRepositoryNode,
@@ -131,6 +132,63 @@ test('durably stages one exact request and survives restart', async (t) => {
   assert.deepEqual(loaded.labourRecord, expected.labourRecord)
   assert.deepEqual(loaded.acceptanceRecord, expected.acceptanceRecord)
   await second.dispose()
+})
+
+test('stages null-prototype Record data as the same durable JSON value', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'labourchain-staging-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const expected = request('null-prototype-data')
+  const labourData = Object.assign(
+    Object.create(null),
+    expected.labourRecord.data,
+  )
+  const exact = {
+    ...expected,
+    labourRecord: {
+      ...expected.labourRecord,
+      data: labourData,
+    },
+  }
+  assert.equal(Object.getPrototypeOf(exact.labourRecord.data), null)
+
+  const first = await createNode(root)
+  await first.context[CONTRIBUTION_STAGING_SERVICE].stage(exact)
+  await first.dispose()
+
+  const second = await createNode(root)
+  const [loaded] = await staged(second)
+  assert.equal(loaded?.labourRecord.id, exact.labourRecord.id)
+  assert.equal(
+    loaded?.acceptanceRecord.id,
+    exact.acceptanceRecord.id,
+  )
+  assert.deepEqual(loaded?.labourRecord.data, {
+    assets: [expected.asset.id],
+  })
+  await second.dispose()
+})
+
+test('rejects Record data when JSON persistence would lose a value', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'labourchain-staging-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const expected = request('lossy-record-data')
+  const node = await createNode(root)
+
+  await assert.rejects(
+    node.context[CONTRIBUTION_STAGING_SERVICE].stage({
+      ...expected,
+      labourRecord: {
+        ...expected.labourRecord,
+        data: {
+          ...(expected.labourRecord.data as Record<string, unknown>),
+          droppedByJson: undefined,
+        },
+      },
+    }),
+    ContributionStagingInputError,
+  )
+  assert.deepEqual(await staged(node), [])
+  await node.dispose()
 })
 
 test('same acceptance RecordId never overwrites non-equivalent staging', async (t) => {

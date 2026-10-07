@@ -112,6 +112,66 @@ function requireRecordId(value: unknown, label: string): string {
   return descriptor.value
 }
 
+function isSupportedPlainObject(value: object): boolean {
+  const prototype = Object.getPrototypeOf(value)
+  return prototype === Object.prototype || prototype === null
+}
+
+function isExactJsonValue(left: unknown, right: unknown): boolean {
+  if (Object.is(left, right)) return true
+  if (
+    typeof left !== 'object' ||
+    left === null ||
+    typeof right !== 'object' ||
+    right === null
+  ) {
+    return false
+  }
+
+  const leftArray = Array.isArray(left)
+  const rightArray = Array.isArray(right)
+  if (leftArray || rightArray) {
+    if (!leftArray || !rightArray) return false
+    if (
+      Object.getPrototypeOf(left) !== Array.prototype ||
+      Object.getPrototypeOf(right) !== Array.prototype
+    ) {
+      return false
+    }
+  } else if (
+    !isSupportedPlainObject(left) ||
+    !isSupportedPlainObject(right)
+  ) {
+    return false
+  }
+
+  const leftKeys = Reflect.ownKeys(left)
+  const rightKeys = Reflect.ownKeys(right)
+  if (
+    leftKeys.length !== rightKeys.length ||
+    leftKeys.some((key, index) => key !== rightKeys[index])
+  ) {
+    return false
+  }
+
+  for (const key of leftKeys) {
+    const leftProperty = Object.getOwnPropertyDescriptor(left, key)
+    const rightProperty = Object.getOwnPropertyDescriptor(right, key)
+    if (
+      leftProperty === undefined ||
+      rightProperty === undefined ||
+      !('value' in leftProperty) ||
+      !('value' in rightProperty) ||
+      leftProperty.enumerable !== rightProperty.enumerable ||
+      !isExactJsonValue(leftProperty.value, rightProperty.value)
+    ) {
+      return false
+    }
+  }
+
+  return true
+}
+
 function snapshotRecord(
   value: CoreRecordValue,
   label: string,
@@ -130,7 +190,7 @@ function snapshotRecord(
 
   const snapshot = JSON.parse(serialized) as CoreRecordValue
   requireRecordId(snapshot, label)
-  if (!isDeepStrictEqual(snapshot, value)) {
+  if (!isExactJsonValue(snapshot, value)) {
     throw new ContributionStagingInputError(
       label + ' is not exactly representable as durable JSON.',
     )
