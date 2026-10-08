@@ -22,6 +22,7 @@ import { build } from 'tsdown'
 import {
   ASSET_CONTENT_PROTOCOL_SERVICE,
   ASSET_STORAGE_SERVICE,
+  CONTRIBUTION_STAGING_SERVICE,
   CORE_ENTITY_PROTOCOL_SERVICE,
   CORE_PROTOCOL_PROTOCOL_SERVICE,
   CORE_RECORD_PROTOCOL_SERVICE,
@@ -31,6 +32,7 @@ import {
   MEMBER_PROTOCOL_SERVICE,
   PROTOCOL_RESOLUTION_SERVICE,
   REPOSITORY_CONTRIBUTION_SERVICE,
+  REPOSITORY_CONTRIBUTION_RECOVERY_SERVICE,
   REPO_CONTRIBUTION_PROTOCOL_REFERENCE,
   REPO_CONTRIBUTION_PROTOCOL_SERVICE,
   REPO_ESTABLISHMENT_PROTOCOL_REFERENCE,
@@ -42,9 +44,11 @@ import {
   RecordJournalService,
   RepositoryContributionConflictError,
   assetStoragePlugin,
+  contributionStagingPlugin,
   createRepositoryNode,
   protocolResolutionPlugin,
   repositoryContributionPlugin,
+  repositoryContributionRecoveryPlugin,
   runtimeRecordDatabasePlugin,
   type AssetContentProtocolService,
   type CoreEntityProtocolService,
@@ -264,6 +268,7 @@ test(
     const root = await mkdtemp(join(tmpdir(), 'labourchain-contribution-real-'))
     const journalDirectory = join(root, 'journal')
     const assetDirectory = join(root, 'assets')
+    const stagingDirectory = join(root, 'staging')
     await mkdir(journalDirectory)
     await mkdir(assetDirectory)
 
@@ -406,6 +411,11 @@ test(
         )
         return createRepositoryNode({
           plugins: [
+            { plugin: repositoryContributionRecoveryPlugin },
+            {
+              plugin: contributionStagingPlugin,
+              config: { directory: stagingDirectory },
+            },
             { plugin: repositoryContributionPlugin },
             {
               plugin: assetStoragePlugin,
@@ -546,14 +556,19 @@ test(
           protocolHash: labour.protocolHash,
           createdBy: memberIdentity,
           createdAt: '2026-10-04T01:01:00.000Z',
-          data: {
+          data: Object.assign(Object.create(null), {
             content: '实现 Repository Contribution 最小闭环',
             duration: 1,
             references: [upstream.id],
             assets: [selected.id],
-          },
+          }),
         },
       )
+      assert.equal(Object.getPrototypeOf(labourRecord.data), null)
+      const durableLabourRecord = JSON.parse(
+        JSON.stringify(labourRecord),
+      ) as CoreRecordValue
+
       const acceptance = signedRecord(
         recordService,
         repoKeys.privateKey,
@@ -598,9 +613,15 @@ test(
       assert.match(labourRecord.id, /^[0-9a-f]{64}$/u)
       assert.match(acceptance.id, /^[0-9a-f]{64}$/u)
 
+      const staging = first.context[CONTRIBUTION_STAGING_SERVICE]
+      const removeStage = staging.remove.bind(staging)
+      staging.remove = async () => {
+        throw new Error('simulated cleanup interruption')
+      }
       const committed = await first.context[
-        REPOSITORY_CONTRIBUTION_SERVICE
-      ].commit(request)
+        REPOSITORY_CONTRIBUTION_RECOVERY_SERVICE
+      ].submit(request)
+      staging.remove = removeStage
 
       assert.deepEqual(committed, {
         status: 'COMMITTED',
@@ -625,7 +646,7 @@ test(
       )
       assert.deepEqual(
         await first.context.recordJournal.get(labourRecord.id),
-        labourRecord,
+        durableLabourRecord,
       )
       assert.deepEqual(
         await first.context.recordJournal.get(acceptance.id),
@@ -635,6 +656,12 @@ test(
       await first.dispose()
 
       const second = await createRuntime('second')
+      assert.deepEqual(
+        await second.context[
+          REPOSITORY_CONTRIBUTION_RECOVERY_SERVICE
+        ].recoverPending(),
+        [committed],
+      )
       const replayed = await second.context[
         REPOSITORY_CONTRIBUTION_SERVICE
       ].commit(request)
@@ -657,7 +684,7 @@ test(
 
       assert.deepEqual(
         await second.context.recordJournal.get(labourRecord.id),
-        labourRecord,
+        durableLabourRecord,
       )
       assert.deepEqual(
         await second.context.recordJournal.get(acceptance.id),

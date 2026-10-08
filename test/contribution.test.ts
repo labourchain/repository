@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -12,6 +12,7 @@ import { plugin as repoContributionPlugin } from '../src/protocols/repo.contribu
 import { plugin as repoEstablishmentPlugin } from '../src/protocols/repo.establishment.ts'
 import {
   ASSET_CONTENT_PROTOCOL_REFERENCE,
+  CONTRIBUTION_STAGING_SERVICE,
   ASSET_CONTENT_PROTOCOL_SERVICE,
   ASSET_STORAGE_SERVICE,
   CORE_ENTITY_PROTOCOL_SERVICE,
@@ -22,11 +23,14 @@ import {
   MEMBER_PROTOCOL_SERVICE,
   PROTOCOL_RESOLUTION_SERVICE,
   REPOSITORY_CONTRIBUTION_SERVICE,
+  REPOSITORY_CONTRIBUTION_RECOVERY_SERVICE,
   REPO_CONTRIBUTION_PROTOCOL_REFERENCE,
   REPO_CONTRIBUTION_PROTOCOL_SERVICE,
   REPO_ESTABLISHMENT_PROTOCOL_REFERENCE,
   REPO_ESTABLISHMENT_PROTOCOL_SERVICE,
   AssetNotFoundError,
+  ContributionStagingCorruptionError,
+  ContributionStagingStorageError,
   InvalidAsset,
   ProtocolBuildConflictError,
   RecordJournalConflictError,
@@ -38,15 +42,19 @@ import {
   RepositoryContributionConflictError,
   RepositoryContributionProtocolError,
   assetStoragePlugin,
+  contributionStagingPlugin,
   createRepositoryNode,
   repositoryContributionPlugin,
+  repositoryContributionRecoveryPlugin,
   runtimeRecordDatabasePlugin,
   type Asset,
   type CoreRecordProtocolService,
   type CoreRecordValue,
+  type RuntimeRecordDatabaseSession,
 } from '../src/index.ts'
 import {
   RECORD_JOURNAL_INTERNAL_RUN_EXCLUSIVE,
+  RUNTIME_RECORD_DATABASE_INTERNAL_RUN_EXCLUSIVE,
 } from '../src/internal-publication.ts'
 
 function digest(value: string): string {
@@ -264,6 +272,11 @@ function composition(
   contributionHash = CONTRIBUTION_PROTOCOL_HASH,
 ) {
   return [
+    { plugin: repositoryContributionRecoveryPlugin },
+    {
+      plugin: contributionStagingPlugin,
+      config: { directory: join(root, 'staging') },
+    },
     { plugin: repositoryContributionPlugin },
     { plugin: assetStoragePlugin, config: { directory: join(root, 'assets') } },
     {
@@ -354,6 +367,20 @@ async function acceptedContributions(
     }
   }
   return records
+}
+
+async function stagedAcceptanceIds(
+  node: Awaited<ReturnType<typeof createRepositoryNode>>,
+): Promise<string[]> {
+  const ids: string[] = []
+  for await (
+    const request of node.context[
+      CONTRIBUTION_STAGING_SERVICE
+    ].iterateStaged()
+  ) {
+    ids.push(request.acceptanceRecord.id)
+  }
+  return ids
 }
 
 test('commits A -> L -> D and does not require references-only Asset durability', async () => {
@@ -1203,6 +1230,449 @@ test('malformed acceptance ProtocolHash fails before durable contribution work',
     )
     await assertRecordMissing(node, labour.id)
     await assertRecordMissing(node, 'acceptance-malformed')
+    await node.dispose()
+  })
+})
+
+
+test('staging failure happens before the first contribution durable mutation', async () => {
+  await withRoot(async (root) => {
+    const node = await createNode(root)
+    await establishBase(node)
+
+    const selected = createAsset(node, 'staging failure')
+    const labour = labourRecord('labour-staging-failure', [], [selected.id])
+    const acceptance = acceptanceRecord(
+      'acceptance-staging-failure',
+      REPO_KEY,
+      labour.id,
+      selected.id,
+    )
+    await writeFile(join(root, 'staging'), 'not a directory')
+
+    await assert.rejects(
+      node.context[REPOSITORY_CONTRIBUTION_RECOVERY_SERVICE].submit({
+        asset: selected,
+        labourRecord: labour,
+        acceptanceRecord: acceptance,
+      }),
+      ContributionStagingStorageError,
+    )
+
+    assert.equal(
+      await node.context[ASSET_STORAGE_SERVICE].has(selected.id),
+      false,
+    )
+    await assertRecordMissing(node, labour.id)
+    await assertRecordMissing(node, acceptance.id)
+    await node.dispose()
+  })
+})
+
+test('restart recovery replays staged S0 without duplicate ingress', async () => {
+  await withRoot(async (root) => {
+    const first = await createNode(root)
+    await establishBase(first)
+
+    const selected = createAsset(first, 'recover S0')
+    const labour = labourRecord('labour-recover-s0', [], [selected.id])
+    const acceptance = acceptanceRecord(
+      'acceptance-recover-s0',
+      REPO_KEY,
+      labour.id,
+      selected.id,
+    )
+    const request = {
+      asset: selected,
+      labourRecord: labour,
+      acceptanceRecord: acceptance,
+    }
+
+    first.context[ASSET_STORAGE_SERVICE].preserve = async () => {
+      throw new Error('simulated crash before A')
+    }
+    await assert.rejects(
+      first.context[REPOSITORY_CONTRIBUTION_RECOVERY_SERVICE].submit(request),
+      /simulated crash before A/u,
+    )
+    assert.deepEqual(await stagedAcceptanceIds(first), [acceptance.id])
+    assert.equal(
+      await first.context[ASSET_STORAGE_SERVICE].has(selected.id),
+      false,
+    )
+    await assertRecordMissing(first, labour.id)
+    await assertRecordMissing(first, acceptance.id)
+    await first.dispose()
+
+    const second = await createNode(root)
+    const recovered = await second.context[
+      REPOSITORY_CONTRIBUTION_RECOVERY_SERVICE
+    ].recoverPending()
+    assert.equal(recovered.length, 1)
+    assert.equal(recovered[0]?.status, 'COMMITTED')
+    assert.deepEqual(await stagedAcceptanceIds(second), [])
+    assert.deepEqual(
+      await second.context[ASSET_STORAGE_SERVICE].get(selected.id),
+      selected,
+    )
+    assert.deepEqual(await second.context.recordJournal.get(labour.id), labour)
+    assert.deepEqual(
+      await second.context.recordJournal.get(acceptance.id),
+      acceptance,
+    )
+    assert.equal((await acceptedContributions(second)).length, 1)
+    await second.dispose()
+  })
+})
+
+test('restart recovery reuses durable A in S1 and completes L then D', async () => {
+  await withRoot(async (root) => {
+    const first = await createNode(root)
+    await establishBase(first)
+
+    const selected = createAsset(first, 'recover S1')
+    const labour = labourRecord('labour-recover-s1', [], [selected.id])
+    const acceptance = acceptanceRecord(
+      'acceptance-recover-s1',
+      REPO_KEY,
+      labour.id,
+      selected.id,
+    )
+    const request = {
+      asset: selected,
+      labourRecord: labour,
+      acceptanceRecord: acceptance,
+    }
+
+    first.context[LABOUR_RECORD_PROTOCOL_SERVICE].acceptLabourRecord =
+      async () => {
+        throw new Error('simulated crash before L')
+      }
+    await assert.rejects(
+      first.context[REPOSITORY_CONTRIBUTION_RECOVERY_SERVICE].submit(request),
+      /simulated crash before L/u,
+    )
+    assert.equal(
+      await first.context[ASSET_STORAGE_SERVICE].has(selected.id),
+      true,
+    )
+    await assertRecordMissing(first, labour.id)
+    await assertRecordMissing(first, acceptance.id)
+    assert.deepEqual(await stagedAcceptanceIds(first), [acceptance.id])
+    await first.dispose()
+
+    const second = await createNode(root)
+    const recovered = await second.context[
+      REPOSITORY_CONTRIBUTION_RECOVERY_SERVICE
+    ].recoverPending()
+    assert.equal(recovered[0]?.status, 'COMMITTED')
+    assert.deepEqual(await stagedAcceptanceIds(second), [])
+    assert.deepEqual(await second.context.recordJournal.get(labour.id), labour)
+    assert.deepEqual(
+      await second.context.recordJournal.get(acceptance.id),
+      acceptance,
+    )
+    assert.equal((await acceptedContributions(second)).length, 1)
+    await second.dispose()
+  })
+})
+
+test('restart recovery reuses durable A and L in S2 before publishing D', async () => {
+  await withRoot(async (root) => {
+    const first = await createNode(root)
+    await establishBase(first)
+
+    const selected = createAsset(first, 'recover S2')
+    const labour = labourRecord('labour-recover-s2', [], [selected.id])
+    const acceptance = acceptanceRecord(
+      'acceptance-recover-s2',
+      REPO_KEY,
+      labour.id,
+      selected.id,
+    )
+    const request = {
+      asset: selected,
+      labourRecord: labour,
+      acceptanceRecord: acceptance,
+    }
+
+    const database = first.context.runtimeRecordDatabase
+    const originalRunExclusive:
+      typeof database[typeof RUNTIME_RECORD_DATABASE_INTERNAL_RUN_EXCLUSIVE] =
+      database[RUNTIME_RECORD_DATABASE_INTERNAL_RUN_EXCLUSIVE].bind(database)
+    database[RUNTIME_RECORD_DATABASE_INTERNAL_RUN_EXCLUSIVE] =
+      async function <T>(
+        operation: (
+          database: RuntimeRecordDatabaseSession,
+        ) => Promise<T>,
+      ): Promise<T> {
+        return originalRunExclusive(async (session) =>
+          operation({
+            ...session,
+            accept: async (record) => {
+              if (
+                (record as Partial<CoreRecordValue>).protocol ===
+                REPO_CONTRIBUTION_PROTOCOL_REFERENCE
+              ) {
+                throw new Error('simulated crash before D')
+              }
+              return session.accept(record)
+            },
+          }),
+        )
+      }
+
+    await assert.rejects(
+      first.context[REPOSITORY_CONTRIBUTION_RECOVERY_SERVICE].submit(request),
+      /simulated crash before D/u,
+    )
+    assert.equal(
+      await first.context[ASSET_STORAGE_SERVICE].has(selected.id),
+      true,
+    )
+    assert.deepEqual(await first.context.recordJournal.get(labour.id), labour)
+    await assertRecordMissing(first, acceptance.id)
+    assert.deepEqual(await stagedAcceptanceIds(first), [acceptance.id])
+    await first.dispose()
+
+    const second = await createNode(root)
+    const recovered = await second.context[
+      REPOSITORY_CONTRIBUTION_RECOVERY_SERVICE
+    ].recoverPending()
+    assert.equal(recovered[0]?.status, 'COMMITTED')
+    assert.deepEqual(await stagedAcceptanceIds(second), [])
+    assert.deepEqual(
+      await second.context.recordJournal.get(acceptance.id),
+      acceptance,
+    )
+    assert.equal((await acceptedContributions(second)).length, 1)
+    await second.dispose()
+  })
+})
+
+test('D stays COMMITTED across cleanup failure and replay never heals missing Asset', async () => {
+  await withRoot(async (root) => {
+    const first = await createNode(root)
+    await establishBase(first)
+
+    const selected = createAsset(first, 'recover S3')
+    const labour = labourRecord('labour-recover-s3', [], [selected.id])
+    const acceptance = acceptanceRecord(
+      'acceptance-recover-s3',
+      REPO_KEY,
+      labour.id,
+      selected.id,
+    )
+    const request = {
+      asset: selected,
+      labourRecord: labour,
+      acceptanceRecord: acceptance,
+    }
+
+    first.context[CONTRIBUTION_STAGING_SERVICE].remove = async () => {
+      throw new Error('simulated cleanup interruption')
+    }
+    const committed = await first.context[
+      REPOSITORY_CONTRIBUTION_RECOVERY_SERVICE
+    ].submit(request)
+    assert.equal(committed.status, 'COMMITTED')
+    assert.deepEqual(
+      await first.context.recordJournal.get(acceptance.id),
+      acceptance,
+    )
+    assert.deepEqual(await stagedAcceptanceIds(first), [acceptance.id])
+
+    const storage = first.context[ASSET_STORAGE_SERVICE]
+    const originalGet = storage.get.bind(storage)
+    const originalPreserve = storage.preserve.bind(storage)
+    let preserveCalls = 0
+    storage.get = async (assetId) => {
+      if (assetId === selected.id) throw new AssetNotFoundError(assetId)
+      return originalGet(assetId)
+    }
+    storage.preserve = async (asset) => {
+      preserveCalls += 1
+      return originalPreserve(asset)
+    }
+
+    await assert.rejects(
+      first.context[
+        REPOSITORY_CONTRIBUTION_RECOVERY_SERVICE
+      ].recoverPending(),
+      AssetNotFoundError,
+    )
+    assert.equal(preserveCalls, 0)
+    assert.deepEqual(await stagedAcceptanceIds(first), [acceptance.id])
+    assert.deepEqual(
+      await first.context.recordJournal.get(acceptance.id),
+      acceptance,
+    )
+    await first.dispose()
+
+    const second = await createNode(root)
+    const recovered = await second.context[
+      REPOSITORY_CONTRIBUTION_RECOVERY_SERVICE
+    ].recoverPending()
+    assert.deepEqual(recovered, [committed])
+    assert.deepEqual(await stagedAcceptanceIds(second), [])
+    assert.equal((await acceptedContributions(second)).length, 1)
+    await second.dispose()
+  })
+})
+
+test('distinct same-key conflict remains staged and cannot replace durable D', async () => {
+  await withRoot(async (root) => {
+    const node = await createNode(root)
+    await establishBase(node)
+
+    const selected = createAsset(node, 'recovery same-key conflict')
+    const labour = labourRecord(
+      'labour-recovery-same-key',
+      [],
+      [selected.id],
+    )
+    const accepted = acceptanceRecord(
+      'acceptance-recovery-winner',
+      REPO_KEY,
+      labour.id,
+      selected.id,
+    )
+    await node.context[REPOSITORY_CONTRIBUTION_RECOVERY_SERVICE].submit({
+      asset: selected,
+      labourRecord: labour,
+      acceptanceRecord: accepted,
+    })
+
+    const candidate = acceptanceRecord(
+      'acceptance-recovery-conflict',
+      REPO_KEY,
+      labour.id,
+      selected.id,
+      SECOND_OPERATOR_KEY,
+    )
+    await assert.rejects(
+      node.context[REPOSITORY_CONTRIBUTION_RECOVERY_SERVICE].submit({
+        asset: selected,
+        labourRecord: labour,
+        acceptanceRecord: candidate,
+      }),
+      RepositoryContributionConflictError,
+    )
+
+    assert.deepEqual(await stagedAcceptanceIds(node), [candidate.id])
+    assert.deepEqual(
+      await node.context.recordJournal.get(accepted.id),
+      accepted,
+    )
+    await assertRecordMissing(node, candidate.id)
+    assert.equal((await acceptedContributions(node)).length, 1)
+    await node.dispose()
+  })
+})
+
+
+test('corrupt staged request fails before recovery mutates A, L or D', async () => {
+  await withRoot(async (root) => {
+    const node = await createNode(root)
+    await establishBase(node)
+
+    const selected = createAsset(node, 'corrupt staged recovery')
+    const labour = labourRecord(
+      'labour-corrupt-staged-recovery',
+      [],
+      [selected.id],
+    )
+    const acceptance = acceptanceRecord(
+      'acceptance-corrupt-staged-recovery',
+      REPO_KEY,
+      labour.id,
+      selected.id,
+    )
+    const request = {
+      asset: selected,
+      labourRecord: labour,
+      acceptanceRecord: acceptance,
+    }
+
+    assert.equal(
+      await node.context[
+        REPOSITORY_CONTRIBUTION_SERVICE
+      ].validateForStaging(request),
+      undefined,
+    )
+    await node.context[CONTRIBUTION_STAGING_SERVICE].stage(request)
+
+    const stagingDirectory = join(root, 'staging')
+    const stagedFile = (await readdir(stagingDirectory)).find((name) =>
+      name.endsWith('.contribution.json'),
+    )
+    assert.ok(stagedFile)
+    await writeFile(
+      join(stagingDirectory, stagedFile),
+      '{"asset":',
+    )
+
+    await assert.rejects(
+      node.context[
+        REPOSITORY_CONTRIBUTION_RECOVERY_SERVICE
+      ].recoverPending(),
+      ContributionStagingCorruptionError,
+    )
+    assert.equal(
+      await node.context[ASSET_STORAGE_SERVICE].has(selected.id),
+      false,
+    )
+    await assertRecordMissing(node, labour.id)
+    await assertRecordMissing(node, acceptance.id)
+    await node.dispose()
+  })
+})
+
+test('concurrent exact recovery submit converges and clears staging', async () => {
+  await withRoot(async (root) => {
+    const node = await createNode(root)
+    await establishBase(node)
+
+    const selected = createAsset(node, 'concurrent recovery exact')
+    const labour = labourRecord(
+      'labour-concurrent-recovery-exact',
+      [],
+      [selected.id],
+    )
+    const acceptance = acceptanceRecord(
+      'acceptance-concurrent-recovery-exact',
+      REPO_KEY,
+      labour.id,
+      selected.id,
+    )
+    const request = {
+      asset: selected,
+      labourRecord: labour,
+      acceptanceRecord: acceptance,
+    }
+
+    const [first, second] = await Promise.all([
+      node.context[
+        REPOSITORY_CONTRIBUTION_RECOVERY_SERVICE
+      ].submit(request),
+      node.context[
+        REPOSITORY_CONTRIBUTION_RECOVERY_SERVICE
+      ].submit(request),
+    ])
+
+    assert.equal(first.status, 'COMMITTED')
+    assert.deepEqual(second, first)
+    assert.deepEqual(await stagedAcceptanceIds(node), [])
+    assert.equal((await acceptedContributions(node)).length, 1)
+    assert.deepEqual(
+      await node.context[ASSET_STORAGE_SERVICE].get(selected.id),
+      selected,
+    )
+    assert.deepEqual(await node.context.recordJournal.get(labour.id), labour)
+    assert.deepEqual(
+      await node.context.recordJournal.get(acceptance.id),
+      acceptance,
+    )
     await node.dispose()
   })
 })
