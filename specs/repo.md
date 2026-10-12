@@ -186,7 +186,7 @@ return the relevant Block reference / confirmation position as supported
 
 This Spec does not prescribe the concrete service API, database, transport, or package that supplies either capability.
 
-Repository must not satisfy these dependencies by introducing a domain-owned canonical `repo.records[]`, a second blockchain, or by claiming the durable pending journal itself is Block confirmation.
+Repository must not satisfy these dependencies by introducing a domain-owned canonical `repo.records[]`, a second blockchain, or by claiming a durable Runtime DB read is Block confirmation.
 
 ## Persistence and Runtime index
 
@@ -198,7 +198,7 @@ Runtime may persist a replaceable lookup index equivalent to:
 Repo EntityPublicKey -> establishment RecordId
 ```
 
-The index may additionally cache a derived Repo view or chain-confirmation status for efficient loading, but those derived values must be repairable/rebuildable from the durable DB records and, when available, chain state.
+The index may additionally cache a derived Repo view or chain-confirmation status for efficient loading, but those derived values must be repairable/rebuildable from durable DB Records and, when available, chain state.
 
 Provider-native paths, database IDs, row keys or collection identifiers must not become the Repo identity or creation source.
 
