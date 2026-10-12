@@ -96,40 +96,30 @@ Contribution history 属于事实的 view / projection。它可以由插件提�
 
 ## Core、Record ingress 与链确证边界
 
-Core 提供 Entity、Record、ProtocolHash 与 Block 的身份、签名和确定性验证，不提供固定数据库。Repository 是这些事实的正常提交与本地查询节点，不是链共识或独立验证的信任根。
+Core 负责 Entity、Record、ProtocolHash 与 Block 的身份、签名及确定性验证。Repository 不是链共识或独立验证的信任根。
 
-**目标 Runtime persistence：默认 MongoDB，按 Board 的已验证实践提供可替换的 DB adapter。** Protocol 与 Repository domain services 仅使用窄存储接口；MongoDB collection、BSON `_id`、连接管理和索引由 provider 实现承担。其他 DB 可以实现等价接口，但不得改变 Core RecordId、签名内容或 Protocol 语义。当前 `RecordJournalService`（filesystem）与 `RuntimeRecordDatabaseService`（journal 序列化包装）是**待替换的旧实现**，不能称为已落地 MongoDB Runtime DB。
+**一 Repo 一 Node。** Repo 的运行和写入由唯一的 Repository Node 管理。本轮不设计多个 Node 共同写入同一个 Repo、共享锁或分布式协调。
 
-```text
-Core Record / verified Protocol facts
-           ↓
-Repository domain services (Member / Repo / Contribution)
-           ↓
-narrow durable Record DB contract
-           ↓
-MongoDB provider (default) | alternative DB provider
-           ↓
-provider-managed durable state + indexes
-```
-
-数据库负责已确认写入的数据持久性与崩溃恢复；Node 重启只重建 Cordis 运行环境，从 DB 读取持久事实并按必要的 exact Protocol 重新验证与恢复可重建索引。**不再有贡献请求 staging、自动续办 `recoverPending()` 或应用层的独立 Recovery 子系统。**
-
-Repo acceptance 的事实来源仍是有效且持久的 Repo-signed Record `D`。A/L 等已经独立保存的事实不因为 D 缺失而自动构成接受。调用方可以显式重试原 signed request；这依赖持久化提供者的幂等/唯一约束，不能被描述为自动重放未完成业务请求。
-
-DB 的 unique indexes/conditional writes 要求在多进程、多节点访问下成立；此前仅依赖 same-process `runExclusive()` 的方式不是目标一致性保证。MongoDB 跨文档或跨 collection 操作不是天然原子的，若实际领域不变量要求多文档原子性，必须使用实际部署可用的 MongoDB transaction 或另一个明确成立的持久化原语，不复制 Board 的弱 standalone fallback 当作强保证。**不为此创建另一个领域 Recovery 协议。**
+**MongoDB 是默认 Runtime DB**，通过领域服务可调用的窄存储接口解耦。其他数据库可实现相同接口；`MongoClient`、BSON 标识、collection 和索引配置不进入签名协议字段。
 
 ```text
-Runtime DB persisted Record
-    -> Repository-local durable fact (not Block confirmation)
-
-accepted Block / chain-state
-    -> chain inclusion and confirmation order
-
-derived index / Snapshot / history view
-    -> rebuildable query support (never signed fact authority)
+Core signed Records + exact Protocol semantics
+    -> Member / Repo / Contribution Cordis services
+    -> narrow Runtime Record DB interface
+    -> MongoDB provider (default)
 ```
 
-具体接口原则见 [Runtime Record Database Spec](../specs/runtime-record-database.md)。Cordis 仍只管理插件与资源生命周期。
+MongoDB 对其已保存的数据提供持久性和数据库层面的恢复。Node 重启时重新连接 DB，读取已有 Record 并按需重建索引，不增加第二套恢复机制、提交请求 staging 或 `recoverPending()`。
+
+有效且已持久接收的 Repo-signed `D` 是 Repo 的正向采纳事实；D 不存在则不能仅根据其他已保存的 Record 推断采纳。Repo 对相同逻辑键的冲突判断可以在所属单 Node 的提交路径内处理，不引入多 Node 并发唯一性设计，也不额外为 MongoDB 指定持久性配置、事务框架或恢复验证流程。
+
+```text
+MongoDB stored signed facts -> Repository-local fact
+accepted Block / chain state -> chain inclusion evidence
+derived index / projection -> rebuildable view, not a signed fact
+```
+
+具体接口以 [Runtime Database Spec](../specs/runtime-record-database.md) 为准。Cordis 负责唯一的插件与资源生命周期。
 
 ## Asset Protocol 与持久化边界
 
@@ -280,7 +270,7 @@ sequenceDiagram
     participant Cordis as Cordis
     participant MemberProtocol as Member Protocol capability
     participant Repo as Repo Protocol capability
-    participant Journal as Runtime Record DB
+    participant DB as Runtime Record DB
     participant Index as Runtime Repo index
     participant Chain as Chain-state adapter
 
@@ -288,16 +278,16 @@ sequenceDiagram
     Cordis->>MemberProtocol: require creator Member
     MemberProtocol-->>Cordis: valid creator identity
     Cordis->>Repo: validate establishment Record
-    Repo->>Journal: durably accept establishment Record
-    Journal-->>Repo: accepted RecordId
+    Repo->>DB: durably accept establishment Record
+    DB-->>Repo: accepted RecordId
     Repo->>Index: index Repo identity -> RecordId
     Repo-->>Creator: Repo established
 
     Creator->>Cordis: load Repo identity
     Cordis->>Repo: resolve Repo
     Repo->>Index: lookup RecordId
-    Repo->>Journal: read accepted establishment Record
-    Journal-->>Repo: establishment Record
+    Repo->>DB: read accepted establishment Record
+    DB-->>Repo: establishment Record
     opt chain confirmation status requested/available
         Repo->>Chain: lookup RecordId inclusion
         Chain-->>Repo: pending or block-confirmed
@@ -309,32 +299,31 @@ Runtime Repo index 只是加速 lookup 的可替换数据。Repo identity 来自
 
 ## Contribution 数据流
 
-Member 在 Repository 外产生并签署 `labour.record@0.1.0`；Repo 已签署的 `repo.contribution@0.1.0` 是另一个独立 Record。已经确认的字段与关系保持不变：
+Member 签名的 `labour.record@0.1.0` 是劳动事实 L；Repo 签名的 `repo.contribution@0.1.0` 是独立的正向采纳事实 D：
 
 ```text
-Member-signed labour Record L
-    -> L.data.references[] / L.data.assets[]
+L.createdBy = Member EntityPublicKey
+L.data.references[] / L.data.assets[] = 确认的成果引用
 
-Repo-signed acceptance Record D
-    -> D.createdBy = Repo EntityPublicKey
-    -> D.data = { labourRecordId: L.id, assetId, operator }
+D.createdBy = Repo EntityPublicKey
+D.data = { labourRecordId: L.id, assetId, operator }
 ```
 
-`D.data.assetId` 在原关系契约下明确选中 `L.data.assets[]` 中的一项成果；不因为一条 Repo 采纳事实而推断该劳动的所有成果都被采纳。具体 Asset identity、provider、数据尺寸、管理及可用性要求**已延后，待 #8 返工**，不能使用旧 filesystem Asset 服务来反向固定领域含义。
-
-目标 Runtime 数据流只确立经过讨论的提交事实与数据库边界：
+D 的 `assetId` 选中 L 所声明成果中的一项，不自动接受全部成果。Repo acceptance 是签名领域事实，不是所有权、成员资格或 Block 确证。
 
 ```text
-signed L / signed D + selected result reference
-    -> exact Protocol validation + relation validation
-    -> MongoDB-backed replaceable Record DB interface
-    -> durable L and durable Repo acceptance D (D published last)
-    -> Repository COMMITTED
+signed L + signed D
+   -> exact Protocol / relation validation
+   -> narrow Runtime Record DB interface
+   -> MongoDB 持久接收 L / D（D 最后）
+   -> Repository acceptance based on valid durable D
 ```
 
-本地 DB 的持久接收和独立链的 Block-confirmation 属于两层不同语义。具体多文档写入的原子性、同键唯一约束、以及 Asset 集成，需要在 DB adapter 和 #8 返工中分别验证。现有 `RepositoryContributionService`、文件 journal 和 Asset provider 可作为迁移起点，但并非全部已被新的架构验收。
+**所有 Asset 相关实现条件均延后讨论。** 不在本节固定具体 AssetId 生成、字节内容、保存/读取、完整性、资源大小或 Asset 入库工作流。已合并的原 Contribution + Asset 代码尚待 #8 返工后重验收。
 
-旧的 `ContributionStagingService` / `RepositoryContributionRecoveryService` 不再属于目标数据流；没有 automatic replay、pre-D staging 状态或第二条 commit 路径。
+一个 Repo 只由一个 Node 维护。该 Node 可以在提交路径中按需要串行判断同键冲突；不再将跨 Node 竞争和数据库多文档事务作为本轮架构前提。
+
+独立 Contribution Recovery 及 staging 已撤回，相关运行时代码由后续 #47 删除。
 
 ## Contribution 状态
 
@@ -364,34 +353,27 @@ Node 重启时直接读取已持久化的 D/L 等事实，不再按之前保存�
 
 ## 数据与投影
 
-Repository 的目标持久化边界是配置的 Runtime DB（MongoDB 为默认 provider），而不是 filesystem journal + 额外 staging + 状态恢复器。
+Repository 使用配置的 Runtime DB（默认 MongoDB）读取和存储已接收的 Core 签名事实：
 
 ```text
-1. Runtime DB / durable Core Records
-   - 持久存储已经接收的 exact signed Records
-   - RecordId 与签名字段属于 Core，不属于 MongoDB
-   - Repo acceptance D 是 Repository 的接受事实标志，不是 Block-confirmed
+Runtime DB / exact signed Records
+  - 已持久接收事实
+  - RecordId 和签名内容来自 Core
 
-2. provider-managed indexes / concrete uniqueness
-   - 支持领域所需的查询与唯一约束
-   - 数据库原子性必须在真实 provider 上成立
-   - MongoDB _id / collections 不进入 Protocol identity
+Repo-local indexes / projections
+  - 加速查询
+  - 可从 DB 事实重建，不赋予新事实权威
 
-3. derived projections / Snapshots
-   - 基于 DB 持久事实和 exact Protocol 语义恢复
-   - 支持历史查询和索引加速
-   - 不成为事实来源
-
-4. chain-state adapter
-   - 查询已被接受 Block 的真实收录证据
-   - 不由本地 DB 推断 Block 确认
+chain-state adapter
+  - 独立报告 accepted-Block 收录
+  - 不由本地 DB 推断 Block 确证
 ```
 
-已撤回的独立 Contribution Recovery / staging 数据类别**不再存在于目标架构**。数据库自身恢复已提交的数据；Node 只重新连接 DB 并读取数据。显式 API 重试不是后台恢复任务。
+Node 启动读取 DB，而不是恢复或重放未完成的用户命令。未持久存在的 D 不会被本地衍生状态替代。MongoDB 自身故障恢复不应复制成应用层的额外机制。
 
-Asset 的管理与存储模型尚待重新审查，因此不在本节继续规定 exact Asset descriptor/bytes、Repo Asset registry 结构或任何 filesystem 写入协议。Repo Asset / Contributor 浏览可以在后续查询设计中讨论，但不能从旧代码反推领域契约。
+**Asset identity、存储、浏览和管理全部延后／待返工。** 此处不规定 Repo Asset registry、内容存储、文件接口或查询 schema。
 
-Repo creation provenance、labour Record、Repo acceptance 仍是签名事实；`Patch` / `Snapshot` 的链上/运行时区别保持不变。Repository 不创建第二套链，也不拥有全链 `repo.records[]` 事实集合。
+Repo establishment、Labour Record 与 Repo acceptance 仍是签名事实。Patch 是具体协议日后可能采用的独立能力；Snapshot/视图属于可重建的运行状态，不是链上事实。Repository 不创建第二套链或规范 `repo.records[]` 数据模型。
 
 ## Cordis 生命周期
 
@@ -406,7 +388,7 @@ Architecture 当前不锁定：
 - 具体 npm package 名称和 monorepo 目录；
 - Protocol metadata 最终字段；
 - `member.profile` 的完整字段、更新和隐私模型；
-- durable Record journal 的最终 package/service/API 形式；
+- Runtime DB 的具体 TypeScript 接口、MongoDB collections 和 indexes；
 - chain-state adapter 的最终 package/service/API 形式；
 - MongoDB 默认 provider 之外的可替换 DB 具体实现；
 - HTTP / REST / WebSocket 接口；
