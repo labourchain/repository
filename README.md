@@ -54,11 +54,11 @@ Cordis + verified Protocol implementations
   -> persisted signed records and provider-enforced concrete uniqueness
 ```
 
-参考 [Ri0n72Y/board](https://github.com/Ri0n72Y/board) 已使用的接口分离与 MongoDB provider 模式，但不拷贝 Board 的 `pid`、`patch`、tags、业务 schema。
+**每个 Repo 仅由一个 Node 负责维护。** 参考 [Ri0n72Y/board](https://github.com/Ri0n72Y/board) 已使用的接口分离与 MongoDB provider 模式，但不拷贝 Board 的 `pid`、`patch`、tags、业务 schema。
 
-**当前 `main` 仍有** filesystem `RecordJournalService`、journal-backed `RuntimeRecordDatabaseService`、filesystem Asset store、`ContributionStagingService` 和 `RepositoryContributionRecoveryService`。它们是实际存在的**旧实现**。MongoDB migration、独立 Recovery 删除及 Asset 返工尚未发生，不可将目标设计描述为已实现。
+**当前 `main` 仍保留待替换的旧持久化代码、Asset 存储和已撤回的 Contribution Recovery。** 后续分别处理 MongoDB provider 改造（#31）、Recovery 删除（#47）以及 Asset 返工（#8）；目标架构尚未全部落地。
 
-DB 负责已经写入的数据在数据库故障/重启后的持久性；Node 重新启动后读取 DB 已存事实并恢复可重建的索引。不需要后台自动续办之前未完成的 Contribution 请求，也不需要第二份 durable staging。
+DB 负责已经写入的数据在数据库故障/重启后的持久性；Node 重新启动后读取 DB 已存事实并重建必要的索引。不要求跨 Node 的 Repo 并发协调，也不需要自动续办未完成的 Contribution 请求或额外的 DB 恢复机制。
 
 ## 当前进度
 
