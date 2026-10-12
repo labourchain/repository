@@ -7,6 +7,8 @@
 - **Umbrella:** [`repository-mvp.md`](./repository-mvp.md)
 - **Member dependency:** [`member.md`](./member.md)
 
+> **Architecture correction (2026-10):** Signed Protocol fields remain as defined here. The prior filesystem journal/Asset-byte provider is legacy; MongoDB-default Runtime DB migration is pending, and Asset identity/storage is **deferred — rework required**. No independent contribution Recovery/staging feature remains in scope.
+
 ## Purpose
 
 This Spec defines the stable Repository capability for establishing and loading a Repo.
@@ -101,7 +103,7 @@ Repo establishment must:
 - require `Record.createdBy` to identify an Entity satisfying the Member capability;
 - verify the Record signature against that creator identity through Core Record semantics;
 - require `Record.data` to be valid Core Entity data and use its validated `publicKey` as the Repo identity;
-- durably accept the establishment Record into the configured Record ingress/journal before reporting the Repo established;
+- durably accept the establishment Record into the configured durable Runtime Record DB provider before reporting the Repo established;
 - make the established Repo loadable again by its stable identity after restart;
 - fail on a conflicting already-accepted or already-chain-confirmed establishment of the same Repo identity rather than silently replacing its creation source;
 - persist only the Runtime index/state required for efficient lookup in addition to the durable establishment Record itself.
@@ -155,7 +157,7 @@ The same establishment Record can have different runtime/chain statuses without 
 
 ```text
 accepted / pending-chain
-    -> exact Record is durably retained by Record ingress/journal
+    -> exact Record is durably retained by durable Runtime Record DB provider
     -> Repo is established for Repository product behavior
 
 block-confirmed
@@ -167,7 +169,7 @@ Repository establishment does not wait for Block packing. An accepted/pending es
 
 ## Runtime dependencies
 
-Repository requires a durable Record ingress/journal capable of retaining accepted establishment Records across restart. The establishment Protocol runtime also depends on the mounted Core v0.1.0 `core.entity@0.1.0` / `core.record@0.1.0` services and `member.identity@0.1.0` capability rather than copying those algorithms or identities. At minimum, the establishment flow needs behavior equivalent to:
+Repository requires a durable durable Runtime Record DB provider capable of retaining accepted establishment Records across restart. The establishment Protocol runtime also depends on the mounted Core v0.1.0 `core.entity@0.1.0` / `core.record@0.1.0` services and `member.identity@0.1.0` capability rather than copying those algorithms or identities. At minimum, the establishment flow needs behavior equivalent to:
 
 ```text
 durably accept an exact signed Record, idempotently by RecordId
@@ -196,7 +198,7 @@ Runtime may persist a replaceable lookup index equivalent to:
 Repo EntityPublicKey -> establishment RecordId
 ```
 
-The index may additionally cache a derived Repo view or chain-confirmation status for efficient loading, but those derived values must be repairable/rebuildable from the durable journal and, when available, chain state.
+The index may additionally cache a derived Repo view or chain-confirmation status for efficient loading, but those derived values must be repairable/rebuildable from the durable DB records and, when available, chain state.
 
 Provider-native paths, database IDs, row keys or collection identifiers must not become the Repo identity or creation source.
 
@@ -237,7 +239,7 @@ Consumers must be able to distinguish at least:
 - invalid Repo or Member identity according to Core identity representation;
 - invalid or rejected establishment Record;
 - required Member or Repo Protocol semantics unavailable;
-- durable Record ingress/journal unavailable or failed;
+- durable durable Runtime Record DB provider unavailable or failed;
 - chain-confirmation status unavailable when explicitly requested;
 - Runtime lookup-index/provider failure.
 
@@ -250,7 +252,7 @@ Tests must demonstrate that:
 - the establishment Record's `createdBy` is the creator Member identity and its signature verifies with that identity;
 - the exact establishment Record is durably accepted before establishment succeeds;
 - the same Repo can be loaded again by stable identity after restart;
-- Repo identity from `data.publicKey` and creator provenance from `Record.createdBy` can be recovered from the durable Record journal even if the lookup index is rebuilt;
+- Repo identity from `data.publicKey` and creator provenance from `Record.createdBy` can be recovered from the durable Runtime DB even if the lookup index is rebuilt;
 - a conflicting second establishment of the same Repo identity is rejected;
 - stale/missing Runtime index state cannot replace the establishment Record as the domain source;
 - provider-native storage identifiers do not replace Repo identity;
