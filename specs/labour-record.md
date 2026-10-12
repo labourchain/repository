@@ -93,7 +93,7 @@ These fields do not claim perfect measurement and do not define `duration`.
 labour results that this labour explicitly builds on or cites.
 
 The Protocol treats each reference as an opaque non-empty string. The current
-The legacy `asset.content@0.1.0` implementation used its content-derived AssetId as that
+The legacy `asset.content@0.1.0` implementation used its content-derived AssetId as one concrete
 reference value, but `labour.record@0.1.0` deliberately does not validate the
 AssetId shape, existence or content integrity itself. Missing references never
 prevent a labour Record from being created.
