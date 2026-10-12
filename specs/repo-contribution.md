@@ -10,7 +10,7 @@
 - **Labour dependency:** [`labour-record.md`](./labour-record.md)
 - **Repo dependency:** [`repo.md`](./repo.md)
 
-> **Architecture correction (2026-10):** Signed Protocol fields remain as defined here. The prior old persistence/Asset-byte provider is legacy; MongoDB-default Runtime DB migration is pending, and Asset identity/storage is **deferred — rework required**. No independent contribution Recovery/staging feature remains in scope.
+> **Architecture correction (2026-10):** Signed Protocol fields remain as defined here. The previous persistence implementation and unreviewed Asset-byte provider is legacy; MongoDB-default Runtime DB migration is pending, and Asset identity/storage is **deferred — rework required**. No independent contribution Recovery/staging feature remains in scope.
 
 ## Purpose
 
@@ -151,9 +151,7 @@ operator
 At the standalone data-shape boundary, `labourRecordId` and `assetId` must be
 non-empty strings. Their actual identity semantics are not reimplemented here:
 `labourRecordId` is confirmed by exact equality with the supplied validated
-labour Record's `id`, while `assetId` is confirmed by exact equality with the
-selected Asset and by membership in `labour.assets[]`. This avoids copying Core
-RecordId or AssetId algorithms into the Repo acceptance Protocol.
+labour Record's `id`, while `assetId` is confirmed by equality with the selected opaque result reference and by membership in `labour.assets[]`. Concrete Asset identity is deferred. This avoids duplicating Core RecordId or future Asset identity algorithms in the Repo acceptance Protocol.
 
 The enclosing Record is:
 
