@@ -90,7 +90,7 @@ Cordis plugins 不按照 CRUD 操作或单个 Requirement 机械拆分。
 
 拆分主要服从协议边界、版本边界和生命周期。一起升级、一起加载、一起失效且没有独立运行价值的紧密协议可以由同一个 Cordis plugin 实现；能够被其他产品独立复用的协议应避免与 Repository 产品运行时绑定。
 
-Member、`labour.record`、Repo、Asset 和 contribution relation 都应首先按各自协议边界提供可组合能力。`labour.record@0.1.0` 与 `asset.content@0.1.0` 都是独立 Cordis Protocol implementations，不依赖 Board/Project 产品模型。LabourFlow 等上层产品可以只加载所需协议，不应为了使用同 identity 的 Member + labour Record + Asset + Repo 能力而加载完整 Repository 产品运行时.
+Member、`labour.record`、Repo、Asset 和 contribution relation 都应首先按各自协议边界提供可组合能力。`labour.record@0.1.0` 是独立 Cordis Protocol implementation；旧 `asset.content@0.1.0` 已延后返工，不作为当前已接受的通用 Asset Contract，不依赖 Board/Project 产品模型。LabourFlow 等上层产品可以只加载所需协议，不应为了使用同 identity 的 Member + labour Record + Asset + Repo 能力而加载完整 Repository 产品运行时.
 
 Contribution history 属于事实的 view / projection。它可以由插件提供查询、索引或缓存能力，但不需要为了概念完整性固定建立一个 History Protocol。
 
@@ -155,11 +155,11 @@ specific signed Record
 
 candidate set before Block confirmation
     -> Repo 可以选择、替换、追加或放弃待打包 Records
-    -> journal / Runtime database 只描述节点当前接受和准备处理的状态
+    -> Runtime DB 只描述节点已持久接收的事实和本地派生状态
     -> 这些状态本身不是 canonical chain truth
 ```
 
-因此 Repository 的本地 validation 主要服务于正常节点的运行自洽、恢复、关系维护和打包准备。它可以尽早拒绝明显非法的事实，但 peer node 不信任生产节点已经执行过这些检查，也不把 Runtime database、journal、snapshot 或本地 plugin 执行结果作为链级证明。
+因此 Repository 的本地 validation 主要服务于正常节点的运行自洽、关系维护和打包准备。它可以尽早拒绝明显非法的事实，但 peer node 不信任生产节点已经执行过这些检查，也不把 Runtime database、snapshot 或本地 plugin 执行结果作为链级证明。
 
 当下一版 Core Block packing 能力实现后，Header 只增加由 Records 自身确定性派生的 `vroot`。Block 不保存第二份 ValidationManifest，也不在 Header 重复列出 Runtime plugin / Protocol composition：
 
@@ -189,7 +189,7 @@ Block 内的 Records 可以按照适用 Protocol 建立一个或多个有逻辑�
 
 ## Repository 与其他 LabourChain 组件
 
-```mermaid
+\`\`\`mermaid
 flowchart LR
     subgraph Products["Products"]
         Flow["LabourFlow"]
@@ -198,48 +198,36 @@ flowchart LR
     end
 
     subgraph Node["Repository Node"]
-        Bootstrap["Bootstrap"]
-        Cordis["Cordis"]
-        MemberProtocols["Member Protocol implementations"]
-        RepoProtocols["Repo Protocol implementations"]
-        Journal["Durable Record ingress / journal"]
-        RuntimeDB["Runtime Record database"]
-        ChainState["Chain-state / Block-confirmation adapter"]
-        Providers["Asset / index / staging providers"]
-        Views["Projection / adapter plugins"]
+        Bootstrap["Bootstrap + Cordis"]
+        Domain["Member / Repo / labour / contribution plugins"]
+        Store["Runtime Record storage interface"]
+        Mongo["MongoDB provider (default)"]
+        Other["Alternative DB provider"]
+        ChainState["Chain-state adapter"]
+        Views["Rebuildable projections"]
     end
 
-    subgraph Core["LabourChain Core primitives"]
-        Protocol["Protocol identity / verification"]
+    subgraph Core["LabourChain Core"]
+        Protocol["Exact Protocol verification"]
         Entity["Entity identity"]
-        Record["Record validation / identity"]
-        Block["Block validation / identity"]
+        Record["Core signed Record"]
+        Block["Block validation"]
     end
 
-    Bootstrap --> Cordis
-    Cordis --> MemberProtocols
-    Cordis --> RepoProtocols
-    Cordis --> Journal
-    Cordis --> RuntimeDB
-    Cordis --> ChainState
-    Cordis --> Providers
-    Cordis --> Views
-
-    Flow --> Cordis
-    Board --> Cordis
-    Client --> Cordis
-
-    MemberProtocols --> Protocol
-    MemberProtocols --> Entity
-    RepoProtocols --> Protocol
-    RepoProtocols --> Entity
-    RepoProtocols --> Record
-    RepoProtocols --> RuntimeDB
-    RuntimeDB --> Journal
-    Views --> Journal
+    Flow --> Bootstrap
+    Board --> Bootstrap
+    Client --> Bootstrap
+    Bootstrap --> Domain
+    Domain --> Protocol
+    Domain --> Entity
+    Domain --> Record
+    Domain --> Store
+    Store --> Mongo
+    Store -.-> Other
+    Store --> Views
     Views --> ChainState
     ChainState --> Block
-```
+\`\`\`
 
 Repository 不重新定义 Core 已有的 Protocol、Record、Entity identity、signature 或 Block 语义。Core Record 只是通用签名事实容器；劳动记录由 `labour.record@0.1.0` 把 `labourRecord` 作为 `Record.data` 解释。当前 #9 的 Repo 侧采纳事实由具体的 `repo.contribution@0.1.0` 定义，而不是继续依赖一个未指定的 generic confirmation / relation Protocol。未来其他领域事实仍由各自具体 Protocol 定义。
 
@@ -276,7 +264,7 @@ Repo 后续采取需要链上留痕的决定时，决定 Record 由 Repo identit
 
 ```text
 accepted/pending-chain
-    -> 已进入 durable Record journal
+    -> 已经由配置的 Runtime DB 持久接收
     -> Repository 可以恢复并加载该 Repo
 
 block-confirmed
@@ -292,7 +280,7 @@ sequenceDiagram
     participant Cordis as Cordis
     participant MemberProtocol as Member Protocol capability
     participant Repo as Repo Protocol capability
-    participant Journal as Durable Record journal
+    participant Journal as Runtime Record DB
     participant Index as Runtime Repo index
     participant Chain as Chain-state adapter
 
@@ -317,7 +305,7 @@ sequenceDiagram
     Repo-->>Creator: Repo + createdBy/status
 ```
 
-Runtime Repo index 只是加速 lookup 的可替换数据。Repo identity 来自 establishment Record 的 `data.publicKey`，创建来源来自该 Record 的 `createdBy`。缺失或陈旧的 index 不能创造第二条创建事实；index 可以通过 durable journal，以及在可用时通过 chain state 重新对账。
+Runtime Repo index 只是加速 lookup 的可替换数据。Repo identity 来自 establishment Record 的 `data.publicKey`，创建来源来自该 Record 的 `createdBy`。缺失或陈旧的 index 不能创造第二条创建事实；index 可由 Runtime DB 内已持久化的 establishment Records 重建；链状态只决定单独的 Block-confirmation 显示。
 
 ## Contribution 数据流
 
@@ -420,7 +408,7 @@ Architecture 当前不锁定：
 - `member.profile` 的完整字段、更新和隐私模型；
 - durable Record journal 的最终 package/service/API 形式；
 - chain-state adapter 的最终 package/service/API 形式；
-- MongoDB、PostgreSQL、filesystem 等持久化实现；
+- MongoDB 默认 provider 之外的可替换 DB 具体实现；
 - HTTP / REST / WebSocket 接口；
 - UI；
 - 高级 ACL 和角色体系；
