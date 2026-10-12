@@ -1,566 +1,110 @@
 # Contribution Specification
 
-- **Status:** Accepted
-- **Scope:** Repository orchestration for one concrete labour / Asset contribution
-- **Requirements:** [`../docs/requirements.md`](../docs/requirements.md)
-- **Architecture:** [`../docs/architecture.md`](../docs/architecture.md)
-- **Umbrella:** [`repository-mvp.md`](./repository-mvp.md)
-- **Repo acceptance Protocol:** [`repo-contribution.md`](./repo-contribution.md)
+- **Status:** Under revision — signed fact semantics retained; DB/Asset integration pending rework
+- **Scope:** Repo acceptance of a Member labour contribution; no standalone Recovery service
+- **Requirements:** [Repository requirements](../docs/requirements.md)
+- **Architecture:** [Repository architecture](../docs/architecture.md)
+- **Repo acceptance Protocol:** [repo-contribution.md](./repo-contribution.md)
+- **Runtime DB:** [runtime-record-database.md](./runtime-record-database.md)
 
-## Purpose
+## Confirmed signed facts
 
-A Repository contribution is the process by which a Member submits one Asset
-associated with a Member-produced `labour.record@0.1.0` Record and a
-Repo-signed `repo.contribution@0.1.0` acceptance Record.
-
-The current #9 vertical slice is deliberately concrete. It does not require a
-generic relation Protocol, generic confirmation Protocol or generic Patch
-framework.
-
-The minimum signed facts are:
+Member confirms their labour by signing a `labour.record@0.1.0` Core Record `L`. Repo makes a distinct positive acceptance decision by signing a `repo.contribution@0.1.0` Record `D`:
 
 ```text
-Member-signed labour Record L
-    -> proves the Member-side labour assertion
-    -> references[] identifies confirmed input Assets
-    -> assets[] identifies result Assets
+L.createdBy = Member EntityPublicKey
+L.data.references[] = confirmed upstream references
+L.data.assets[] = declared results
 
-Repo-signed acceptance Record D
-    -> protocol = repo.contribution@0.1.0
-    -> selects L by labourRecordId
-    -> selects one result Asset A by assetId
-    -> records actual operator
-```
-
-The accepted Asset itself is the exact immutable Asset defined by
-[`asset.md`](./asset.md) and durably handled by
-[`asset-storage.md`](./asset-storage.md).
-
-Repository does not produce the Member's labour Record, rewrite its relations,
-or own Repo private-key signing.
-
-## Contribution input
-
-The minimum #9 submission shape is behaviorally equivalent to:
-
-```ts
-interface ContributionRequest {
-  readonly asset: Asset
-  readonly labourRecord: CoreRecord
-  readonly acceptanceRecord: CoreRecord
+D.createdBy = Repo EntityPublicKey
+D.data = {
+  labourRecordId: L.id,
+  assetId,
+  operator
 }
 ```
 
-No separate contributor, Repo, relation object, confirmation object,
-ContributionId or Patch object is required.
+The Repo selects one result from `L.data.assets[]`; it does not automatically accept all results of that labour. `operator` records who acted for the Repo without defining ACL, ownership, membership or delegation. No additional Member confirmation Record, ContributionId, generic relation Protocol or Patch is required.
 
-Those values are derived from the signed facts:
+Repository consumes **already signed** L and D, not Member/Repo private keys. Historical interpretation is determined by exact ProtocolHash and verified artifacts.
 
-```text
-contributor
-    = labourRecord.createdBy
+## Accepted Repository decision
 
-Repo
-    = acceptanceRecord.createdBy
-
-accepted AssetId
-    = acceptanceRecord.data.assetId
-
-labour relation
-    = acceptanceRecord.data.labourRecordId
-      + labourRecord.references[]
-      + labourRecord.assets[]
-
-operator
-    = acceptanceRecord.data.operator
-```
-
-The supplied `asset.id` must equal
-`acceptanceRecord.data.assetId`.
-
-## Member-side confirmation
-
-The valid Member-signed `labour.record@0.1.0` is the Member-side confirmation
-for this MVP contribution.
-
-Its existing validation already requires:
-
-- a valid Core Record;
-- a valid author signature;
-- an author satisfying the Member capability;
-- exact `labour.record@0.1.0` Protocol semantics.
-
-The signed `references[]` and `assets[]` are therefore the concrete
-Member-confirmed Asset relations. #9 must not introduce a second
-Member-confirmation Record.
-
-## Repo-side confirmation
-
-Repo-side acceptance is the concrete
-`repo.contribution@0.1.0` fact defined in
-[`repo-contribution.md`](./repo-contribution.md).
-
-Its enclosing Core Record supplies the Repo identity and Repo signature.
-Its data supplies:
+Repository `COMMITTED` means a valid Repo acceptance fact `D` has been reliably persisted and the required signed relations/prerequisites can be verified. It is not the same as Block confirmation.
 
 ```text
-labourRecordId
-assetId
-operator
+D absent from durable DB
+  -> contribution not accepted by this Repository
+
+valid durable D + verified required facts
+  -> Repository COMMITTED
+
+D durable but required facts corrupt/unavailable
+  -> explicit integrity/storage error, not false acceptance/absence
 ```
 
-The Record is a positive acceptance fact only. Absence of such a fact is not a
-durable rejection.
-
-## Asset relation policy
-
-For one concrete contribution:
+The current signed relation and same-key decision are:
 
 ```text
-labour.references[]
-    -> confirmed upstream production/citation references
-
-acceptanceRecord.data.assetId
-    -> selected result Asset accepted by this Repo
-
-labour.assets[]
-    -> all result Assets declared by the Member
+(Repo = D.createdBy, L.id, D.data.assetId)
+    -> one accepted D.id
 ```
 
-The selected accepted Asset must occur in `labour.assets[]`.
+Exact same D replay is idempotent. A different D under the same logical key conflicts. In the redesigned DB, the required conditional write/uniqueness must be enforced by **the DB provider** across concurrent processes; the old journal-scoped in-process exclusive section is not sufficient as the final product boundary.
 
-The current labour Record schema does not distinguish mandatory execution
-inputs from contextual/citation references. Therefore current
-`repo.contribution@0.1.0` does not infer a local-durability prerequisite for
-every AssetId in `labour.references[]`.
+D is the last durable Repository acceptance fact. L and other independently accepted facts may already persist when D is absent; their presence cannot be promoted to a Repo acceptance by heuristics.
 
-The selected result Asset must be durably retrievable before Repository commit.
-It may already exist in Asset storage or may be supplied by the current request
-and preserved idempotently.
-
-Other AssetIds in `labour.assets[]` are not automatically accepted and are
-not required to be locally durable for this specific contribution. A Repo may
-accept them separately.
-
-If one AssetId appears in both `references[]` and `assets[]`, and the
-Repository initially lacks it, preserving/getting that submitted selected
-result Asset is sufficient for current #9 Asset availability. Its
-`references[]` occurrence does not require pre-existing local durability.
-
-Missing local availability of an Asset mentioned only in `references[]` does
-not make the labour Record invalid and does not by itself block current
-Repository `COMMITTED`. A stronger referenced-Asset availability requirement
-belongs to a concrete Protocol that explicitly defines it.
-
-## Patch boundary
-
-No current #9 contribution based on
-`labour.record@0.1.0` + `asset.content@0.1.0` requires a Patch fact.
-
-Patch remains a future extension for a Protocol that actually defines mutable
-state evolution. The current vertical slice neither defines a generic Patch
-schema nor waits for one.
-
-## Execution and chain status
-
-Repository execution and chain confirmation remain separate dimensions.
-
-Repository execution is:
+## Database integration (pending implementation)
 
 ```text
-STAGED
-    -> request is being processed; no acceptance fact is durable
-
-DOMAIN_CONFIRMED
-    -> labour Record is valid under exact semantics
-    -> Repo acceptance Record is valid under exact semantics
-    -> their labour/Asset relation agrees
-    -> selected result Asset is canonical-valid and durably retrievable
-    -> Repository orchestration finds no conflicting accepted Repo/labour/Asset key
-
-COMMITTED
-    -> all prerequisite durable state exists
-    -> valid Repo acceptance Record is durably accepted last
+exact Protocol/Record validation
+  -> Repository domain acceptance decision
+  -> narrow durable Record DB interface
+  -> MongoDB implementation by default (replaceable)
+  -> durable acceptance D and the signed prerequisites
 ```
 
-`DOMAIN_CONFIRMED` is not chain confirmation and is not itself Repository
-acceptance.
+The Node trusts the configured DB to recover its **persisted** state. Restart reconnects, reads D/L from DB, verifies exact Protocol semantics when needed and rebuilds optional indexes/views. It does **not** attempt to reconstruct an interrupted request or automatically run commit again.
 
-Chain status is separate:
+Storage provider identities, collections and transactions are local implementation details, not signed Protocol data. MongoDB operations must use real unique/conditional persistence guarantees. If a cross-document invariant requires a transaction, provide it with a deployment supporting transactions; do not describe an ordinary single-process mutex or a weak standalone fallback as equivalent.
 
-```text
-pending-chain
-    -> block-confirmed
-```
+Existing contribution code uses `RecordJournalService`, `RuntimeRecordDatabaseService` and filesystem `AssetStorageService`. Those provider integrations remain **legacy code requiring refactor** and do not define the new DB contract.
 
-A Repository-committed contribution remains pending-chain until future accepted
-Block / chain-state evidence proves inclusion. Local persistence, Runtime
-relationship state or candidate Block construction cannot upgrade it.
+## Withdrawn Recovery behavior
 
-## Required durable fact set
+The separate #10 Recovery functionality has been **withdrawn**. Remove from the implementation in a later bounded code PR:
 
-For one accepted key:
+- `ContributionStagingService` and its filesystem persisted copy of the complete request;
+- `RepositoryContributionRecoveryService.submit()` / `recoverPending()`;
+- recovery-only `validateForStaging()`, plugins/exports and tests tied exclusively to auto-resume;
+- the pre-D `STAGED / DOMAIN_CONFIRMED` durable processing-phase model and S0/S1/S2/S3 automatic re-execution matrix.
 
-```text
-Repo R
-labour Record L
-selected Asset A
-acceptance Record D
-```
+If the caller receives no response after D was persisted, the caller may read D or **explicitly retry** the exact signed operation. DB durability and idempotent acceptance handle this case. Do not introduce a new transaction/saga, restore the request from staging or fabricate D from durable-looking L/Asset remnants.
 
-Repository `COMMITTED` requires:
+Ordinary DB read failure or storage corruption is a provider/integrity error. No application-level staging is required to recover the database.
 
-1. exact labour Record `L` is durably accepted;
-2. exact selected Asset `A` is durably retrievable;
-3. `D` is a valid `repo.contribution@0.1.0` Record where:
-   - `D.createdBy = R`;
-   - `D.data.labourRecordId = L.id`;
-   - `D.data.assetId = A.id`;
-   - `A.id` occurs in `L.data.assets[]`;
-4. Repository orchestration finds no distinct already accepted `D2` for the
-   same `(R, L.id, A.id)` logical key;
-5. `D` is durably accepted after the above prerequisites.
+## Asset integration is deferred
 
-The Repo establishment fact and Member declaration facts remain their existing
-independent durable facts. They are dependencies used to validate `R` and the
-labour author; they are not duplicated inside the contribution.
+The labour `references[] / assets[]` and Repo `assetId` fields are retained. However, the previous `asset.content@0.1.0` content-bytes identity, 16 MiB limit, `preserve/get/has` filesystem provider and selected-result byte-durability workflow were not agreed as the universal Repository Asset model.
 
-No third canonical Contribution store is required.
-
-## Deterministic COMMITTED predicate
-
-For an exact durable acceptance Record `D`:
-
-```text
-RepositoryContributionState(D) == COMMITTED
-iff
-
-  D is durably present
-  AND D validates as repo.contribution@0.1.0
-  AND Repo D.createdBy is established
-
-  AND durable Record L = get(D.data.labourRecordId) exists
-  AND L validates as labour.record@0.1.0
-  AND D.data.assetId is in L.data.assets
-
-  AND Asset D.data.assetId is durably retrievable
-
-  AND no distinct accepted repo.contribution Record
-      exists for the same
-      (D.createdBy, D.data.labourRecordId, D.data.assetId)
-```
-
-This predicate depends only on exact durable facts and deterministic Protocol
-validation. It does not depend on process-local state, UI/session state,
-candidate Block state or chain confirmation.
-
-If an acceptance marker exists but required durable storage is unreadable or
-corrupt, the implementation must fail closed with the underlying integrity /
-storage error. It must not silently report either a healthy `COMMITTED` state
-or pretend that no acceptance fact ever existed.
-
-## Commit marker and write ordering
-
-The Repo acceptance Record `D` is the final durable marker for Repository
-commit.
-
-Normal #9 ordering is:
-
-```text
-1. resolve/validate exact Protocols
-2. validate labour Record L
-3. validate Repo acceptance Record D and relation D -> L -> selected Asset A
-4. durably preserve/get selected Asset A
-5. durably accept labour Record L, idempotently
-6. under the serialized Runtime Record database boundary:
-     - re-check singular acceptance key
-     - durably accept Repo acceptance Record D last
-7. return COMMITTED
-```
-
-The request may contain a labour Record or selected Asset that is already
-durable. Existing exact RecordId / AssetId duplicate semantics make those steps
-idempotent.
-
-The acceptance Record may be constructed and signed before this flow, but it
-must not be durably accepted by Repository before the prerequisite Record and
-Asset durability conditions are satisfied.
-
-Repository does not construct or sign `D` unless a future explicit signer
-capability is defined. For #9, the orchestration consumes a supplied Repo-signed
-Record and validates it.
-
-## Duplicate and conflict behavior
-
-Existing identity semantics are reused:
-
-- exact Asset replay is idempotent by AssetId;
-- exact labour Record replay is idempotent by RecordId;
-- exact Repo acceptance Record replay is idempotent by RecordId.
-
-The logical acceptance key is:
-
-```text
-(
-  Repo = acceptanceRecord.createdBy,
-  labourRecordId,
-  assetId
-)
-```
-
-A distinct Repo acceptance Record for an already accepted logical key is a
-conflict in v0.1.0 and must not replace the earlier acceptance fact.
-
-No ContributionId is introduced merely for deduplication.
-
-## Runtime Record database relation boundary
-
-The durable signed facts already contain the concrete relationship:
-
-```text
-Repo acceptance Record
-    -> labourRecordId
-    -> labour.assets[] selected asset
-    -> labour.references[] confirmed upstream references
-```
-
-#9 therefore does not require a generic relation database or graph structure.
-
-The existing Runtime Record database serialized ingress boundary is sufficient
-for the normal commit path. A future implementation may maintain a narrow,
-rebuildable index equivalent to:
-
-```text
-(Repo, labourRecordId, assetId) -> acceptance RecordId
-```
-
-for conflict checking/query efficiency, but that index is not acceptance truth
-and is not required to define `COMMITTED`. It must be rebuildable from durable
-Records under exact Protocol semantics.
-
-Dependency/order information needed by later Block work is already explicit:
-the Repo acceptance fact depends on the labour Record it references. This does
-not create a global DAG, `previous` chain or generic relation framework.
-
-## Exact Protocol service boundary
-
-Repository orchestration uses existing exact
-`ProtocolResolutionService` to resolve the acceptance Record's exact
-`repo.contribution@0.1.0` implementation.
-
-The specialized service contract is defined in
-[`repo-contribution.md`](./repo-contribution.md).
-
-There is no cross-Protocol generic `validateContribution` API.
-
-The Protocol service owns semantic validation. Repository orchestration owns:
-
-- Asset availability and durable preservation;
-- Record durable ingress ordering;
-- same-key accepted-fact conflict checks;
-- staging/correlation when #10 implements recovery;
-- Repository result reporting.
-
-The Protocol service never calls Repository Asset/Record persistence in order
-to commit a contribution.
-
-## Restart derivation
-
-A fresh node can derive a committed contribution without process-local memory:
-
-```text
-durable acceptance Record D
-    -> exact repo.contribution Protocol validation
-    -> D.data.labourRecordId
-    -> durable labour Record L
-    -> exact labour Protocol validation
-    -> D.data.assetId
-    -> durable selected Asset retrieval
-    -> L.references[] remains signed lineage; local absence alone is not a #9 blocker
-    -> COMMITTED
-```
-
-The operator survives because it is part of `D.data`.
-
-A replaceable index may accelerate lookup from
-`(Repo, labourRecordId, assetId)` to `D.id`, but the index is not required
-to recover the acceptance truth.
-
-## Staging and recovery boundary
-
-#9 defines the normal durable commit boundary. #10 owns recovery of interrupted
-pre-commit flows.
-
-A future staging provider may persist correlation needed by #10, but staging is
-not part of the `COMMITTED` predicate and cannot create acceptance.
-
-#9 does not define a staging schema, retry state machine, rollback protocol,
-transaction coordinator or saga framework.
-
-Partial durable state is allowed before the final acceptance marker:
-
-- selected Asset may be durable while the labour Record is not;
-- selected Asset and labour Record may be durable while the acceptance Record
-  is not.
-
-Those states are not `COMMITTED`. #10 may later reconcile them.
-
-If the acceptance Record is already durable, the normal ordering says the
-Repository commit marker has been reached even if the original caller did not
-receive the response. Recovery/response reconciliation remains #10.
+Those rules are **deferred and await Asset domain/management rework**. They may be examined as historical code but are not accepted as present MVP requirements. Revalidate the contribution's selected-Asset availability and management behavior after [Asset Spec](./asset.md) and [Asset Storage Spec](./asset-storage.md) are re-accepted. No old Asset assumptions may be silently promoted via these Contribution tests.
 
 ## Chain boundary
 
-Repository `COMMITTED` means local durable domain acceptance.
+Repository COMMITTED is a local acceptance fact. It remains `pending-chain` until an independent accepted Block/chain-state provider supports `block-confirmed`. Candidate Block packing, broadcasting, Runtime DB persistence or any local projection alone cannot create that evidence.
 
-It does not mean:
+## Revised acceptance checks
 
-- Block packed;
-- candidate Block produced;
-- peer validated;
-- chain accepted;
-- canonical/block-confirmed.
+Required when the DB adapter is implemented:
 
-Only future accepted-Block/chain-state evidence can support
-`block-confirmed`.
+- Signed L and D retain exact RecordId, signature, Protocol reference/hash and the accepted field shapes.
+- Exact replay is idempotent; a distinct same-key D fails under actual concurrent DB writes.
+- Node restart and DB reconnect read previously persisted D/L without a replay/staging coordinator.
+- D absent is never reported as accepted, regardless of independently persisted earlier facts.
+- Durable D plus corrupted/missing required facts fails explicitly without silent historical healing.
+- No standalone contribution Recovery API/plugin/queue or synthetic ContributionId remains.
+- Provider unavailability is an error, not an implicit fallback to ephemeral in-memory storage.
+- Chain-state status is kept distinct from Repository acceptance.
+- Approved Asset identity/storage acceptance is added **only after** its separate design review.
 
-#9 does not implement #11 contribution history merely to expose this
-distinction.
-
-## Failure model
-
-The #9 implementation must expose failures at the layer that owns them,
-including:
-
-- exact ProtocolHash / verified implementation unavailable;
-- invalid Member-signed labour Record;
-- Repo unavailable/not established;
-- invalid Repo acceptance Record or operator;
-- acceptance/labour relation mismatch;
-- selected Asset absent from `labour.assets[]`;
-- selected Asset invalid, conflicting, missing, corrupt or not durably
-  retrievable;
-- durable Record ingress failure;
-- distinct already accepted Repo/labour/Asset key conflict;
-- commit result cannot be determined safely because durable state cannot be
-  verified.
-
-Missing local Asset availability must not be surfaced as
-`labour.record@0.1.0` semantic invalidity.
-
-## Current #9 implementation mapping
-
-The current Runtime implementation follows this mapping:
-
-```text
-Contribution orchestration
-  -> validate labour Record through exact labour.record service
-  -> derive contributor from labourRecord.createdBy
-  -> resolve exact repo.contribution service
-  -> validate acceptance Record + relation, including established Repo author
-  -> derive Repo from acceptanceRecord.createdBy
-  -> preserve/get submitted selected Asset
-  -> accept labour Record through Runtime Record database
-  -> under the same serialized ingress boundary:
-       check singular acceptance key
-       accept Repo acceptance Record last
-  -> return COMMITTED
-```
-
-Repo signing is outside this service: the request supplies the signed acceptance
-Record.
-
-No #10 recovery loop, #11 projection, Block packer or chain adapter is needed
-for this normal path.
-
-## Implementation acceptance tests
-
-The implementation acceptance surface covers:
-
-### Canonical fixture
-
-One fixture should contain:
-
-- one Member EntityPublicKey;
-- one established Repo EntityPublicKey;
-- one operator EntityPublicKey;
-- one upstream referenced Asset `A0` (it may be absent from this Repo);
-- one Member-signed labour Record `L` with:
-  - `references = [A0.id]`;
-  - `assets = [A1.id]`;
-- one submitted result Asset `A1`;
-- one Repo-signed `repo.contribution@0.1.0` Record `D` with:
-  - `labourRecordId = L.id`;
-  - `assetId = A1.id`;
-  - `operator`.
-
-The final commit marker is `D.id`.
-
-`A0`, `A1`, `L` and `D` above are role names, not fake literal hashes.
-The runtime implementation builds and verifies the real `repo.contribution@0.1.0`
-artifact in integration coverage. Fixtures use the real verified artifact
-ProtocolHash and Core-derived RecordIds / AssetIds rather than design-time fake
-hashes; those derived values are the regression vectors for the implemented
-contract.
-
-### Relation tests
-
-- valid `D -> L -> A1`;
-- wrong labour RecordId;
-- selected Asset not in `L.assets[]`;
-- one input Asset referenced by multiple accepted labour Records;
-- one labour Record with multiple outputs where separate acceptance facts select
-  separate Assets;
-- unchanged maintenance where the same Asset is in references and assets;
-- no `previous`, `pid` or reverse edge.
-
-### COMMITTED table
-
-At minimum:
-
-| Labour durable | Selected Asset durable | Valid acceptance durable | Result |
-| --- | --- | --- | --- |
-| yes | no | no | not committed |
-| yes | yes | no | not committed |
-| no | yes | no | not committed |
-| yes | yes | invalid | not committed / explicit error |
-| yes | yes | yes | COMMITTED |
-
-In addition:
-
-- a valid unrelated `L.references[]` Asset missing locally may still commit;
-- invalid `D -> L -> selected Asset` relation is a semantic failure;
-- exact `D` replay is committed/idempotent;
-- a distinct `D2` with the same logical key is an orchestration conflict.
-
-A storage corruption/unavailability error after an acceptance marker exists is
-an explicit integrity/storage failure, not a healthy alternative state.
-
-### Failure seams
-
-Expected normal-path result after:
-
-- failure before selected Asset durability: not committed;
-- failure after selected Asset durability but before labour Record durability:
-  not committed;
-- failure after labour Record durability but before acceptance Record:
-  not committed;
-- failure while persisting acceptance Record: never report committed unless
-  the durable acceptance Record can be verified;
-- failure after acceptance Record durability but before response: durable facts
-  satisfy the commit predicate; response/recovery reconciliation belongs to
-  #10.
-
-No rollback is required by #9.
-
-### Restart
-
-A fresh Runtime over the same durable Record journal and Asset provider must be
-able to re-derive `COMMITTED`, including the Repo identity, contributor,
-accepted Asset, labour relation and operator, without an in-memory Contribution
-registry.
-
-### Chain separation
-
-A Repository-committed contribution remains pending-chain in #9. No synthetic
-Block evidence or #11 history implementation is required.
+This is a correction of Requirements → Architecture → Spec. Implementation/test cleanup and MongoDB migration are subsequent bounded tasks.
