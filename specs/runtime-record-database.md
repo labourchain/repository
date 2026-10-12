@@ -1,69 +1,62 @@
 # Runtime Database Specification
 
-- **Status:** Draft — design correction; implementation pending
-- **Scope:** Repository node-local persisted Core Records and minimal Repository query/mutation boundaries
-- **Reference:** [Board's working MongoDB repository pattern](https://github.com/Ri0n72Y/board/tree/main/apps/board-api/src)
+- **Status:** Draft — architecture correction; implementation pending
+- **Scope:** Repository-local Core Record persistence for one Repo maintained by one Node
+- **Reference:** [Board's MongoDB repository pattern](https://github.com/Ri0n72Y/board/tree/main/apps/board-api/src)
 - **Requirements:** [Repository requirements](../docs/requirements.md)
 - **Architecture:** [Repository architecture](../docs/architecture.md)
 
-## Decision and authority
+## Ownership and authority
 
-Repository adopts **MongoDB as its default persistent database**, following the working Board practice of a domain-facing repository interface and a separate MongoDB implementation. Domain Protocol and orchestration code must not depend on `MongoClient`, collections, BSON `_id`, or provider-specific queries. A different database may implement the same required semantics without changing Protocol facts.
+**Each Repo is maintained by exactly one Repository Node.** Multiple Nodes do not concurrently maintain or write the same Repo. Distributed Repo writers, shared-Repo locking, cross-Node conflict arbitration and multi-Node coordination are outside the current design.
 
-This corrects the earlier filesystem Record-journal plus a same-process `RuntimeRecordDatabase` wrapper. Those existing implementations are **legacy code awaiting replacement**, not the target persistent database architecture.
+**MongoDB is the default persistent Runtime database.** The Node uses a small domain-facing storage interface so the provider may later be replaced without changing signed Core Record/Protocol fields. Follow Board's practical interface/implementation separation, not its specific business schemas.
 
-The database is the authority for **which exact Repository-local Records have been durably accepted**. It is not the source of Protocol validity, Repo acceptance semantics, Block confirmation, or chain consensus. The applicable exact Protocols and signed facts continue to define those meanings.
+MongoDB is trusted for persistence of data it has accepted. The Node does not independently implement database crash recovery, maintain a second copy of requests, or certify MongoDB's durability machinery. After restart it reconnects and reads persisted Records.
 
-## Minimum storage-facing contract
+The database stores facts; it does not define the signed Record's semantic validity, make a Record Block-confirmed, or replace Core Protocol validation. A valid durable Repo acceptance Record D remains the Repo acceptance marker.
 
-The current confirmed Core Record fields and Protocol-specific `Record.data` remain unchanged. An implementation should provide only the operations actually consumed by Member, Repo, labour, contribution and history features:
+## Minimal domain-facing contract
 
-- Accept one exact already-validated signed Record durably, idempotently by Core RecordId. Reject non-equivalent data under the same id.
-- Read one exact stored Record by RecordId, distinguishing not found from database unavailability or inconsistent data.
-- Enumerate/query stored accepted Records sufficiently for Repo establishment, concrete contribution uniqueness and later history projection.
-- Atomically enforce the concrete uniqueness/conditional-write invariant needed to publish a Repo acceptance Record; do **not** rely on a process-only mutex when multiple node instances share the database.
-- Expose storage failures rather than silently substituting an empty in-memory repository.
+The initial capability should be limited to the actual Repository needs:
 
-A conceptual interface is `accept(record)`, `get(recordId)`, and a bounded `iterate/query` capability, plus a provider-safe **concrete conditional acceptance** for the real same-key invariant. The exact TypeScript signatures and index shapes belong to the subsequent implementation design, not to a new generic ORM, graph DB, queue or transaction framework.
+- `accept(record)`: store an exact validated signed Core Record, idempotently by RecordId; reject conflicting data at the same ID.
+- `get(recordId)`: load the exact persisted Record, distinguishing absence from a database failure.
+- `iterate/query`: find stored Records for Repo establishment, contribution relationships and derived history.
 
-## MongoDB default and replaceability
+Member, Repo and Contribution use the interface; they do not directly use MongoDB collections, `MongoClient` or BSON `_id`. The provider handles its indexes and normal storage operations. The application may serialize its own Repo acceptance operations as needed, using its one-Node ownership and persisted DB data. No shared-Repo multi-writer constraint or general transaction API is required.
 
-Follow Board's useful separation:
+Keep the already confirmed Core Record fields, `labour.record` fields, Repo establishment facts and `repo.contribution` fields. Do not copy Board `pid`, tags, patch, SnapshotHead or other Board business structures.
+
+## Provider selection
 
 ```text
-Repository Protocol/domain service
-        -> narrow Record storage interface
-        -> MongoDB implementation (default)
-        -> MongoDB database
+Repository domain / Protocol services
+        -> narrow Runtime Record DB interface
+        -> MongoDB provider (default)
+        -> persisted Core Records
 ```
 
-Board's `RecordRepository` and `MongoRecordRepository` demonstrate interface/implementation separation, its `db/mongo.ts` creates collections and indexes, and `services/index.ts` assembles the provider. **Do not copy Board's `pid`, `schema`, `patch`, tags or SnapshotHead fields**: Repository uses its already established Core Record and Repo Protocol fields.
+An alternative DB adapter may satisfy the same minimal interface. Its native storage IDs are local implementation details, never RecordId, AssetId or other signed Protocol data. An explicit in-memory test provider is fine; production Node must not silently substitute memory storage for a configured MongoDB provider failure.
 
-MongoDB collection names, BSON identifiers and indexes are implementation details. Unique indexes / conditional writes must enforce real identity and Repo acceptance invariants. Use the configured MongoDB deployment's supported durability and atomicity features; multiple writes to distinct collections are **not automatically atomic**. Board's SnapshotHead path itself requires transactions for strong multi-document consistency and has a weaker standalone fallback; that fallback is not a Repository integrity guarantee.
+MongoDB storage recovery belongs to MongoDB. No separate writeConcern policy, journal implementation, DB recovery verification framework or transaction coordinator is specified at Repository domain level.
 
-Other storage providers may be implemented behind the same contract, but the normal Repository node must not silently fall back to an ephemeral memory database when durable MongoDB is unavailable. In-memory implementations may be used explicitly by unit tests.
+## Node restart and contribution behavior
 
-## Restart and failure semantics
+Startup recreates Cordis services, connects to the configured DB and reads existing facts; missing/stale query indexes or projections can be rebuilt from stored Records. This is ordinary Node initialization, not an independent Recovery feature.
 
-The database owns storage-engine crash durability and recovery. On node restart, Repository reopens its configured provider, reads existing persisted facts, verifies their exact Protocol semantics as needed, and reconstructs only derived indexes/views. It does **not** maintain a second durable copy of whole contribution requests, replay interrupted user commands, or run a bespoke `recoverPending()` coordinator.
+For an interrupted contribution:
 
-An interrupted request with no durable Repo acceptance Record `D` is **not Repository COMMITTED**. Persisted independent facts remain facts. An existing durable `D` remains the Repository acceptance marker; it is not rolled back because the caller missed a response. If its dependencies are corrupt/unavailable, report an integrity/storage failure rather than using request data to heal them.
+- Without a durable acceptance Record `D`, the Repo has not committed that contribution. Earlier durably stored facts may still exist.
+- With valid durable `D`, the Repo accepted it. If necessary persisted relations cannot be read or validated, expose an integrity/storage error.
+- A caller may explicitly retry the same signed operation using existing RecordId idempotency and the Repo's own same-key decision. The Node does not automatically complete an earlier request.
 
-If a caller explicitly retries the **same supplied signed operation**, existing RecordId idempotency and concrete contribution same-key conflict rules apply; any Asset-specific identity/idempotency requirement remains deferred for rework. This is caller retry, not automatic startup recovery.
+Asset identity, storage, availability and management are **deferred — rework required**. This DB Spec does not prescribe Asset storage or Asset-dependent contribution completion criteria.
 
-## Out of scope
+## Explicit exclusions
 
-- A standalone Repository Recovery service, durable staging queue or phase state machine;
-- rewriting already signed Record fields or storing MongoDB native ids in signed facts;
-- a second append-only file journal acting as an independent Record authority;
-- a generic DB abstraction or unrestricted business CRUD interface;
-- a Repository-specific plugin manager outside Cordis;
-- Block packing, chain-state ownership, synchronization or consensus;
-- fixing/redefining Asset storage while the Asset model is deferred for rework.
+No standalone contribution staging, `recoverPending()`, automatic request replay, phase state machine, generic queue, second Record store, general ORM, multi-Node Repo ownership, cross-Node locking, Block packing, chain synchronization or consensus.
 
-## Implementation migration (not performed by this documentation change)
+## Implementation follow-up (outside this docs PR)
 
-1. Replace legacy filesystem Record journal / `RuntimeRecordDatabase` storage plumbing with a narrow DB-backed provider and MongoDB default.
-2. Remove `ContributionStagingService`, `RepositoryContributionRecoveryService`, their exports, plugin wiring and recovery-only preflight/helpers/tests.
-3. Reconcile contribution's single-domain acceptance path with the new DB atomicity/uniqueness contract while preserving the confirmed signed `repo.contribution` fields.
-4. Separately redesign Asset management before treating its existing content-byte provider as accepted MVP scope.
+After this Spec is accepted: remove the withdrawn Recovery code (#47); implement the MongoDB-default provider behind this narrow interface (#31); reconcile existing Member/Repo/Contribution consumers with it; separately revisit all Asset-related functionality (#8). Do not silently retain obsolete persistence components or use the deferred Asset model as an implementation prerequisite.
