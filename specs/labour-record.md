@@ -138,8 +138,7 @@ acceptLabourRecord(record)
 loadLabourRecord(recordId)
 ```
 
-`acceptLabourRecord` enters the existing Runtime Record database serialized ingress
-boundary. The replacement Runtime DB will own persisted Record durability through a replaceable provider.
+`acceptLabourRecord` uses the narrow Runtime Record persistence interface. The target MongoDB-default provider will own exact durable Record storage and concrete concurrent write safety; the current journal-backed serialized wrapper is legacy and scheduled for replacement.
 This is pending-chain Runtime acceptance, not Block confirmation.
 
 `loadLabourRecord` reads the exact durable Record through the Runtime Record
