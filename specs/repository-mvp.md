@@ -16,7 +16,7 @@ This umbrella Spec tracks the revised MVP. A merged implementation and a green C
 | Repo establishment/identity | Implemented | Retain |
 | `labour.record@0.1.0` | Implemented | Retain its agreed minimal fields and references |
 | Exact ProtocolHash / verified artifact resolution | Implemented | Retain |
-| Signed Record ingress / Runtime DB | Legacy filesystem journal + process-local wrapper implemented | **Redesign:** MongoDB default; provider-agnostic interface; implementation pending |
+| Signed Record ingress / Runtime DB | Previous implementation awaiting replacement | **Redesign:** MongoDB default; narrow replaceable interface; implementation pending |
 | `asset.content@0.1.0` and Asset identity | Historical implementation exists | **Deferred — rework required** |
 | Asset storage | Historical filesystem implementation exists | **Deferred — rework required** |
 | Repo-signed `repo.contribution@0.1.0` | Implemented | Retain confirmed fact fields; storage/Asset integration requires revalidation |
@@ -65,6 +65,8 @@ Repository-local durable acceptance remains `pending-chain` unless independently
 
 ## Revised Runtime DB architecture
 
+**Each Repo is maintained by exactly one Node.**
+
 ```text
 Repository domain/Protocol services
     -> narrow persistent Record store abstraction
@@ -79,9 +81,9 @@ The already agreed Core Record / Repo acceptance fields are preserved. Board's p
 
 MongoDB handles recovery of successfully persisted state. The Repository node, after restarting, reconnects to the provider and reads those records. It does **not** persist/replay a second copy of user requests and does **not** automatically complete operations that never reached the acceptance marker.
 
-The provider must expose reliable exact RecordId lookup, idempotent insertion, non-equivalent conflict handling, necessary domain queries and atomic uniqueness/conditional acceptance when concurrent nodes operate. A process-local lock alone is insufficient. Index/cache/projection is derived state, not fact authority. If a multi-document invariant needs a transaction, check actual MongoDB deployment capabilities; never claim that cross-collection writes are automatically atomic.
+**One Repo is maintained by one Node.** The provider exposes exact RecordId lookup, idempotent insertion, conflicts on non-equivalent duplicates and necessary domain queries. The owning Node enforces its Repo-local acceptance decisions against persisted DB facts. Multi-Node Repo writers, shared distributed uniqueness, transaction coordination and extra database-durability policy are not requirements. Index/cache/projection remains derived state, not fact authority.
 
-See [Runtime Record Database Specification](./runtime-record-database.md). The old filesystem `RecordJournalService`, journal-backed `RuntimeRecordDatabaseService` and contribution staging/recovery are migration/deletion work, **not accepted target design**.
+See [Runtime Record Database Specification](./runtime-record-database.md). Previous persistence components and withdrawn contribution staging/recovery are code cleanup/migration tasks, **not the target design**.
 
 ## Asset boundary is deferred
 
@@ -95,12 +97,12 @@ The revised node does not have a standalone Recovery capability, staging queue o
 
 - Validate the supplied signed facts and concrete relations.
 - Use the configured Runtime DB provider to persist accepted facts under the provider's actual uniqueness/atomicity guarantees.
-- Repo acceptance `D` is written last under the established domain decision. D absent means not Repository COMMITTED, even if earlier facts survive.
+- Repo acceptance `D` is written last under the established domain decision. D absent means there is no Repo acceptance fact, even if earlier facts survive. Concrete Asset-related completion is deferred.
 - On startup, read persisted facts and rebuild only derived state. Do not replay pre-D commands.
 - Explicit caller retry of the same signed request remains allowed under RecordId and contribution-key idempotency rules.
 - A durable acceptance Record whose required dependencies are corrupt/unavailable must surface an integrity/storage failure; do not silently heal it from the original request.
 
-Contribution's currently implemented dependency on a concrete filesystem Asset store and journal lock **must be revisited** during subsequent implementation; it is not ratified by this document.
+Contribution's previously implemented dependency on a concrete filesystem Asset store and old in-process persistence wrapper **must be revisited** during subsequent work; it is not ratified by this document.
 
 ## MVP integration acceptance — revised
 
@@ -109,11 +111,11 @@ The MVP will require:
 1. One concrete executable Cordis composition that loads Member, Repo, exact Protocol resolution and a configured MongoDB-backed (or explicitly equivalent) Runtime Record DB provider.
 2. Durable exact Records that survive DB/node restart with unchanged Core identity/signature and without false Block confirmation.
 3. Repo establishment and reload, Member labour validation, and Repo acceptance semantics operating over the confirmed signed Record fields.
-4. Repo same-key conflict and idempotent exact replay enforced correctly across multiple processes/providers, not solely by a JavaScript mutex.
+4. Repo same-key conflict and idempotent exact replay are enforced within the Repo's single owning Node using persisted database facts.
 5. Explicit fail-closed behavior for corrupted/unavailable DB data or unavailable exact Protocol implementation.
 6. Contribution-history pending-chain vs block-confirmed projection based on durable Record and real accepted-chain evidence.
 7. Cordis plugin readiness/disposal and test/build/package checks on supported Node runtimes.
-8. **After Asset design re-acceptance**, tests for approved Asset identity, storage/management and its end-to-end contribution flow.
+8. **Asset identity, storage/management and full Asset contribution end-to-end acceptance are deferred to #8 rework** and are not criteria for accepting the DB/documentation correction.
 
 Deleted acceptance requirement: restarting a node automatically resumes an interrupted, pre-acceptance contribution from a durable request staging area. Database durability and reading persisted facts are the required guarantees; auto-completion of interrupted commands is not.
 
@@ -126,7 +128,7 @@ MongoDB is a chosen default **Runtime provider**; its BSON `_id`, collections an
 ## Next implementation sequence (not part of this documentation PR)
 
 1. Remove dead `contribution-staging` and `contribution-recovery` code/tests/exports and #10-only interfaces.
-2. Replace legacy journal-backed Runtime Record persistence with the narrow MongoDB-default adapter and relevant concurrency tests.
+2. Replace previous Runtime Record persistence with the narrow MongoDB-default adapter and focused RecordId/one-Node Repo acceptance tests.
 3. Review and rework Asset/Asset Storage from product requirements before restoring them as accepted capabilities.
 4. Recheck contribution against the revised DB and Asset boundaries.
 5. Complete #11 and #39 after those prerequisites are settled.
