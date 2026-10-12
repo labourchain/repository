@@ -47,11 +47,11 @@ Cordis + exact verified Protocol implementations
   -> durable signed Records and concrete DB-side uniqueness
 ```
 
-This follows [Board's](https://github.com/Ri0n72Y/board) practical repository-interface/MongoDB-provider split without copying Board-specific `pid`, patch, tag or snapshot schema.
+**Exactly one Node maintains each Repo.** This follows [Board's](https://github.com/Ri0n72Y/board) practical repository-interface/MongoDB-provider split without copying Board-specific `pid`, patch, tag or snapshot schema.
 
-The **current merged code is still legacy**: filesystem Record journal, journal-backed RuntimeRecordDatabase, file-based Asset storage, contribution staging, and recovery orchestration remain in source. The DB migration, Recovery removal and Asset redesign are future implementation work, **not complete**.
+The **current merged code still contains old persistence components**, deferred Asset storage, and withdrawn contribution staging/recovery. The DB migration (#31), code deletion (#47) and Asset redesign (#8) are future implementation work, **not complete**.
 
-The database itself recovers committed data. On restart, the node reconnects and reads durable facts/rebuildable projections; it does not automatically replay unfinished user contribution requests from a second durable staging system.
+MongoDB handles persistence. On restart, the owning Node reconnects and reads stored facts and rebuildable projections; there is no cross-Node Repo write coordination, separate application DB recovery, or automatic replay of unfinished user contribution requests.
 
 ## Status
 
