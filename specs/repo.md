@@ -184,7 +184,7 @@ lookup whether RecordId is included in an accepted Block
 return the relevant Block reference / confirmation position as supported
 ```
 
-This Spec does not prescribe the concrete service API, database, transport, or package that supplies either capability.
+The normal node uses MongoDB by default behind a replaceable Runtime Record DB interface; this Spec does not prescribe provider-native MongoDB schema, package, transport, or the chain-state adapter's implementation.
 
 Repository must not satisfy these dependencies by introducing a domain-owned canonical `repo.records[]`, a second blockchain, or by claiming a durable Runtime DB read is Block confirmation.
 
