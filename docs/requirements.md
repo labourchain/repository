@@ -53,7 +53,7 @@ assets[]
 
 `references` / `assets` 的引用完整性不能成为快速劳动记录的前置负担。缺少引用不阻止 labour Record 成立；上层产品可以根据 Git、聊天、计时器、当前打开的资料或 LLM 分析提出引用建议，但未经确认的推测不写入基础劳动事实。
 
-`labour.record` 不记录 tags、Project、pid、assignee、status、priority、日报/周报、项目推进统计或 LLM 分类。它们属于组织、分析或 projection。`labour.record@0.1.0` 仍只把 Asset reference 当作 opaque reference 保存；当前 `asset.content@0.1.0` 已将 MVP 的实际引用值收敛为 AssetId。
+`labour.record` 不记录 tags、Project、pid、assignee、status、priority、日报/周报、项目推进统计或 LLM 分类。它们属于组织、分析或 projection。`labour.record@0.1.0` 仍只把 Asset reference 当作 opaque reference 保存；旧 `asset.content@0.1.0` 曾将引用实现为 AssetId，但该通用身份方案当前延后返工。
 
 ## Asset 最小身份与内容
 
@@ -184,7 +184,7 @@ Contribution history 可以组合两类明确区分的数据来源：
 
 两者在视图中不得被混称为同一种链确证状态。Repository 不因此维护规范的 `records[]` 集合。
 
-日常访问不应要求每次都完整扫描整条链。可以使用可重建或可对账的 cache、index、pending journal 或 projection 支持该视图，但这些运行时数据不是 Block confirmation 本身。
+日常访问不应要求每次都完整扫描整条链。可以使用可重建或可对账的 cache、DB index 或 projection 支持该视图，但这些运行时数据不是 Block confirmation 本身。
 
 ## 协议有效性与版本
 
