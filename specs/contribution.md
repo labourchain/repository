@@ -1,110 +1,65 @@
 # Contribution Specification
 
-- **Status:** Under revision — signed fact semantics retained; DB/Asset integration pending rework
-- **Scope:** Repo acceptance of a Member labour contribution; no standalone Recovery service
+- **Status:** Under revision — signed facts retained; Asset-dependent behavior deferred
 - **Requirements:** [Repository requirements](../docs/requirements.md)
 - **Architecture:** [Repository architecture](../docs/architecture.md)
-- **Repo acceptance Protocol:** [repo-contribution.md](./repo-contribution.md)
-- **Runtime DB:** [runtime-record-database.md](./runtime-record-database.md)
+- **Protocol:** [Repo Contribution Protocol](./repo-contribution.md)
+- **Runtime DB:** [Runtime Database](./runtime-record-database.md)
 
 ## Confirmed signed facts
 
-Member confirms their labour by signing a `labour.record@0.1.0` Core Record `L`. Repo makes a distinct positive acceptance decision by signing a `repo.contribution@0.1.0` Record `D`:
+A Member records labour using a signed `labour.record@0.1.0` Core Record L. Repo acceptance is a separate Repo-signed `repo.contribution@0.1.0` Record D:
 
 ```text
 L.createdBy = Member EntityPublicKey
 L.data.references[] = confirmed upstream references
-L.data.assets[] = declared results
+L.data.assets[] = declared result references
 
 D.createdBy = Repo EntityPublicKey
-D.data = {
-  labourRecordId: L.id,
-  assetId,
-  operator
-}
+D.data = { labourRecordId: L.id, assetId, operator }
 ```
 
-The Repo selects one result from `L.data.assets[]`; it does not automatically accept all results of that labour. `operator` records who acted for the Repo without defining ACL, ownership, membership or delegation. No additional Member confirmation Record, ContributionId, generic relation Protocol or Patch is required.
+The Repo acceptance fact selects one reference from `L.data.assets[]`. The labourer's confirmation is L itself; no second Member confirmation, ContributionId, generic relation or Patch is required. `operator` records the actor without assigning ownership, governance or ACL authority.
 
-Repository consumes **already signed** L and D, not Member/Repo private keys. Historical interpretation is determined by exact ProtocolHash and verified artifacts.
+Core identity/signatures and exact ProtocolHash verification remain authoritative. The Repository consumes signed facts; it does not sign on behalf of Member or Repo.
 
-## Accepted Repository decision
+## Repository acceptance boundary
 
-Repository `COMMITTED` means a valid Repo acceptance fact `D` has been reliably persisted and the required signed relations/prerequisites can be verified. It is not the same as Block confirmation.
+A valid, durably accepted D is the Repo's positive acceptance fact, distinct from Block confirmation. The same signed D is idempotent. A distinct D for the same `(Repo, L.id, assetId)` logical key is a conflict under the Repo's **single-Node** acceptance path. No distributed writers maintain the same Repo.
 
 ```text
-D absent from durable DB
-  -> contribution not accepted by this Repository
-
-valid durable D + verified required facts
-  -> Repository COMMITTED
-
-D durable but required facts corrupt/unavailable
-  -> explicit integrity/storage error, not false acceptance/absence
+No durable D -> no Repo acceptance fact.
+Valid durable D + required relations readable/valid -> Repository acceptance.
+Durable D with corrupt/unavailable required facts -> explicit error.
 ```
 
-The current signed relation and same-key decision are:
+The Node reads and writes these facts through its configured Runtime DB provider. MongoDB is the default. The domain service may serialize operations for the Repo within its owning Node. Do not turn this into a cross-Node locking, multi-writer uniqueness or transaction framework.
 
-```text
-(Repo = D.createdBy, L.id, D.data.assetId)
-    -> one accepted D.id
-```
+## No standalone Recovery
 
-Exact same D replay is idempotent. A different D under the same logical key conflicts. In the redesigned DB, the required conditional write/uniqueness must be enforced by **the DB provider** across concurrent processes; the old journal-scoped in-process exclusive section is not sufficient as the final product boundary.
+The previous independent Contribution Recovery / staging behavior is withdrawn. The target implementation does not persist entire requests for later automatic replay or provide `recoverPending()`. After restart the Node simply loads the Records persisted in MongoDB; it does not execute an unfinished request on its own.
 
-D is the last durable Repository acceptance fact. L and other independently accepted facts may already persist when D is absent; their presence cannot be promoted to a Repo acceptance by heuristics.
+A caller can explicitly retry the original signed input. This is ordinary idempotent domain behavior, not application-level DB Recovery. D is not fabricated from partial earlier facts, and an existing D is not silently repaired from request material.
 
-## Database integration (pending implementation)
+Existing staged-request providers, recovery-specific preflight/helpers and tests will be removed separately under #47. The earlier filesystem Record persistence implementations are not part of the new target design.
 
-```text
-exact Protocol/Record validation
-  -> Repository domain acceptance decision
-  -> narrow durable Record DB interface
-  -> MongoDB implementation by default (replaceable)
-  -> durable acceptance D and the signed prerequisites
-```
+## Asset-dependent behavior: DEFERRED
 
-The Node trusts the configured DB to recover its **persisted** state. Restart reconnects, reads D/L from DB, verifies exact Protocol semantics when needed and rebuilds optional indexes/views. It does **not** attempt to reconstruct an interrupted request or automatically run commit again.
+**All concrete Asset behavior is postponed pending #8 rework.** The signed names `references[]`, `assets[]` and `assetId` remain; their contents are opaque references for the present contract. No byte-content identity, 16 MiB size limit, filesystem `preserve/get/has`, selected-result availability, repair policy, Asset DB schema, or Asset lifecycle is confirmed.
 
-Storage provider identities, collections and transactions are local implementation details, not signed Protocol data. MongoDB operations must use real unique/conditional persistence guarantees. If a cross-document invariant requires a transaction, provide it with a deployment supporting transactions; do not describe an ordinary single-process mutex or a weak standalone fallback as equivalent.
-
-Existing contribution code uses `RecordJournalService`, `RuntimeRecordDatabaseService` and filesystem `AssetStorageService`. Those provider integrations remain **legacy code requiring refactor** and do not define the new DB contract.
-
-## Withdrawn Recovery behavior
-
-The separate #10 Recovery functionality has been **withdrawn**. Remove from the implementation in a later bounded code PR:
-
-- `ContributionStagingService` and its filesystem persisted copy of the complete request;
-- `RepositoryContributionRecoveryService.submit()` / `recoverPending()`;
-- recovery-only `validateForStaging()`, plugins/exports and tests tied exclusively to auto-resume;
-- the pre-D `STAGED / DOMAIN_CONFIRMED` durable processing-phase model and S0/S1/S2/S3 automatic re-execution matrix.
-
-If the caller receives no response after D was persisted, the caller may read D or **explicitly retry** the exact signed operation. DB durability and idempotent acceptance handle this case. Do not introduce a new transaction/saga, restore the request from staging or fabricate D from durable-looking L/Asset remnants.
-
-Ordinary DB read failure or storage corruption is a provider/integrity error. No application-level staging is required to recover the database.
-
-## Asset integration is deferred
-
-The labour `references[] / assets[]` and Repo `assetId` fields are retained. However, the previous `asset.content@0.1.0` content-bytes identity, 16 MiB limit, `preserve/get/has` filesystem provider and selected-result byte-durability workflow were not agreed as the universal Repository Asset model.
-
-Those rules are **deferred and await Asset domain/management rework**. They may be examined as historical code but are not accepted as present MVP requirements. Revalidate the contribution's selected-Asset availability and management behavior after [Asset Spec](./asset.md) and [Asset Storage Spec](./asset-storage.md) are re-accepted. No old Asset assumptions may be silently promoted via these Contribution tests.
+The previous Contribution implementation's Asset-preserve/get ordering and Asset-dependent `COMMITTED` checks are historical implementation details, **not current accepted MVP behavior**. Requirements for actually managing and retrieving an accepted Asset will be set during the separate Asset design review. Do not preempt that review through this Spec.
 
 ## Chain boundary
 
-Repository COMMITTED is a local acceptance fact. It remains `pending-chain` until an independent accepted Block/chain-state provider supports `block-confirmed`. Candidate Block packing, broadcasting, Runtime DB persistence or any local projection alone cannot create that evidence.
+Repository acceptance is `pending-chain` unless an accepted Block/chain-state source proves inclusion. Local DB presence or candidate Block construction never implies `block-confirmed`.
 
-## Revised acceptance checks
+## Acceptance checks after redesign
 
-Required when the DB adapter is implemented:
+- Original signed L/D field sets, signatures and exact ProtocolHash validation preserved.
+- RecordId duplicate handling and one-Repo same-key conflict behavior preserved.
+- DB/node restart reads already persisted Records without staging or automatic contribution completion.
+- D absent is never represented as accepted; corrupt required persisted facts fail explicitly.
+- No separate Recovery service, ContributionId, multi-Node coordination or generic DB framework.
+- Asset-specific tests and end-to-end contribution completion criteria remain **deferred until #8 is agreed**.
 
-- Signed L and D retain exact RecordId, signature, Protocol reference/hash and the accepted field shapes.
-- Exact replay is idempotent; a distinct same-key D fails under actual concurrent DB writes.
-- Node restart and DB reconnect read previously persisted D/L without a replay/staging coordinator.
-- D absent is never reported as accepted, regardless of independently persisted earlier facts.
-- Durable D plus corrupted/missing required facts fails explicitly without silent historical healing.
-- No standalone contribution Recovery API/plugin/queue or synthetic ContributionId remains.
-- Provider unavailability is an error, not an implicit fallback to ephemeral in-memory storage.
-- Chain-state status is kept distinct from Repository acceptance.
-- Approved Asset identity/storage acceptance is added **only after** its separate design review.
-
-This is a correction of Requirements → Architecture → Spec. Implementation/test cleanup and MongoDB migration are subsequent bounded tasks.
+This correction changes documentary authority; it does not implement the DB migration or delete existing code.
