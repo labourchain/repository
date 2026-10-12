@@ -6,7 +6,7 @@
 - **Architecture:** [`../docs/architecture.md`](../docs/architecture.md)
 - **Umbrella:** [`repository-mvp.md`](./repository-mvp.md)
 
-> **Architecture correction (2026-10):** Signed Protocol fields remain as defined here. The prior filesystem journal/Asset-byte provider is legacy; MongoDB-default Runtime DB migration is pending, and Asset identity/storage is **deferred — rework required**. No independent contribution Recovery/staging feature remains in scope.
+> **Architecture correction (2026-10):** Signed Protocol fields remain as defined here. The prior old persistence/Asset-byte provider is legacy; MongoDB-default Runtime DB migration is pending, and Asset identity/storage is **deferred — rework required**. No independent contribution Recovery/staging feature remains in scope.
 
 ## Purpose
 
