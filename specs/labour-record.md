@@ -7,7 +7,7 @@
 - **Architecture:** [`../docs/architecture.md`](../docs/architecture.md)
 - **Umbrella:** [`repository-mvp.md`](./repository-mvp.md)
 
-> **Architecture correction (2026-10):** Signed Protocol fields remain as defined here. The prior filesystem journal/Asset-byte provider is legacy; MongoDB-default Runtime DB migration is pending, and Asset identity/storage is **deferred — rework required**. No independent contribution Recovery/staging feature remains in scope.
+> **Architecture correction (2026-10):** Signed Protocol fields remain as defined here. The prior old persistence/Asset-byte provider is legacy; MongoDB-default Runtime DB migration is pending, and Asset identity/storage is **deferred — rework required**. No independent contribution Recovery/staging feature remains in scope.
 
 ## Purpose
 
@@ -138,7 +138,7 @@ acceptLabourRecord(record)
 loadLabourRecord(recordId)
 ```
 
-`acceptLabourRecord` uses the narrow Runtime Record persistence interface. The target MongoDB-default provider will own exact durable Record storage and concrete concurrent write safety; the current journal-backed serialized wrapper is legacy and scheduled for replacement.
+`acceptLabourRecord` uses the narrow Runtime Record persistence interface. The target MongoDB-default provider owns the persisted Records. Each Repo has one owning Node; this capability does not require shared-Repo cross-Node synchronization.
 This is pending-chain Runtime acceptance, not Block confirmation.
 
 `loadLabourRecord` reads the exact durable Record through the Runtime Record
