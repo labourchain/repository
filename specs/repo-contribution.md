@@ -122,7 +122,7 @@ availability are checked by Repository orchestration through the existing Asset
 capabilities.
 
 The concrete Protocol service does not inject `assetStorage`,
-`runtimeRecordDatabase`, staging, history or chain-state services. Those are
+the concrete Runtime DB provider, history or chain-state services. Those are
 Repository runtime concerns rather than acceptance-fact semantics.
 
 ## Record contract
@@ -338,7 +338,7 @@ index is reconstructed.
 
 ## Patch boundary
 
-No agreed contribution using `labour.record@0.1.0` and the deferred legacy `asset.content@0.1.0` in
+The legacy contribution flow using `labour.record@0.1.0` and the deferred `asset.content@0.1.0` in
 #9 requires a Patch fact.
 
 Patch remains a future extension hook for a Protocol that actually defines
@@ -397,7 +397,7 @@ It does not:
 
 - preserve or read Asset bytes;
 - persist Records;
-- own Runtime staging (withdrawn);
+- define or own an application-level Recovery/staging state machine;
 - maintain contribution history;
 - pack Blocks;
 - determine chain confirmation;
