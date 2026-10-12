@@ -189,7 +189,7 @@ Block 内的 Records 可以按照适用 Protocol 建立一个或多个有逻辑�
 
 ## Repository 与其他 LabourChain 组件
 
-\`\`\`mermaid
+```mermaid
 flowchart LR
     subgraph Products["Products"]
         Flow["LabourFlow"]
@@ -227,7 +227,7 @@ flowchart LR
     Store --> Views
     Views --> ChainState
     ChainState --> Block
-\`\`\`
+```
 
 Repository 不重新定义 Core 已有的 Protocol、Record、Entity identity、signature 或 Block 语义。Core Record 只是通用签名事实容器；劳动记录由 `labour.record@0.1.0` 把 `labourRecord` 作为 `Record.data` 解释。当前 #9 的 Repo 侧采纳事实由具体的 `repo.contribution@0.1.0` 定义，而不是继续依赖一个未指定的 generic confirmation / relation Protocol。未来其他领域事实仍由各自具体 Protocol 定义。
 
