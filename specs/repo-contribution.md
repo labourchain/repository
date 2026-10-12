@@ -338,8 +338,7 @@ index is reconstructed.
 
 ## Patch boundary
 
-The legacy contribution flow using `labour.record@0.1.0` and the deferred `asset.content@0.1.0` in
-#9 requires a Patch fact.
+The current signed labour/Repo-acceptance fact model does **not** require a Patch fact. The legacy `asset.content@0.1.0` integration is separately deferred for rework.
 
 Patch remains a future extension hook for a Protocol that actually defines
 mutable domain-state evolution. #9 must not invent or wait for a generic Patch
