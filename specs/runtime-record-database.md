@@ -39,7 +39,7 @@ Repository domain / Protocol services
 
 An alternative DB adapter may satisfy the same minimal interface. Its native storage IDs are local implementation details, never RecordId, AssetId or other signed Protocol data. An explicit in-memory test provider is fine; production Node must not silently substitute memory storage for a configured MongoDB provider failure.
 
-MongoDB storage recovery belongs to MongoDB. No separate writeConcern policy, journal implementation, DB recovery verification framework or transaction coordinator is specified at Repository domain level.
+MongoDB storage recovery belongs to MongoDB. No separate low-level MongoDB durability configuration, DB recovery verification framework or transaction coordinator is specified at Repository domain level.
 
 ## Node restart and contribution behavior
 
