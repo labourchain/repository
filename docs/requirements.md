@@ -148,7 +148,7 @@ Block packing 与 peer validation 后续实现时必须满足：
 
 Node 默认使用 MongoDB 保存 Core signed Records，领域服务通过窄 Runtime DB 接口访问，其他数据库可以实现相同操作；不采用 Board 特有的 `pid`、Patch 或 SnapshotHead 字段。
 
-**MongoDB 负责自身持久化与数据库故障恢复。** Node 只连接 DB、读取已持久保存的事实，按需验证 exact Protocol 并重建衍生索引/视图。不设计专门的 writeConcern、journal、跨文档事务配置、DB 自检或应用层数据库恢复机制。
+**MongoDB 负责自身持久化与数据库故障恢复。** Node 只连接 DB、读取已持久保存的事实，按需验证 exact Protocol 并重建衍生索引/视图。不设计额外的数据库持久化策略、事务配置、DB 自检或应用层数据库恢复机制。
 
 已撤回的 #10 独立 Contribution Recovery 不再属于系统：没有 persisted request staging、`recoverPending()`、自动续办未完成请求或恢复状态机。相关旧代码在后续清理任务中删除。
 
