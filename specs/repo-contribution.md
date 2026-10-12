@@ -10,7 +10,7 @@
 - **Labour dependency:** [`labour-record.md`](./labour-record.md)
 - **Repo dependency:** [`repo.md`](./repo.md)
 
-> **Architecture correction (2026-10):** Signed Protocol fields remain as defined here. The prior filesystem journal/Asset-byte provider is legacy; MongoDB-default Runtime DB migration is pending, and Asset identity/storage is **deferred — rework required**. No independent contribution Recovery/staging feature remains in scope.
+> **Architecture correction (2026-10):** Signed Protocol fields remain as defined here. The prior old persistence/Asset-byte provider is legacy; MongoDB-default Runtime DB migration is pending, and Asset identity/storage is **deferred — rework required**. No independent contribution Recovery/staging feature remains in scope.
 
 ## Purpose
 
@@ -115,7 +115,7 @@ according to the existing Core/Repository exact-resolution contract. The
 implementation must not substitute another artifact merely because the
 human-readable reference/version looks compatible.
 
-`asset.content@0.1.0` is intentionally not a Protocol dependency of the pure
+The deferred legacy `asset.content@0.1.0` is not a Protocol dependency of the pure
 Repo acceptance validator. The acceptance fact carries an `assetId` selected from the validated labour Record's `assets[]`. The generic Asset identity/availability and management contract is **deferred for rework**; the old filesystem Asset provider is not an accepted new-architecture prerequisite.
 
 The concrete Protocol service does not inject `assetStorage`,
@@ -141,7 +141,7 @@ labourRecordId
     = RecordId of the Member-produced labour.record fact
 
 assetId
-    = AssetId of the specific result Asset accepted by the Repo
+    = opaque reference of the selected result (concrete AssetId design deferred)
 
 operator
     = Core EntityPublicKey of the human/entity actor who performed
@@ -258,37 +258,15 @@ second Member-confirmation fact is required.
 A labour Record with no `assets[]`, or one whose `assets[]` does not contain
 the selected `assetId`, cannot be the basis of this Repo acceptance fact.
 
-The Protocol does not require Asset bytes or durable storage during pure
-Record/relation validation. Durable Asset availability is a Repository
-orchestration precondition described in `contribution.md`.
+The Protocol validates only the signed reference relationship. Any future concrete Asset availability condition belongs to the separately reviewed Asset management design, not this protocol.
 
 ## Upstream reference and selected Asset policy
 
-`labour.references[]` preserves confirmed upstream production/citation
-relations: the labour explicitly builds on or cites those AssetIds. The field
-does not distinguish a mandatory execution input from a contextual reference,
-so current `repo.contribution@0.1.0` does not infer that every referenced Asset
-must already be durably retrievable by this Repository.
+The signed labour `references[]` / `assets[]` fields preserve the Member's declared relationships. The Repo acceptance Record's `assetId` selects exactly one reference from `labour.assets[]`; no other result is automatically accepted.
 
-The selected `data.assetId` must be durably retrievable and must match the
-exact submitted/preserved Asset.
+**Asset implementation is deferred / rework required.** This Protocol section does not require a byte-content provider, specific AssetId derivation, preservation/readback, an input Asset to be locally available, or a selected Asset to be stored under the old filesystem contract. Those concrete product/storage conditions must be decided in the independent Asset design.
 
-Other result AssetIds in `labour.assets[]` are not implicitly accepted by this
-Record and therefore are not required to be durable for this specific
-contribution. They may be accepted separately by their own Repo acceptance
-Records.
-
-If the same AssetId appears in both `references[]` and `assets[]`, as in an
-unchanged maintenance result, and the Repository does not already store it, the
-current request may preserve it as the selected result Asset. That one durable
-Asset satisfies the current acceptance requirement; the `references[]`
-occurrence does not independently require it to have existed before preserve.
-
-Missing local availability of an Asset mentioned only in `references[]` does
-not retroactively invalidate the `labour.record@0.1.0` fact and does not by
-itself block current #9 acceptance. A future concrete Protocol may impose a
-stronger referenced-Asset availability rule when it can express that rule
-explicitly.
+The presence of the same opaque reference in both lists is not a reason to introduce `previous`, `pid` or generic relations.
 
 ## Positive-fact semantics
 
@@ -325,7 +303,7 @@ accepted state.
   idempotency.
 
 This singularity keeps the positive acceptance action and its operator trace
-unambiguous without inventing a ContributionId. It must be enforced by Repository orchestration **and the actual durable DB provider's concurrent uniqueness/conditional-write guarantee**, not only by inspecting records under a process-local lock;
+unambiguous without inventing a ContributionId. It is enforced by the owning **single Repository Node** through its serialized domain acceptance path and persisted DB facts;
 the stateless Protocol service does not perform that lookup.
 
 A Runtime implementation may use a rebuildable key-to-RecordId index for
@@ -441,7 +419,7 @@ The Protocol implementation must cover at least:
 
 The Protocol service tests must not require Runtime Record database state,
 existing logical-key lookup or an acceptance index. Exact acceptance replay
-idempotency, distinct same-key conflict, DB-backed concurrent conflict checking and
+idempotency, distinct same-key conflict, one-Node same-key conflict checking and
 restart loading from persisted Records are Repository orchestration tests owned by
 `contribution.md` and the current #9 implementation.
 
