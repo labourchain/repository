@@ -49,7 +49,7 @@ The database owns storage-engine crash durability and recovery. On node restart,
 
 An interrupted request with no durable Repo acceptance Record `D` is **not Repository COMMITTED**. Persisted independent facts remain facts. An existing durable `D` remains the Repository acceptance marker; it is not rolled back because the caller missed a response. If its dependencies are corrupt/unavailable, report an integrity/storage failure rather than using request data to heal them.
 
-If a caller explicitly retries the **same supplied signed operation**, already existing RecordId/AssetId idempotency and concrete same-key conflict rules apply. This is caller retry, not automatic startup recovery.
+If a caller explicitly retries the **same supplied signed operation**, existing RecordId idempotency and concrete contribution same-key conflict rules apply; any Asset-specific identity/idempotency requirement remains deferred for rework. This is caller retry, not automatic startup recovery.
 
 ## Out of scope
 
