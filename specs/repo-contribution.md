@@ -116,10 +116,7 @@ implementation must not substitute another artifact merely because the
 human-readable reference/version looks compatible.
 
 `asset.content@0.1.0` is intentionally not a Protocol dependency of the pure
-Repo acceptance validator. The acceptance fact carries an AssetId selected from
-the already validated labour Record; actual Asset identity/integrity and durable
-availability are checked by Repository orchestration through the existing Asset
-capabilities.
+Repo acceptance validator. The acceptance fact carries an `assetId` selected from the validated labour Record's `assets[]`. The generic Asset identity/availability and management contract is **deferred for rework**; the old filesystem Asset provider is not an accepted new-architecture prerequisite.
 
 The concrete Protocol service does not inject `assetStorage`,
 the concrete Runtime DB provider, history or chain-state services. Those are
@@ -323,13 +320,12 @@ accepted state.
 - replay of the exact same RecordId is idempotent;
 - a distinct acceptance RecordId for an already accepted logical key is a
   conflict and must not silently replace the existing acceptance fact;
-- exact duplicate Asset preservation continues to use AssetId idempotency;
+- any Asset-specific idempotency/identity guarantee is deferred until the Asset contract is re-accepted;
 - exact duplicate labour Record acceptance continues to use existing RecordId
   idempotency.
 
 This singularity keeps the positive acceptance action and its operator trace
-unambiguous without inventing a ContributionId. It is enforced by Repository
-Contribution orchestration, which can inspect already accepted durable facts;
+unambiguous without inventing a ContributionId. It must be enforced by Repository orchestration **and the actual durable DB provider's concurrent uniqueness/conditional-write guarantee**, not only by inspecting records under a process-local lock;
 the stateless Protocol service does not perform that lookup.
 
 A Runtime implementation may use a rebuildable key-to-RecordId index for
@@ -423,8 +419,7 @@ caller, including:
 - `labourRecordId` mismatch;
 - selected `assetId` absent from `labour.assets[]`.
 
-Asset not-found/corruption/persistence errors remain Asset-storage /
-Contribution-orchestration failures rather than labour Record validity errors.
+Any Asset-related not-found, integrity or provider error (after the Asset design is reviewed) remains a Repository/Asset-provider concern, not labour Record semantic invalidity.
 
 ## Implementation acceptance tests
 
@@ -446,8 +441,8 @@ The Protocol implementation must cover at least:
 
 The Protocol service tests must not require Runtime Record database state,
 existing logical-key lookup or an acceptance index. Exact acceptance replay
-idempotency, distinct same-key conflict, serialized conflict checking and
-restart reconstruction are Repository orchestration tests owned by
+idempotency, distinct same-key conflict, DB-backed concurrent conflict checking and
+restart loading from persisted Records are Repository orchestration tests owned by
 `contribution.md` and the current #9 implementation.
 
 Storage ordering and Repository `COMMITTED` tests likewise belong to
