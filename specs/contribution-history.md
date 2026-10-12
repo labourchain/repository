@@ -13,7 +13,7 @@ Show the labour facts associated with a Repo's accepted contributions, with a di
 ## Authorities
 
 ```text
-MongoDB-default Runtime Record DB (replaceable provider)
+MongoDB-default Runtime Record DB (replaceable provider; one owning Node per Repo)
   -> exact stored Member-signed labour Records L
   -> exact stored Repo-signed acceptance Records D
   -> Repo acceptance fact determined by valid durable D and dependencies
@@ -46,11 +46,11 @@ After node restart, reopen the Runtime DB and read durable facts. If a query pro
 
 A crash between D persistence and projection update must not permanently omit the accepted contribution; later projection reconciliation must be able to find that durable D. Neither rebuilding a projection nor deleting a cache may change the signed facts or Block inclusion.
 
-The former filesystem Record journal source and standalone Contribution staging/correlation source are **withdrawn** from the target architecture.
+Only the configured Runtime DB supplies Repository-local persisted Record facts. The standalone Contribution staging/replay mechanism is withdrawn.
 
 ## Asset dependency
 
-Asset identity, storage and Repo management are **deferred — rework required**. History retains the confirmed relation fields and result references, but does not fix a content-byte storage provider, generic AssetId derivation, 16 MiB limit or Repo Asset listing schema. Final history presentation and Asset retrieval integration must be reviewed after the Asset contract is accepted.
+**All Asset-related identity, storage, management, listing and retrieval are deferred / rework required.** History retains only the agreed opaque signed reference fields until the separate Asset design is accepted.
 
 ## Failure boundaries and acceptance
 
