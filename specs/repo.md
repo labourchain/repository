@@ -169,7 +169,7 @@ Repository establishment does not wait for Block packing. An accepted/pending es
 
 ## Runtime dependencies
 
-Repository requires a durable durable Runtime Record DB provider capable of retaining accepted establishment Records across restart. The establishment Protocol runtime also depends on the mounted Core v0.1.0 `core.entity@0.1.0` / `core.record@0.1.0` services and `member.identity@0.1.0` capability rather than copying those algorithms or identities. At minimum, the establishment flow needs behavior equivalent to:
+Repository requires a durable Runtime Record DB provider capable of retaining accepted establishment Records across restart. The establishment Protocol runtime also depends on the mounted Core v0.1.0 `core.entity@0.1.0` / `core.record@0.1.0` services and `member.identity@0.1.0` capability rather than copying those algorithms or identities. At minimum, the establishment flow needs behavior equivalent to:
 
 ```text
 durably accept an exact signed Record, idempotently by RecordId
@@ -239,7 +239,7 @@ Consumers must be able to distinguish at least:
 - invalid Repo or Member identity according to Core identity representation;
 - invalid or rejected establishment Record;
 - required Member or Repo Protocol semantics unavailable;
-- durable durable Runtime Record DB provider unavailable or failed;
+- durable Runtime Record DB provider unavailable or failed;
 - chain-confirmation status unavailable when explicitly requested;
 - Runtime lookup-index/provider failure.
 
