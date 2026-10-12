@@ -8,19 +8,19 @@ Repository 是 LabourChain 中用于保存劳动成果（Asset）并对相关劳
 
 ## 范围
 
-Repository MVP 包括：
+Repository MVP 的当前确认与暂缓功能：
 
-- 最小 Member 协议能力，用于识别人类参与者；
-- Repo 的建立、身份和重新加载；
-- Repo creation provenance 与 Repo decision operator 留痕；
-- Asset contribution；
-- `repo.contribution@0.1.0` 的 Repo 侧正向采纳事实与 operator 留痕；
-- 已接受 Asset 的持久保存与读取；
-- Repo contribution history；
-- Repo 可视化劳动记录测试所需的最小 labourRecord Protocol 能力；
-- 对历史事实所引用 Protocol reference 与 exact ProtocolHash / verified artifact 的正确解析与验证。
+- Member 身份、Repo 创建与重启后读取；
+- Repo creation provenance 与 operator 留痕；
+- 最小签名劳动事实 `labour.record@0.1.0`；
+- `repo.contribution@0.1.0` 对一项成果引用的正向采纳事实；
+- exact ProtocolHash / verified artifact 解析；
+- **一个 Repo 仅由一个 Node 维护**；
+- 使用 MongoDB 默认持久化 Record，存储接口可由其他数据库实现；
+- Contribution history（待 Runtime DB 改造后实现）；
+- **Asset 身份、存储、浏览及实际仓库管理功能整体延后实现／待返工**，不是当前已验收功能或具体完成条件。
 
-Member 是人类参与者在协议与实现层的称呼，以 Core Entity identity 为身份锚点。`Worker` 保留为概念层的劳动主体描述，不作为程序中的人类实体类型。Core Record 是通用协议事实容器；描述劳动的领域事实暂称 `labourRecord`，作为适用 labour Protocol 下的一种 `Record.data`，由承担劳动的 Member 以其 Entity identity 产生或签署。Repo 自身作出的链上决定由 Repo identity 签名，并在相应 decision fact 中标注实际 operator。Record 被 Block 收录后获得这条链上的收录与确证顺序。Repository 不把 Record 作为另一类规范仓库内容保存，可以为日常查询和分析保留与 contribution 相关的 Record 投影。
+Member 是人类参与者在协议与实现层的称呼，以 Core Entity identity 为身份锚点。Core Record 是通用签名事实容器；`labour.record` 为具体劳动语义；Repo 签名决定由其自身 identity 表达并记录 operator。Repository 本地接收事实与后来由 Block 建立的链确证严格区分。
 
 ## labour.record 最小劳动事实
 
@@ -57,11 +57,11 @@ assets[]
 
 ## Asset 最小身份与内容
 
-**状态：延后实现／待返工。** 前次基于 `asset.content@0.1.0` 的“完整字节对象、内容导出 AssetId、16 MiB 上限、独立文件存储”是未经充分产品讨论即进入实现的假设，不再作为已确认的 Repository 领域需求。
+**Deferred — 延后实现／待返工。** 本轮不指定 Asset 的通用身份、内容、数字表示、仓库管理、持久存储、取回流程、资源限制或校验条件。原 `asset.content@0.1.0` 的字节对象及 16 MiB 边界是历史代码，不构成已接受的产品要求。
 
-需要重新讨论 Asset（劳动成果）、成果的内容/表示、Repo 接收与实际仓库管理之间的关系，之后才能确定 Asset 身份、存储方式、资源限制、名称/元数据和读取/管理行为。
+仅保留已确认的劳动记录 `references[] / assets[]` 与 Repo 采纳事实 `assetId` 等引用字段。字段保留不等于认可旧 Asset 类型或存储方式。
 
-已经确认的是劳动记录通过 `references[]` 和 `assets[]` 表达明确引用与成果关系；不要求快速劳动记录强制解析所有引用，也不添加 `previous`、`pid` 或通用关系协议。Asset 具体 identity 与 storage contract 暂缓，详见标为 Deferred 的 `specs/asset.md` 和 `specs/asset-storage.md`。现有代码保持不变但**待返工**。
+实际 Asset 设计应另行从真实仓库行为展开 Requirements → Architecture → Specs。现有 Asset 实现不在本轮修改。
 
 ## Member 与身份组合
 
@@ -93,49 +93,38 @@ Repo identity 和创建来源在正常应用重启后必须能够从 durable fac
 
 ## Asset contribution
 
-当前已确认的最小 Repo 采纳事实由 Member 签署的劳动 Record 与 Repo 签署的接受 Record 建立。Repo 接受劳动者的一项明确成果，不自动接受同一次劳动所关联的所有成果。
+Member 对劳动的确认是签名的 `labour.record@0.1.0` Record L；Repo 的正向采纳事实是另一条 Repo 签名的 `repo.contribution@0.1.0` Record D：
 
 ```text
-Member-signed labour.record@0.1.0 Record L
-  -> Record.createdBy = contributor EntityPublicKey
-  -> data.references[] = 确认引用的上游成果
-  -> data.assets[] = 此次劳动声明的成果引用
+L.createdBy = contributor EntityPublicKey
+L.data.references[] = 已确认上游引用
+L.data.assets[] = 此次劳动声明的成果引用
 
-Repo-signed repo.contribution@0.1.0 Record D
-  -> Record.createdBy = Repo EntityPublicKey
-  -> data = { labourRecordId: L.id, assetId, operator }
+D.createdBy = Repo EntityPublicKey
+D.data = { labourRecordId: L.id, assetId, operator }
 ```
 
-`D.data.assetId` 表示 Repo 选择 `L.data.assets[]` 中的一项成果。Repo identity 由 `createdBy` 表达，贡献者身份由 L 的签名和 `createdBy` 表达，`operator` 仅记录该次 Repo 行为的执行者，不自行证明成员资格、授权或所有权。Repo acceptance 是正向采纳事实，不为拒绝、撤销或重新打开创造预设 decision enum。
+`D.data.assetId` 明确选中 `L.data.assets[]` 中的一项成果引用，不自动采纳其他成果。Repo identity 由 `D.createdBy` 表达，劳动者由 L 的签名确认，`operator` 仅用于该次操作留痕。不存在额外 Member confirmation、ContributionId、`pid`、`previous` 或通用 relation model。
 
-Member 的劳动事实与 Repo 的采纳事实相互独立。Repo 不代替 Member 签署劳动记录，不代替 Runtime/signer 持有 Repo 私钥；`Record.data` 的这些已确定字段不因数据库迁移而改变。没有新 ContributionId、额外 Member confirmation、generic relation 或 Patch。
-
-**待返工边界：** 成果引用 `assetId` 所指对象的通用身份、存储、可用性、大小与具体管理语义必须在 Asset 产品设计完成后再固定。过去“选中结果必须由本地 `asset.content` provider 保留 exact bytes”等规则是原实现的耦合，不应继续当作已经验收的产品需求。原 #9 的签名关系原则保留，其与 Asset 存储的整合需要重新验收。
+**Asset 相关的实体身份、内容上传、保管、读取、可用性与实际仓库操作均延后讨论。** 不能继续以旧的 `asset.content` 文件存储当作 Contribution 成立的必需条件。已确认的是上述签名事实与引用关系，不是完整的 Asset 端到端入库实现。
 
 ## Repository acceptance 与链确证
 
-MVP 区分两个不同完成边界：
+Repository acceptance 与 Block 确证是两种不同的完成边界：
 
 ```text
-Repository committed
-= Repo 已完成领域校验与所需确认
-+ 待上链 Records 已被可靠持久接收
-+ accepted Asset 可持久读取
+Repository acceptance
+  = 已验证且由 Repo 签名的采纳事实 D
+  + D 已由当前 Repo 所属 Node 的 Runtime DB 持久接收
+  + 必需的已确认签名事实和引用关系有效
 
 Block confirmed
-= 相关 Records 已被某个有效 Block 收录
-+ 获得这条链上的确证顺序
+  = 相关事实进入经过独立验证且被接受的 Block
 ```
 
-Repository committed 是产品接受边界；Block confirmed 是链确证边界。两者不能混称为同一个 canonical 状态。
+D 不存在时，不得根据 L 或其他持久事实推断 Repo 已采纳。D 存在但必要的已持久化签名事实不可读取或损坏时，报告 storage/integrity 错误，而不是宣称健康接受或悄悄修复。签名采纳不自动完成尚未设计的 Asset 管理、存储或可用性保证。
 
-因此：
-
-- Repository 可以在等待下一次 Block packing 时已经向使用方报告 contribution accepted；
-- 运行时必须能够在重启后继续识别并处理这些已接受但尚未被 Block 收录的 Records；
-- 一旦链状态可查询，Runtime/Projection 必须能够区分 pending-chain 与 block-confirmed；
-- 本地持久化不会单独赋予 Record “已被链确证”的含义。
-
+只有 accepted Block/chain-state 证据可以使 `pending-chain` 升级为 `block-confirmed`；本地 DB 接收和 candidate Block 打包均不能替代。
 
 ## 链上信任与独立验证
 
@@ -155,23 +144,23 @@ Block packing 与 peer validation 后续实现时必须满足：
 
 ## 持久性与恢复
 
-**默认持久化方案为 MongoDB，经可替换的 Runtime DB interface 使用。** 参考 Board 的领域 Repository 接口与 MongoDB provider 分离方式；Repository 的签名事实使用已确定的 Core Record 和各 Protocol 字段，不复用 Board 的 `pid`、tags、patch、SnapshotHead 等产品字段。
+**一个 Repo 由一个 Node 维护。** 当前没有多个 Node 同时管理、修改同一个 Repo 的模型，也不需要跨 Node 的冲突协调、共享 Repo 锁或分布式事务协议。
 
-数据库负责已成功持久化数据的可靠性、故障恢复和必要的唯一性/条件写入。Node 不重做数据库存储恢复，不创建第二份 durable request，不运行独立 Contribution Recovery。重启时重新建立 Cordis 组合和数据库连接，从 DB 读取现有持久事实并按需验证 exact Protocol、重建可丢弃的索引/投影。
+Node 默认使用 MongoDB 保存 Core signed Records，领域服务通过窄 Runtime DB 接口访问，其他数据库可以实现相同操作；不采用 Board 特有的 `pid`、Patch 或 SnapshotHead 字段。
 
-Repo acceptance Record `D` 经可靠持久写入后，才构成 Repo 已接受该项贡献的事实。仅有劳动 Record 或其他上游事实不构成 Repo acceptance；若 D 不存在，Node 不能从“看似遗留的”数据推断本次提交已成功，也无需自动续办未完成的用户请求。调用方显式重试同一 signed operation 时必须遵守幂等和同键冲突语义。D 存在但依赖持久状态不可读取/损坏时显式报告错误，不使用请求内容无声修复历史事实。
+**MongoDB 负责自身持久化与数据库故障恢复。** Node 只连接 DB、读取已持久保存的事实，按需验证 exact Protocol 并重建衍生索引/视图。不设计专门的 writeConcern、journal、跨文档事务配置、DB 自检或应用层数据库恢复机制。
 
-**撤回 #10 独立 Recovery。** 原 `ContributionStagingService`、`RepositoryContributionRecoveryService`、`recoverPending()`、请求副本和进度恢复测试均属待删除旧代码。它们不是新的 Runtime DB 架构的一部分。无需定义 staging、phase、retry/correlation 或恢复状态机。
+已撤回的 #10 独立 Contribution Recovery 不再属于系统：没有 persisted request staging、`recoverPending()`、自动续办未完成请求或恢复状态机。相关旧代码在后续清理任务中删除。
 
-MongoDB 默认实现应通过窄 DB contract 与领域服务解耦，其他 DB 只需满足相同持久性、完整性、查询及并发唯一性能力。MongoDB 的跨文档写入不是无条件原子的，领域所需一致性必须由实际 provider 的原子写入/索引或正式部署支持的事务保障，不能只依赖 Node 单进程锁。具体可见 `specs/runtime-record-database.md`。
+已持久化且有效的 D 是 Repo 采纳事实；D 不存在意味着未被当前 Repo 接受。调用方可以自行重试同一已签名的请求；使用现有 RecordId 幂等和单 Node 中的具体同键冲突检查即可。这不是启动时自动恢复用户操作。
 
-Record 的 Repository 本地接收不同于链上 Block-confirmed；只有 accepted Block/chain-state 能证明后者。Block/message 广播与重试属于之后的网络层，不属于 Repository Recovery。
+本地接受不同于 Block confirmation；Block 投递、打包与网络同步不在本项范围内。
 
 ## Asset 读取与浏览
 
-**延后实现／待返工。** 之前把 `get(assetId) / has(assetId) / preserve(asset)` 当作完整 Repo Asset 管理合同缺乏产品论证，暂不把它作为 MVP 通过标准。
+**全部延后实现／待返工。** 目前不确认通用 `preserve/get/has`、内容字节布局、Repo Asset 目录、检索、管理接口或资源大小限制。
 
-需要从真实仓库行为明确：哪些成果可被管理、如何入库/取用、成果 identity 与内容副本有什么区别、按什么方式查询、哪些字段只是本地 DB/展示元数据。现有 `AssetStorageService` 不删除但不计为已验收的目标功能。Asset 浏览与后续历史查询应在完成这项讨论后统一设计。
+Asset 是未来 Repository 的重要产品能力，但必须先讨论实际仓库管理方式，再制定身份和存储合同。本轮既不扩展旧 Asset 代码，也不把它列为已经完成的 MVP 验收项。
 
 ## Contribution history
 
@@ -180,7 +169,7 @@ Record 的 Repository 本地接收不同于链上 Block-confirmed；只有 accep
 Contribution history 可以组合两类明确区分的数据来源：
 
 - Repository 已接受、但仍等待 Block 收录的 durable pending/committed state；
-- 已经由链上 Block 收录确证的 Records、Assets、confirmations 和 relations 的投影。
+- 已经由链上 Block 收录确证的签名 Records 及其已确认关系的投影；Asset 展示另行设计。
 
 两者在视图中不得被混称为同一种链确证状态。Repository 不因此维护规范的 `records[]` 集合。
 
