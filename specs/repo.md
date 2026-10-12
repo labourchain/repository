@@ -7,7 +7,7 @@
 - **Umbrella:** [`repository-mvp.md`](./repository-mvp.md)
 - **Member dependency:** [`member.md`](./member.md)
 
-> **Architecture correction (2026-10):** Signed Protocol fields remain as defined here. The prior filesystem journal/Asset-byte provider is legacy; MongoDB-default Runtime DB migration is pending, and Asset identity/storage is **deferred — rework required**. No independent contribution Recovery/staging feature remains in scope.
+> **Architecture correction (2026-10):** Signed Protocol fields remain as defined here. The prior old persistence/Asset-byte provider is legacy; MongoDB-default Runtime DB migration is pending, and Asset identity/storage is **deferred — rework required**. No independent contribution Recovery/staging feature remains in scope.
 
 ## Purpose
 
@@ -184,7 +184,7 @@ lookup whether RecordId is included in an accepted Block
 return the relevant Block reference / confirmation position as supported
 ```
 
-The normal node uses MongoDB by default behind a replaceable Runtime Record DB interface; this Spec does not prescribe provider-native MongoDB schema, package, transport, or the chain-state adapter's implementation.
+The Repo's single owning Node uses MongoDB by default behind a narrow replaceable Runtime Record DB interface; this Spec does not prescribe the provider's native schema or other database-specific internals.
 
 Repository must not satisfy these dependencies by introducing a domain-owned canonical `repo.records[]`, a second blockchain, or by claiming a durable Runtime DB read is Block confirmation.
 
@@ -210,7 +210,7 @@ For the MVP, one Repo identity has one accepted establishment Record.
 
 A second attempt to establish the same Repo identity must not silently replace the first accepted establishment. Conflict checks must consider durable accepted/pending state and any available block-confirmed state; a stale or missing lookup index cannot authorize a duplicate establishment.
 
-Cross-node concurrent establishment, fork/reorg arbitration and generic Entity admission are outside this Story unless the later chain/network model introduces explicit requirements for them.
+Each Repo is maintained by one Node. Cross-Node Repo establishment competition and coordination are outside this Story; this Node still checks for conflicting establishment facts in its persisted DB.
 
 ## Boundaries
 
