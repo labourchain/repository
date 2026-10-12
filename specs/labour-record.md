@@ -92,8 +92,7 @@ These fields do not claim perfect measurement and do not define `duration`.
 `references` is an optional list of confirmed upstream Asset references: existing
 labour results that this labour explicitly builds on or cites.
 
-The Protocol treats each reference as an opaque non-empty string. The current
-The legacy `asset.content@0.1.0` implementation used its content-derived AssetId as one concrete
+The Protocol treats each reference as an opaque non-empty string. The legacy `asset.content@0.1.0` implementation used its content-derived AssetId as one concrete
 reference value, but `labour.record@0.1.0` deliberately does not validate the
 AssetId shape, existence or content integrity itself. Missing references never
 prevent a labour Record from being created.
@@ -111,8 +110,7 @@ The Protocol deliberately does not introduce `outcome`, `producedAssets`,
 both `references` and `assets` when a labour act works on an existing Asset.
 
 As with `references`, this Protocol validates only the reference representation.
-The previous `asset.content@0.1.0` implementation supplied AssetId, but that Asset identity model is deferred for rework;
-Asset existence and integrity remain outside labour Record validation.
+The previous `asset.content@0.1.0` implementation supplied AssetId, but that identity model is deferred for rework. Asset existence and integrity remain outside labour Record validation.
 
 ## Member and signature boundary
 
