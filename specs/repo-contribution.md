@@ -10,6 +10,8 @@
 - **Labour dependency:** [`labour-record.md`](./labour-record.md)
 - **Repo dependency:** [`repo.md`](./repo.md)
 
+> **Architecture correction (2026-10):** Signed Protocol fields remain as defined here. The prior filesystem journal/Asset-byte provider is legacy; MongoDB-default Runtime DB migration is pending, and Asset identity/storage is **deferred — rework required**. No independent contribution Recovery/staging feature remains in scope.
+
 ## Purpose
 
 `repo.contribution@0.1.0` defines the minimum signed Repo-side fact required
@@ -336,7 +338,7 @@ index is reconstructed.
 
 ## Patch boundary
 
-No current `labour.record@0.1.0` + `asset.content@0.1.0` contribution in
+No agreed contribution using `labour.record@0.1.0` and the deferred legacy `asset.content@0.1.0` in
 #9 requires a Patch fact.
 
 Patch remains a future extension hook for a Protocol that actually defines
@@ -395,7 +397,7 @@ It does not:
 
 - preserve or read Asset bytes;
 - persist Records;
-- own Runtime staging;
+- own Runtime staging (withdrawn);
 - maintain contribution history;
 - pack Blocks;
 - determine chain confirmation;
