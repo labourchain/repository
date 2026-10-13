@@ -60,6 +60,14 @@ Cordis + verified Protocol implementations
 
 DB 负责已经写入的数据在数据库故障/重启后的持久性；Node 重新启动后读取 DB 已存事实并重建必要的索引。不要求跨 Node 的 Repo 并发协调，也不需要自动续办未完成的 Contribution 请求或额外的 DB 恢复机制。
 
+## #48 M1：自然语言劳动录入（草稿与已签名 L 分离）
+
+`labourCapturePlugin` 提供 `labourCapture` 服务；必须与已有的 Member、`labour.record@0.1.0` 和 `runtimeRecordDatabasePlugin` 一起组合。MongoDB Provider 使用同一个数据库连接，分别存储 `records`（Core 签名 Record）与 `labour_inputs`（非签名输入）。后者有独立可替换的 `labourInputStore` 接口，不写入 Core Record 集合。
+
+调用 `labourCapture.create({ originalText, source, sourceReference?, memberIdentity, suggested? })` 会保留原文、来源和未经确认的建议字段，返回 `draft`；它**不会自动创建、生成签名或保存 L**。调用方必须在用户确认后提供已经签名的 Core `labour.record@0.1.0`，再显式执行 `labourCapture.confirm(inputId, signedRecord)`。此过程复用现有 LabourRecordService 的 Core 签名、Member 和精确 ProtocolHash 校验。`get(inputId)` / `list()` 返回草稿状态及已确认记录（若存在），`loadSigned(recordId)` / `listSigned()` 独立读取并重新校验 L。L 不依赖 A 或 D，可以不关联任何输入而独立存在。
+
+若签名 L 已持久化但尚未关联原始输入，调用者可使用**同一签名 L**显式重试确认；没有自动恢复或隐式签名。当前仅支持自然语言录入，Agent Session、Patch/Projection、Review UI 和 Block/History 留待后续阶段。
+
 ## 当前进度
 
 | 领域 | 状态 |
