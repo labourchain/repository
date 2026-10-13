@@ -1,6 +1,6 @@
 # Repo
 
-Repo 是 LabourChain 中的仓库。它以 Asset 为存放对象，并在接收劳动者 contribution 时参与相关劳动的确证。
+Repo 是 LabourChain 中记录与回顾劳动、管理相关成果并作出采纳决定的仓库。Member 签名劳动记录 L 可以独立持久保存和查询；关联的成果 Asset A 是可选的。Repo 是否采纳该劳动，由之后独立作出的签名决定 D 表达，而不是由 L 的入库自动推定。
 
 ## 定义
 
@@ -16,16 +16,20 @@ Repo identity
     └─ other protocols...
 ```
 
-Repo 用于保存劳动成果，并留下其采纳了哪些劳动贡献的可验证事实。Repo 不把 Record 作为另一类仓库内容保存；与 Repo 有关的劳动历史由相关 LabourChain facts 重新构建。劳动者与 Repo 之间不额外建立链上 membership 状态。
+Repo Runtime 通过数据库保存、查询已验证的 Core 签名事实，包括独立成立的劳动记录 L；劳动形成具体成果时可以关联 Asset A，但保存 L 不要求先有 A 或 Repo 采纳决定 D。Repo 可在后续集体审议后签名采纳决定 D。Core Record 是协议事实，不能因在 Runtime DB 中持久保存，就被重新定义为 Repo 的 Asset 内容或规范的 `repo.records[]`；贡献历史从相关事实投影得到。劳动者与 Repo 之间不额外建立链上 membership 状态。
 
 ```text
 Member performs labour
   ↓
-Record<data = labourRecord>
-  ↓ relates to
-Asset
-  ↓ contribution
-Repo
+Member-signed labour Record L
+  ├──> Runtime DB: save L / query / review (no A or D required)
+  └──> optional association ──> Asset A
+
+L (+ optional A)
+  ↓ later: Repo daily / weekly collective deliberation
+  ↓ positive acceptance, if supported by the applicable Protocol
+Repo-signed decision Record D
+  (v0.1.0 requires selected A; acceptance without A needs a new version)
 ```
 
 ## establishment 与 operator
