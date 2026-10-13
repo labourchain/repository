@@ -6,6 +6,8 @@
 - **Architecture:** [`../docs/architecture.md`](../docs/architecture.md)
 - **Umbrella:** [`repository-mvp.md`](./repository-mvp.md)
 
+> **Architecture correction (2026-10):** Signed Protocol fields remain as defined here. The previous persistence implementation and unreviewed Asset-byte provider is legacy; MongoDB-default Runtime DB migration is pending, and Asset identity/storage is **deferred — rework required**. No independent contribution Recovery/staging feature remains in scope.
+
 ## Purpose
 
 This Spec defines the minimum LabourChain capability needed to establish and recognize a human Member before Repo establishment and other human-facing protocol behavior.
@@ -85,7 +87,7 @@ declareMember(identityRecord)
 requireMember(entityIdentity)
 ```
 
-`declareMember` succeeds only after the exact declaration Record is durably accepted by the configured Record ingress/journal. This is Repository/runtime acceptance and may still be pending-chain.
+`declareMember` succeeds only after the exact declaration Record is durably accepted by the configured durable Record DB provider. This is Repository/runtime acceptance and may still be pending-chain.
 
 `requireMember` validates the queried identity with Core Entity semantics and succeeds when at least one accepted valid `member.identity` Record for that identity can be recovered from durable facts. Runtime indexes are derived and replaceable.
 

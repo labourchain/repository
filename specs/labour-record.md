@@ -7,6 +7,8 @@
 - **Architecture:** [`../docs/architecture.md`](../docs/architecture.md)
 - **Umbrella:** [`repository-mvp.md`](./repository-mvp.md)
 
+> **Architecture correction (2026-10):** Signed Protocol fields remain as defined here. The previous persistence implementation and unreviewed Asset-byte provider is legacy; MongoDB-default Runtime DB migration is pending, and Asset identity/storage is **deferred — rework required**. No independent contribution Recovery/staging feature remains in scope.
+
 ## Purpose
 
 `labour.record` is the minimum independently composable Protocol for recording one
@@ -90,8 +92,7 @@ These fields do not claim perfect measurement and do not define `duration`.
 `references` is an optional list of confirmed upstream Asset references: existing
 labour results that this labour explicitly builds on or cites.
 
-The Protocol treats each reference as an opaque non-empty string. The current
-`asset.content@0.1.0` Asset Protocol uses its deterministic AssetId as that
+The Protocol treats each reference as an opaque non-empty string. The legacy `asset.content@0.1.0` implementation used its content-derived AssetId as one concrete
 reference value, but `labour.record@0.1.0` deliberately does not validate the
 AssetId shape, existence or content integrity itself. Missing references never
 prevent a labour Record from being created.
@@ -109,8 +110,7 @@ The Protocol deliberately does not introduce `outcome`, `producedAssets`,
 both `references` and `assets` when a labour act works on an existing Asset.
 
 As with `references`, this Protocol validates only the reference representation.
-For the current MVP the value supplied by `asset.content@0.1.0` is AssetId;
-Asset existence and integrity remain outside labour Record validation.
+The previous `asset.content@0.1.0` implementation supplied AssetId, but that identity model is deferred for rework. Asset existence and integrity remain outside labour Record validation.
 
 ## Member and signature boundary
 
@@ -138,8 +138,7 @@ acceptLabourRecord(record)
 loadLabourRecord(recordId)
 ```
 
-`acceptLabourRecord` enters the existing Runtime Record database serialized ingress
-boundary. That Runtime boundary delegates exact durability to the Record journal.
+`acceptLabourRecord` uses the narrow Runtime Record persistence interface. The target MongoDB-default provider owns the persisted Records. Each Repo has one owning Node; this capability does not require shared-Repo cross-Node synchronization.
 This is pending-chain Runtime acceptance, not Block confirmation.
 
 `loadLabourRecord` reads the exact durable Record through the Runtime Record
