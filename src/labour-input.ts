@@ -4,6 +4,7 @@ import {
   LABOUR_RECORD_PROTOCOL_REFERENCE,
   LABOUR_RECORD_PROTOCOL_SERVICE,
   validateLabourRecordData,
+  LabourRecordValidationError,
   type LabourRecordData,
   type LabourRecordView,
   type ValidatedLabourRecord,
@@ -50,8 +51,8 @@ export interface LabourInputStore {
 }
 
 export class LabourInputValidationError extends Error {
-  constructor(message: string) {
-    super(message)
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options)
     this.name = 'LabourInputValidationError'
   }
 }
@@ -96,11 +97,21 @@ function normalizeSuggestion(value: unknown): Partial<LabourRecordData> | undefi
   const fields = value as Record<string, unknown>
   // Validate even incomplete suggestions with the existing labour.record schema.
   // Placeholders are never persisted or promoted to signed facts.
-  const checked = validateLabourRecordData({
-    content: 'Unconfirmed suggestion',
-    duration: 0,
-    ...fields,
-  })
+  let checked: LabourRecordData
+  try {
+    checked = validateLabourRecordData({
+      content: 'Unconfirmed suggestion',
+      duration: 0,
+      ...fields,
+    })
+  } catch (cause) {
+    if (cause instanceof LabourRecordValidationError) {
+      throw new LabourInputValidationError(
+        'Invalid suggested labour fields.', { cause },
+      )
+    }
+    throw cause
+  }
   const selected: Record<string, unknown> = {}
   for (const key of Object.keys(fields)) {
     selected[key] = checked[key as keyof LabourRecordData]
