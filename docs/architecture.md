@@ -297,33 +297,39 @@ sequenceDiagram
 
 Runtime Repo index 只是加速 lookup 的可替换数据。Repo identity 来自 establishment Record 的 `data.publicKey`，创建来源来自该 Record 的 `createdBy`。缺失或陈旧的 index 不能创造第二条创建事实；index 可由 Runtime DB 内已持久化的 establishment Records 重建；链状态只决定单独的 Block-confirmation 显示。
 
-## Contribution 数据流
+## Labour Record 与 Repo 集体采纳数据流
 
-Member 签名的 `labour.record@0.1.0` 是劳动事实 L；Repo 签名的 `repo.contribution@0.1.0` 是独立的正向采纳事实 D：
+L 是 Member 确认的独立劳动事实；A 是可选成果；D 是 Repo 在日会、周会等审议后作出正向采纳决定时产生的独立签名事实。**Repo 保存一条 L 不等于采纳该劳动。**
 
 ```text
-L.createdBy = Member EntityPublicKey
-L.data.references[] / L.data.assets[] = 确认的成果引用
+Member -> sign L (may reference A, or no A)
+       -> validate exact labour Protocol
+       -> Runtime Record DB stores L for browsing/review
+                         |
+                         v (later, optional)
+                 Repo daily/weekly deliberation
+                         |
+                  positive decision
+                         v
+                 Repo signs D -> store D -> acceptance
+```
 
+一次会议可以处理多条 L；会议审议和等待状态不强制产生签名 D，也不引入独立 Recovery / staging。Repo 的签名与 `operator` 留痕不自动证明会议程序或组织授权。拒绝、暂缓及会议意见的产品层保存方式应与正向签名采纳事实区分，治理证据另行设计。
+
+**现有 `repo.contribution@0.1.0` 的字段保持不变：**
+
+```text
 D.createdBy = Repo EntityPublicKey
 D.data = { labourRecordId: L.id, assetId, operator }
 ```
 
-D 的 `assetId` 选中 L 所声明成果中的一项，不自动接受全部成果。Repo acceptance 是签名领域事实，不是所有权、成员资格或 Block 确证。
+它只能选择 `L.assets[]` 中的一项 A。要让 D 接受没有 A 的 L，必须新增经审查的版本化协议（概念候选 `assetId?`），不能修改已有 v0.1.0 的签名语义或 exact ProtocolHash。旧记录仍按其历史版本验证。
 
-```text
-signed L + signed D
-   -> exact Protocol / relation validation
-   -> narrow Runtime Record DB interface
-   -> MongoDB 持久接收 L / D（D 最后）
-   -> Repository acceptance based on valid durable D
-```
+在确实执行 Repo 正向采纳的路径中，**D 最后持久写入**，并经所需的有效引用校验后形成 Repository-local acceptance；D-last 是这类采纳操作的完成边界，**不是独立保存 L 的前提，也不是跨会议的通用 A/L/D 事务**。
 
-**所有 Asset 相关实现条件均延后讨论。** 不在本节固定具体 AssetId 生成、字节内容、保存/读取、完整性、资源大小或 Asset 入库工作流。已合并的原 Contribution + Asset 代码尚待 #8 返工后重验收。
+当前旧 `RepositoryContributionService.commit()` 仍强制接收和持久化具体 Asset，属于未完成 #8 重新设计的历史实现，不能用于无 A 劳动采纳。新的 MongoDB Record provider #31 不负责改变该协议、重构 Asset 或实现集体会议流程。
 
-一个 Repo 只由一个 Node 维护。该 Node 可以在提交路径中按需要串行判断同键冲突；不再将跨 Node 竞争和数据库多文档事务作为本轮架构前提。
-
-独立 Contribution Recovery 及 staging 已撤回，相关运行时代码已在 #47 删除。
+一个 Repo 只由一个 Node 维护。该 Node 可以在采纳路径中按需要串行判断同键冲突；不引入跨 Node 竞争、多文档事务或独立 Contribution Recovery。
 
 ## Contribution 状态
 
@@ -332,7 +338,7 @@ Repository 接受与链收录是不同的事实，不借助 Node 会话级阶段
 ```text
 D 未持久存在
     -> 当前没有可用 Repo acceptance fact
-    -> 即使其他 Record 或成果已保存在 DB，也不自动成为 COMMITTED
+    -> 即使 L 或成果已保存在 DB，也不自动成为 Repo-accepted；L 本身仍可独立保存、查询和回顾
 
 有效 D 已经持久存在
     + 必需依赖事实经验证可读取
