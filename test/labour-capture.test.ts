@@ -202,7 +202,7 @@ test('natural-language draft and independently signed L survive Mongo restart', 
       const db = check.db(databaseName)
       assert.equal(await db.collection('labour_inputs').countDocuments(), 1)
       assert.equal(await db.collection('records').countDocuments(), 4)
-      assert.equal(await db.collection('records')
+      assert.equal(await db.collection<{ _id: string }>('records')
         .countDocuments({ _id: draft.input.id }), 0)
     } finally {
       await check.close()
