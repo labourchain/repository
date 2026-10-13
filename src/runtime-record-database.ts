@@ -3,31 +3,40 @@ import {
   RECORD_JOURNAL_INTERNAL_RUN_EXCLUSIVE,
   RUNTIME_RECORD_DATABASE_INTERNAL_RUN_EXCLUSIVE,
 } from './internal-publication.ts'
-import type {
-  JournalRecord,
-  RecordJournalExclusiveSession,
-} from './record-journal.ts'
+import type { RecordJournalExclusiveSession } from './record-journal.ts'
 
 export const RUNTIME_RECORD_DATABASE_SERVICE = 'runtimeRecordDatabase' as const
-export const RUNTIME_RECORD_DATABASE_PLUGIN_NAME =
-  'runtime.record-database' as const
+export const JOURNAL_RECORD_DATABASE_PLUGIN_NAME =
+  'runtime.record-database-journal' as const
+
+export interface RuntimeRecord {
+  readonly id: string
+}
+
+export interface RuntimeRecordDatabase {
+  runExclusive<T>(
+    operation: (database: RuntimeRecordDatabaseSession) => Promise<T>,
+  ): Promise<T>
+  [RUNTIME_RECORD_DATABASE_INTERNAL_RUN_EXCLUSIVE]<T>(
+    operation: (database: RuntimeRecordDatabaseSession) => Promise<T>,
+  ): Promise<T>
+  get(recordId: string): Promise<RuntimeRecord>
+  iterateAccepted(): AsyncIterableIterator<RuntimeRecord>
+}
 
 export interface RuntimeRecordDatabaseSession {
-  accept(record: JournalRecord): Promise<void>
-  get(recordId: string): Promise<JournalRecord>
-  iterateAccepted(): AsyncIterableIterator<JournalRecord>
+  accept(record: RuntimeRecord): Promise<void>
+  get(recordId: string): Promise<RuntimeRecord>
+  iterateAccepted(): AsyncIterableIterator<RuntimeRecord>
 }
 
 /**
- * Minimal Repository Runtime Record database boundary.
+ * Legacy filesystem-journal adapter for the Runtime Record DB interface.
  *
- * Protocol implementations own the meaning of their relationship state. This
- * service only gives those implementations one serialized Repository ingress
- * boundary and exact Record durability through recordJournal. Concrete
- * relationship state belongs to the first Protocol consumer that needs it;
- * this service does not invent a generic state model in advance.
+ * Existing tests use this provider explicitly; production uses MongoDB.
+ * Both providers expose the same domain session and publication guard.
  */
-export class RuntimeRecordDatabaseService {
+export class RuntimeRecordDatabaseService implements RuntimeRecordDatabase {
   private readonly ctx: Context
   constructor(ctx: Context) {
     this.ctx = ctx
@@ -49,6 +58,14 @@ export class RuntimeRecordDatabaseService {
     )
   }
 
+  get(recordId: string): Promise<RuntimeRecord> {
+    return this.ctx.recordJournal.get(recordId)
+  }
+
+  iterateAccepted(): AsyncIterableIterator<RuntimeRecord> {
+    return this.ctx.recordJournal.iterateAccepted()
+  }
+
   private createSession(
     journal: RecordJournalExclusiveSession,
   ): RuntimeRecordDatabaseSession {
@@ -62,12 +79,13 @@ export class RuntimeRecordDatabaseService {
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
-    runtimeRecordDatabase: RuntimeRecordDatabaseService
+    runtimeRecordDatabase: RuntimeRecordDatabase
   }
 }
 
-export const runtimeRecordDatabasePlugin = {
-  name: RUNTIME_RECORD_DATABASE_PLUGIN_NAME,
+/** Explicit journal adapter for existing filesystem test fixtures. */
+export const journalRecordDatabasePlugin = {
+  name: JOURNAL_RECORD_DATABASE_PLUGIN_NAME,
   provide: RUNTIME_RECORD_DATABASE_SERVICE,
   inject: ['recordJournal'],
   apply(ctx: Context): void {

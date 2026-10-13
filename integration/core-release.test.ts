@@ -24,7 +24,7 @@ import {
   RecordJournalService,
   createRepositoryNode,
   protocolResolutionPlugin,
-  runtimeRecordDatabasePlugin,
+  journalRecordDatabasePlugin,
   type CoreEntityProtocolService,
   type CoreRecordProtocolService,
   type CoreRecordValue,
@@ -269,7 +269,7 @@ test(
           },
           { plugin: coreEntityPlugin },
           { plugin: coreRecordPlugin },
-          { plugin: runtimeRecordDatabasePlugin },
+          { plugin: journalRecordDatabasePlugin },
           {
             plugin: RecordJournalService,
             config: { directory: journalDirectory },

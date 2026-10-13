@@ -1,6 +1,6 @@
 # Runtime Database Specification
 
-- **Status:** Draft — architecture correction; implementation pending
+- **Status:** MongoDB provider implementation in #31 (pending CI and independent review)
 - **Scope:** Repository-local Core Record persistence for one Repo maintained by one Node
 - **Reference:** [Board's MongoDB repository pattern](https://github.com/Ri0n72Y/board/tree/main/apps/board-api/src)
 - **Requirements:** [Repository requirements](../docs/requirements.md)
@@ -57,6 +57,6 @@ Asset identity, storage, availability and management are **deferred — rework r
 
 No standalone contribution staging, `recoverPending()`, automatic request replay, phase state machine, generic queue, second Record store, general ORM, multi-Node Repo ownership, cross-Node locking, Block packing, chain synchronization or consensus.
 
-## Implementation follow-up (outside this docs PR)
+## Implementation follow-up
 
-The withdrawn Recovery code was removed in #47. Implement the MongoDB-default provider behind this narrow interface (#31), reconcile existing Member/Repo/Contribution consumers, and separately revisit all Asset-related functionality (#8). Do not silently retain obsolete persistence components or use the deferred Asset model as an implementation prerequisite.
+The withdrawn Recovery code was removed in #47. The #31 implementation introduces the MongoDB-backed Runtime Record DB and moves Member/Repo/Contribution reads and writes onto that interface. Existing filesystem Journal fixtures use an explicit compatibility adapter rather than a MongoDB fallback. Separately revisit all Asset-related functionality (#8). Do not silently retain obsolete persistence components or use the deferred Asset model as an implementation prerequisite.

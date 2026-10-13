@@ -11,6 +11,16 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      mongo:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ ping: 1 }).ok'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
     strategy:
       fail-fast: false
       matrix:
@@ -27,6 +37,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm run typecheck
       - run: pnpm run test:coverage
+        env:
+          MONGODB_TEST_URI: mongodb://127.0.0.1:27017
       - run: pnpm run test:core-release
       - run: pnpm run build
       - name: verify publish tarball

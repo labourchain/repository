@@ -16,7 +16,7 @@ This umbrella Spec tracks the revised MVP. A merged implementation and a green C
 | Repo establishment/identity | Implemented | Retain |
 | `labour.record@0.1.0` | Implemented | Retain its agreed minimal fields and references |
 | Exact ProtocolHash / verified artifact resolution | Implemented | Retain |
-| Signed Record ingress / Runtime DB | Previous implementation awaiting replacement | **Redesign:** MongoDB default; narrow replaceable interface; implementation pending |
+| Signed Record ingress / Runtime DB | MongoDB provider and narrow interface in #31 | CI / independent review pending; explicit journal test adapter retained |
 | `asset.content@0.1.0` and Asset identity | Historical implementation exists | **Deferred — rework required** |
 | Asset storage | Historical filesystem implementation exists | **Deferred — rework required** |
 | Repo-signed `repo.contribution@0.1.0` | Implemented | Retain confirmed fact fields; storage/Asset integration requires revalidation |
@@ -25,7 +25,7 @@ This umbrella Spec tracks the revised MVP. A merged implementation and a green C
 | Contribution history (#11) | Unimplemented | Defer implementation until DB/Asset boundary is settled |
 | Concrete executable composition (#39) | Unimplemented | Defer integration until revised providers are ready |
 
-The current code on `main` is not yet the revised MongoDB-backed product architecture. The withdrawn standalone Recovery code was subsequently removed in #47; the MongoDB migration remains pending.
+The #31 implementation provides a MongoDB-backed Runtime Record DB with a replaceable interface; its CI and independent review remain pending. The withdrawn standalone Recovery code was removed in #47.
 
 ## Confirmed domain facts
 

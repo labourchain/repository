@@ -16,6 +16,7 @@ import {
   MemberProtocolConfigError,
   RecordJournalNotFoundError,
   RecordJournalService,
+  journalRecordDatabasePlugin,
   createRepositoryNode,
   type CoreRecordProtocolService,
   type CoreRecordValue,
@@ -120,6 +121,7 @@ function composition(directory: string) {
     memberPluginEntry(),
     { plugin: coreEntityProvider },
     { plugin: coreRecordProvider },
+    { plugin: journalRecordDatabasePlugin },
     { plugin: RecordJournalService, config: { directory } },
   ]
 }
@@ -132,7 +134,7 @@ test('Protocol artifact entry exports exactly one named plugin', async () => {
   assert.deepEqual(namespace.plugin.inject, [
     CORE_ENTITY_PROTOCOL_SERVICE,
     CORE_RECORD_PROTOCOL_SERVICE,
-    'recordJournal',
+    'runtimeRecordDatabase',
   ])
 })
 
@@ -143,10 +145,12 @@ test('Member Protocol service follows the Cordis Plugin Fiber lifecycle', async 
     const entityFiber = context.plugin(coreEntityProvider)
     const recordFiber = context.plugin(coreRecordProvider)
     const journalFiber = context.plugin(RecordJournalService, { directory })
+    const databaseFiber = context.plugin(journalRecordDatabasePlugin)
     await Promise.all([
       entityFiber.await(),
       recordFiber.await(),
       journalFiber.await(),
+      databaseFiber.await(),
     ])
 
     const memberFiber = context.plugin(memberIdentityPlugin, {
@@ -319,7 +323,8 @@ test('fails startup when the Host does not supply an exact ProtocolHash', async 
           { plugin: memberIdentityPlugin, config: { protocolHash: 'not-a-hash' } },
           { plugin: coreEntityProvider },
           { plugin: coreRecordProvider },
-          { plugin: RecordJournalService, config: { directory } },
+          { plugin: journalRecordDatabasePlugin },
+    { plugin: RecordJournalService, config: { directory } },
         ],
       }),
     )

@@ -49,7 +49,7 @@ Cordis + exact verified Protocol implementations
 
 **Exactly one Node maintains each Repo.** This follows [Board's](https://github.com/Ri0n72Y/board) practical repository-interface/MongoDB-provider split without copying Board-specific `pid`, patch, tag or snapshot schema.
 
-The **current code still contains old persistence components** and deferred Asset storage; standalone contribution staging/recovery was removed in #47. The DB migration (#31) and Asset redesign (#8) remain pending.
+The **#31 implementation provides MongoDB as the default Runtime Record DB**. Legacy filesystem Journal is used only as an explicit test adapter, never as a MongoDB failure fallback. Standalone contribution staging/recovery was removed in #47. Asset redesign (#8) remains pending.
 
 MongoDB handles persistence. On restart, the owning Node reconnects and reads stored facts and rebuildable projections; there is no cross-Node Repo write coordination, separate application DB recovery, or automatic replay of unfinished user contribution requests.
 
@@ -58,7 +58,7 @@ MongoDB handles persistence. On restart, the owning Node reconnects and reads st
 | Area | Status |
 | --- | --- |
 | Cordis Bootstrap, Member Runtime, Repo, labour.record, exact Protocol resolution | Implemented; retain |
-| Runtime Record persistence | Legacy code present; MongoDB-default adapter migration pending |
+| Runtime Record persistence | MongoDB provider and narrow interface implemented; CI/review pending |
 | Asset / Asset Storage (#8) | **Deferred — rework required** |
 | Repo Contribution (#9) | Signed fact relation retained; DB/Asset orchestration review pending |
 | Standalone Recovery (#10 / #47) | **Withdrawn; runtime code removed** |

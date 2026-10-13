@@ -40,7 +40,7 @@ import {
   assetStoragePlugin,
   createRepositoryNode,
   repositoryContributionPlugin,
-  runtimeRecordDatabasePlugin,
+  journalRecordDatabasePlugin,
   type Asset,
   type CoreRecordProtocolService,
   type CoreRecordValue,
@@ -291,7 +291,7 @@ function composition(
     { plugin: exactResolutionProvider(contributionHash) },
     { plugin: coreEntityProvider },
     { plugin: coreRecordProvider },
-    { plugin: runtimeRecordDatabasePlugin },
+    { plugin: journalRecordDatabasePlugin },
     {
       plugin: RecordJournalService,
       config: { directory: join(root, 'journal') },

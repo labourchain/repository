@@ -7,7 +7,7 @@ import { test } from 'node:test'
 import {
   RecordJournalService,
   createRepositoryNode,
-  runtimeRecordDatabasePlugin,
+  journalRecordDatabasePlugin,
   type JournalRecord,
 } from '../src/index.ts'
 
@@ -30,7 +30,7 @@ test('Runtime Record database shares the journal mutation gate', async () => {
   await withDirectory(async (directory) => {
     const node = await createRepositoryNode({
       plugins: [
-        { plugin: runtimeRecordDatabasePlugin },
+        { plugin: journalRecordDatabasePlugin },
         { plugin: RecordJournalService, config: { directory } },
       ],
     })

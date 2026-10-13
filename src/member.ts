@@ -1,5 +1,8 @@
 import type { Context } from '@deepseek-ai/cordis'
-import type { JournalRecord } from './record-journal.ts'
+import {
+  RUNTIME_RECORD_DATABASE_SERVICE,
+  type RuntimeRecord,
+} from './runtime-record-database.ts'
 
 export const MEMBER_PROTOCOL_NAME = 'member.identity' as const
 export const MEMBER_PROTOCOL_VERSION = '0.1.0' as const
@@ -21,7 +24,7 @@ export interface CoreEntityProtocolService {
   validateEntity(value: unknown): CoreEntityValue
 }
 
-export interface CoreRecordValue extends JournalRecord {
+export interface CoreRecordValue extends RuntimeRecord {
   readonly protocol: string
   readonly protocolHash: string
   readonly createdBy: string
@@ -117,9 +120,9 @@ function memberView(identity: string): MemberView {
 }
 
 /**
- * Journal-backed current Member projection for member.identity.
+ * Database-backed current Member projection for member.identity.
  *
- * The durable Record journal remains the fact source. The in-memory Set is a
+ * Persisted Core Records remain the fact source. The in-memory Set is a
  * replaceable projection of whether at least one valid declaration exists.
  */
 export class MemberIdentityService {
@@ -135,7 +138,7 @@ export class MemberIdentityService {
   async rebuild(): Promise<void> {
     const rebuilt = new Set<string>()
 
-    for await (const journalRecord of this.ctx.recordJournal.iterateAccepted()) {
+    for await (const journalRecord of this.ctx[RUNTIME_RECORD_DATABASE_SERVICE].iterateAccepted()) {
       if (!this.isCandidate(journalRecord)) continue
       const record = this.validateDeclaration(journalRecord)
       rebuilt.add(record.createdBy)
@@ -148,7 +151,7 @@ export class MemberIdentityService {
   }
 
   async declareMember(record: unknown): Promise<MemberView> {
-    return this.ctx.recordJournal.runExclusive(async (journal) => {
+    return this.ctx[RUNTIME_RECORD_DATABASE_SERVICE].runExclusive(async (journal) => {
       // Existing durable Member facts, validation of the incoming declaration
       // and publication share one mutation boundary. A raw same-process journal
       // write therefore cannot make Member history invalid between reconcile
@@ -181,7 +184,7 @@ export class MemberIdentityService {
     return memberView(validatedIdentity)
   }
 
-  private isCandidate(value: JournalRecord): boolean {
+  private isCandidate(value: RuntimeRecord): boolean {
     if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
     const record = value as Partial<CoreRecordValue>
     return record.protocol === MEMBER_PROTOCOL_REFERENCE && record.protocolHash === this.protocolHash
@@ -226,7 +229,7 @@ export class MemberIdentityService {
 export const MEMBER_PROTOCOL_INJECT = Object.freeze([
   CORE_ENTITY_PROTOCOL_SERVICE,
   CORE_RECORD_PROTOCOL_SERVICE,
-  'recordJournal',
+  RUNTIME_RECORD_DATABASE_SERVICE,
 ] as const)
 
 /**

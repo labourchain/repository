@@ -56,7 +56,7 @@ Cordis + verified Protocol implementations
 
 **每个 Repo 仅由一个 Node 负责维护。** 参考 [Ri0n72Y/board](https://github.com/Ri0n72Y/board) 已使用的接口分离与 MongoDB provider 模式，但不拷贝 Board 的 `pid`、`patch`、tags、业务 schema。
 
-**当前实现仍保留待替换的旧持久化代码和 Asset 存储；独立 Contribution Recovery 已在 #47 移除。** MongoDB provider 改造（#31）与 Asset 返工（#8）尚未实施；目标架构尚未全部落地。
+**#31 提供 MongoDB 默认 Runtime Record DB Provider；文件 Journal 仅由旧回归测试显式使用，不作为 MongoDB 的自动回退。** 独立 Contribution Recovery 已在 #47 移除。Asset 返工（#8）仍待实施。
 
 DB 负责已经写入的数据在数据库故障/重启后的持久性；Node 重新启动后读取 DB 已存事实并重建必要的索引。不要求跨 Node 的 Repo 并发协调，也不需要自动续办未完成的 Contribution 请求或额外的 DB 恢复机制。
 
@@ -65,7 +65,7 @@ DB 负责已经写入的数据在数据库故障/重启后的持久性；Node �
 | 领域 | 状态 |
 | --- | --- |
 | Bootstrap / Cordis、Member Runtime、Repo、labour.record、exact Protocol resolution | 已实现，保留 |
-| Core Record 持久化 / Runtime DB | 旧实现存在，**MongoDB 默认 provider 改造待实现** |
+| Core Record 持久化 / Runtime DB | MongoDB Provider + 最小接口已实现，待 CI / 独立审查 |
 | Asset / Asset Storage (#8) | 旧实现存在，**延后实现／待返工** |
 | Repo Contribution (#9) | 签名事实与关系已确认，DB/Asset 编排待复核 |
 | 独立 Recovery (#10 / #47) | **已撤回并删除运行时代码** |
