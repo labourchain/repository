@@ -17,6 +17,7 @@ import {
   BootstrapStartupError,
   RecordJournalNotFoundError,
   RecordJournalService,
+  journalRecordDatabasePlugin,
   RepoAlreadyEstablishedError,
   RepoEstablishmentError,
   RepoEstablishingMemberError,
@@ -159,6 +160,7 @@ function composition(directory: string) {
     },
     { plugin: coreEntityProvider },
     { plugin: coreRecordProvider },
+    { plugin: journalRecordDatabasePlugin },
     { plugin: RecordJournalService, config: { directory } },
   ]
 }
@@ -191,7 +193,7 @@ test('Repo Protocol artifact entry exports exactly one named plugin', async () =
     CORE_ENTITY_PROTOCOL_SERVICE,
     CORE_RECORD_PROTOCOL_SERVICE,
     MEMBER_PROTOCOL_SERVICE,
-    'recordJournal',
+    'runtimeRecordDatabase',
   ])
 })
 
@@ -202,10 +204,12 @@ test('Repo Protocol service follows the Cordis Plugin Fiber lifecycle', async ()
     const entityFiber = context.plugin(coreEntityProvider)
     const recordFiber = context.plugin(coreRecordProvider)
     const journalFiber = context.plugin(RecordJournalService, { directory })
+    const databaseFiber = context.plugin(journalRecordDatabasePlugin)
     await Promise.all([
       entityFiber.await(),
       recordFiber.await(),
       journalFiber.await(),
+      databaseFiber.await(),
     ])
 
     const memberFiber = context.plugin(memberIdentityPlugin, {
@@ -562,7 +566,8 @@ test('Host must supply the exact Repo ProtocolHash', async () => {
           },
           { plugin: coreEntityProvider },
           { plugin: coreRecordProvider },
-          { plugin: RecordJournalService, config: { directory } },
+          { plugin: journalRecordDatabasePlugin },
+    { plugin: RecordJournalService, config: { directory } },
         ],
       }),
       BootstrapStartupError,

@@ -5,9 +5,11 @@ import { join } from 'node:path'
 import { setImmediate as delayImmediate } from 'node:timers/promises'
 import { test } from 'node:test'
 import {
+  RecordJournalNotFoundError,
   RecordJournalService,
+  RuntimeRecordDatabaseNotFoundError,
   createRepositoryNode,
-  runtimeRecordDatabasePlugin,
+  journalRecordDatabasePlugin,
   type JournalRecord,
 } from '../src/index.ts'
 
@@ -30,7 +32,7 @@ test('Runtime Record database shares the journal mutation gate', async () => {
   await withDirectory(async (directory) => {
     const node = await createRepositoryNode({
       plugins: [
-        { plugin: runtimeRecordDatabasePlugin },
+        { plugin: journalRecordDatabasePlugin },
         { plugin: RecordJournalService, config: { directory } },
       ],
     })
@@ -56,5 +58,34 @@ test('Runtime Record database shares the journal mutation gate', async () => {
     assert.deepEqual(await node.context.recordJournal.get(outside.id), outside)
 
     await node.dispose()
+  })
+})
+
+test('journal adapter translates missing RecordId to the shared DB error', async () => {
+  await withDirectory(async (directory) => {
+    const node = await createRepositoryNode({
+      plugins: [
+        { plugin: journalRecordDatabasePlugin },
+        { plugin: RecordJournalService, config: { directory } },
+      ],
+    })
+    try {
+      await assert.rejects(
+        node.context.runtimeRecordDatabase.get('missing'),
+        RuntimeRecordDatabaseNotFoundError,
+      )
+      await assert.rejects(
+        node.context.runtimeRecordDatabase.runExclusive(
+          async (database) => database.get('missing'),
+        ),
+        RuntimeRecordDatabaseNotFoundError,
+      )
+      await assert.rejects(
+        node.context.recordJournal.get('missing'),
+        RecordJournalNotFoundError,
+      )
+    } finally {
+      await node.dispose()
+    }
   })
 })

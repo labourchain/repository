@@ -29,11 +29,9 @@ import {
   type ValidatedRepoContributionRecord,
 } from './repo-contribution.ts'
 import {
-  RecordJournalNotFoundError,
-  type JournalRecord,
-} from './record-journal.ts'
-import {
   RUNTIME_RECORD_DATABASE_SERVICE,
+  RuntimeRecordDatabaseNotFoundError,
+  type RuntimeRecord,
   type RuntimeRecordDatabaseSession,
 } from './runtime-record-database.ts'
 import {
@@ -189,7 +187,7 @@ function requireProtocolService(value: unknown): RepoContributionProtocolService
 }
 
 function isContributionCandidate(
-  record: JournalRecord,
+  record: RuntimeRecord,
 ): boolean {
   if (typeof record !== 'object' || record === null || Array.isArray(record)) {
     return false
@@ -199,7 +197,7 @@ function isContributionCandidate(
 }
 
 function requireDurableContributionProtocolHash(
-  record: JournalRecord,
+  record: RuntimeRecord,
 ): string {
   const protocolHash = (record as Partial<CoreRecordValue>).protocolHash
   if (
@@ -373,7 +371,7 @@ export class RepositoryContributionService {
           try {
             await database.get(acceptance.id)
           } catch (cause) {
-            if (cause instanceof RecordJournalNotFoundError) return undefined
+            if (cause instanceof RuntimeRecordDatabaseNotFoundError) return undefined
             throw cause
           }
 

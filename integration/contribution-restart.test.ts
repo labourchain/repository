@@ -45,7 +45,7 @@ import {
   createRepositoryNode,
   protocolResolutionPlugin,
   repositoryContributionPlugin,
-  runtimeRecordDatabasePlugin,
+  journalRecordDatabasePlugin,
   type AssetContentProtocolService,
   type CoreEntityProtocolService,
   type CoreProtocolService,
@@ -418,7 +418,7 @@ test(
               },
             },
             { plugin: corePlugin },
-            { plugin: runtimeRecordDatabasePlugin },
+            { plugin: journalRecordDatabasePlugin },
             {
               plugin: RecordJournalService,
               config: { directory: journalDirectory },

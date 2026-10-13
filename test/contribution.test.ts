@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict'
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { Context } from '@deepseek-ai/cordis'
+import { MongoClient } from 'mongodb'
 import { plugin as assetContentPlugin } from '../src/protocols/asset.content.ts'
 import { plugin as labourRecordPlugin } from '../src/protocols/labour.record.ts'
 import { plugin as memberIdentityPlugin } from '../src/protocols/member.identity.ts'
@@ -34,12 +35,14 @@ import {
   RecordJournalNotFoundError,
   RecordJournalPublicationError,
   RecordJournalService,
+  RuntimeRecordDatabaseNotFoundError,
   RepositoryContributionAssetMismatchError,
   RepositoryContributionConflictError,
   RepositoryContributionProtocolError,
   assetStoragePlugin,
   createRepositoryNode,
   repositoryContributionPlugin,
+  journalRecordDatabasePlugin,
   runtimeRecordDatabasePlugin,
   type Asset,
   type CoreRecordProtocolService,
@@ -291,7 +294,7 @@ function composition(
     { plugin: exactResolutionProvider(contributionHash) },
     { plugin: coreEntityProvider },
     { plugin: coreRecordProvider },
-    { plugin: runtimeRecordDatabasePlugin },
+    { plugin: journalRecordDatabasePlugin },
     {
       plugin: RecordJournalService,
       config: { directory: join(root, 'journal') },
@@ -1380,5 +1383,173 @@ test('caller retry after restart reuses durable A and L before D', async () => {
     )
     assert.equal((await acceptedContributions(second)).length, 1)
     await second.dispose()
+  })
+})
+
+test('Mongo contribution persists A/L before D, retries explicitly, and never heals durable D', {
+  skip: !process.env.MONGODB_TEST_URI,
+}, async () => {
+  await withRoot(async (root) => {
+    const uri = process.env.MONGODB_TEST_URI!
+    const databaseName = 'labourchain_contribution_' +
+      randomUUID().replaceAll('-', '')
+    const mongo = {
+      plugin: runtimeRecordDatabasePlugin,
+      config: { uri, databaseName },
+    }
+    const createMongoNode = () => createRepositoryNode({
+      plugins: [
+        ...composition(root).filter(
+          (entry) => entry.plugin !== journalRecordDatabasePlugin &&
+            entry.plugin !== RecordJournalService,
+        ),
+        mongo,
+      ],
+    })
+    let node: Awaited<ReturnType<typeof createRepositoryNode>> | undefined
+
+    try {
+      node = await createMongoNode()
+      await establishBase(node)
+      const selected = createAsset(node, 'mongo durable selected result')
+      const labour = labourRecord('mongo-labour', [], [selected.id])
+      const acceptance = acceptanceRecord(
+        'mongo-acceptance', REPO_KEY, labour.id, selected.id,
+      )
+      const request = {
+        asset: selected,
+        labourRecord: labour,
+        acceptanceRecord: acceptance,
+      }
+
+      // Interrupt exactly before D; A and L must remain durable but not accepted.
+      const database = node.context.runtimeRecordDatabase
+      const internalRun = database[
+        RUNTIME_RECORD_DATABASE_INTERNAL_RUN_EXCLUSIVE
+      ].bind(database)
+      database[RUNTIME_RECORD_DATABASE_INTERNAL_RUN_EXCLUSIVE] =
+        async function <T>(
+          operation: (session: RuntimeRecordDatabaseSession) => Promise<T>,
+        ): Promise<T> {
+          return internalRun(async (session) => operation({
+            ...session,
+            accept: async (record) => {
+              if ((record as Partial<CoreRecordValue>).protocol ===
+                  REPO_CONTRIBUTION_PROTOCOL_REFERENCE) {
+                throw new Error('interrupted before durable D')
+              }
+              await session.accept(record)
+            },
+          }))
+        }
+      await assert.rejects(
+        node.context[REPOSITORY_CONTRIBUTION_SERVICE].commit(request),
+        /interrupted before durable D/u,
+      )
+      assert.deepEqual(
+        await node.context.runtimeRecordDatabase.get(labour.id), labour,
+      )
+      assert.deepEqual(
+        await node.context[ASSET_STORAGE_SERVICE].get(selected.id), selected,
+      )
+      await assert.rejects(
+        node.context.runtimeRecordDatabase.get(acceptance.id),
+        RuntimeRecordDatabaseNotFoundError,
+      )
+      await node.dispose()
+      node = undefined
+
+      // Only an explicit caller retry completes D after restart.
+      node = await createMongoNode()
+      const committed = await node.context[
+        REPOSITORY_CONTRIBUTION_SERVICE
+      ].commit(request)
+      assert.equal(committed.status, 'COMMITTED')
+      assert.deepEqual(
+        await node.context.runtimeRecordDatabase.get(acceptance.id), acceptance,
+      )
+      assert.deepEqual(
+        await node.context[REPOSITORY_CONTRIBUTION_SERVICE].commit(request),
+        committed,
+      )
+      let acceptedD = 0
+      for await (const persisted of
+        node.context.runtimeRecordDatabase.iterateAccepted()) {
+        if ((persisted as Partial<CoreRecordValue>).protocol ===
+            REPO_CONTRIBUTION_PROTOCOL_REFERENCE) acceptedD += 1
+      }
+      assert.equal(acceptedD, 1)
+
+      const conflictingAcceptance = acceptanceRecord(
+        'mongo-conflicting-acceptance',
+        REPO_KEY,
+        labour.id,
+        selected.id,
+        SECOND_OPERATOR_KEY,
+      )
+      await assert.rejects(
+        node.context[REPOSITORY_CONTRIBUTION_SERVICE].commit({
+          ...request,
+          acceptanceRecord: conflictingAcceptance,
+        }),
+        RepositoryContributionConflictError,
+      )
+      await assert.rejects(
+        node.context.runtimeRecordDatabase.get(conflictingAcceptance.id),
+        RuntimeRecordDatabaseNotFoundError,
+      )
+
+      // An accepted D cannot be repaired from the supplied Asset.
+      const storage = node.context[ASSET_STORAGE_SERVICE]
+      const originalGet = storage.get.bind(storage)
+      const originalPreserve = storage.preserve.bind(storage)
+      let preserveCalls = 0
+      storage.get = async (assetId) => {
+        if (assetId === selected.id) throw new AssetNotFoundError(assetId)
+        return originalGet(assetId)
+      }
+      storage.preserve = async (asset) => {
+        preserveCalls += 1
+        return originalPreserve(asset)
+      }
+      await assert.rejects(
+        node.context[REPOSITORY_CONTRIBUTION_SERVICE].commit(request),
+        AssetNotFoundError,
+      )
+      assert.equal(preserveCalls, 0)
+      storage.get = originalGet
+      storage.preserve = originalPreserve
+
+      // A missing persisted L also cannot be recreated when D already exists.
+      const admin = new MongoClient(uri)
+      await admin.connect()
+      try {
+        await admin.db(databaseName)
+          .collection<{ _id: string; serialized: string }>('records')
+          .deleteOne({ _id: labour.id })
+      } finally {
+        await admin.close()
+      }
+      await assert.rejects(
+        node.context[REPOSITORY_CONTRIBUTION_SERVICE].commit(request),
+        RuntimeRecordDatabaseNotFoundError,
+      )
+      await assert.rejects(
+        node.context.runtimeRecordDatabase.get(labour.id),
+        RuntimeRecordDatabaseNotFoundError,
+      )
+      assert.deepEqual(
+        await node.context.runtimeRecordDatabase.get(acceptance.id), acceptance,
+      )
+    } finally {
+      if (node && !node.disposed) await node.dispose()
+      const admin = new MongoClient(uri)
+      await admin.connect()
+      try {
+        await admin.db(databaseName).dropDatabase()
+      } finally {
+        await admin.close()
+      }
+    }
   })
 })

@@ -17,7 +17,7 @@ import {
   MEMBER_PROTOCOL_SERVICE,
   RecordJournalService,
   createRepositoryNode,
-  runtimeRecordDatabasePlugin,
+  journalRecordDatabasePlugin,
   type CoreRecordProtocolService,
   type CoreRecordValue,
 } from '../src/index.ts'
@@ -130,7 +130,7 @@ function composition(directory: string) {
     },
     { plugin: coreEntityProvider },
     { plugin: coreRecordProvider },
-    { plugin: runtimeRecordDatabasePlugin },
+    { plugin: journalRecordDatabasePlugin },
     { plugin: RecordJournalService, config: { directory } },
   ]
 }

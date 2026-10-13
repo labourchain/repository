@@ -6,7 +6,10 @@ import {
   MemberNotFoundError,
   type CoreRecordValue,
 } from './member.ts'
-import type { JournalRecord } from './record-journal.ts'
+import {
+  RUNTIME_RECORD_DATABASE_SERVICE,
+  type RuntimeRecord,
+} from './runtime-record-database.ts'
 
 export const REPO_ESTABLISHMENT_PROTOCOL_NAME = 'repo.establishment' as const
 export const REPO_ESTABLISHMENT_PROTOCOL_VERSION = '0.1.0' as const
@@ -119,7 +122,7 @@ function repoView(record: CoreRecordValue, identity: string): RepoView {
  * Current Repo establishment projection.
  *
  * The exact accepted establishment Record remains the domain source. This
- * in-memory map is only a replaceable lookup index rebuilt from recordJournal.
+ * in-memory map is only a replaceable lookup index rebuilt from the Runtime DB.
  */
 export class RepoEstablishmentService {
   private readonly ctx: Context
@@ -134,7 +137,7 @@ export class RepoEstablishmentService {
   async rebuild(): Promise<void> {
     const rebuilt = new Map<string, string>()
 
-    for await (const journalRecord of this.ctx.recordJournal.iterateAccepted()) {
+    for await (const journalRecord of this.ctx[RUNTIME_RECORD_DATABASE_SERVICE].iterateAccepted()) {
       if (!this.isCandidate(journalRecord)) continue
 
       const validated = await this.validateEstablishment(journalRecord)
@@ -157,7 +160,7 @@ export class RepoEstablishmentService {
   }
 
   async establishRepo(value: unknown): Promise<RepoView> {
-    return this.ctx.recordJournal.runExclusive(async (journal) => {
+    return this.ctx[RUNTIME_RECORD_DATABASE_SERVICE].runExclusive(async (journal) => {
       // Creator-Member validation, Repo singularity validation and durable
       // publication share the journal mutation gate. Raw same-process journal
       // acceptance therefore cannot interleave between check and publish.
@@ -197,7 +200,7 @@ export class RepoEstablishmentService {
       throw new RepoNotFoundError(repoIdentity)
     }
 
-    const stored = await this.ctx.recordJournal.get(recordId)
+    const stored = await this.ctx[RUNTIME_RECORD_DATABASE_SERVICE].get(recordId)
     const validated = await this.validateEstablishment(stored)
 
     if (validated.repoIdentity !== repoIdentity) {
@@ -209,7 +212,7 @@ export class RepoEstablishmentService {
     return repoView(validated.record, validated.repoIdentity)
   }
 
-  private isCandidate(value: JournalRecord): boolean {
+  private isCandidate(value: RuntimeRecord): boolean {
     if (typeof value !== 'object' || value === null || Array.isArray(value)) {
       return false
     }
@@ -302,7 +305,7 @@ export const REPO_ESTABLISHMENT_PROTOCOL_INJECT = Object.freeze([
   CORE_ENTITY_PROTOCOL_SERVICE,
   CORE_RECORD_PROTOCOL_SERVICE,
   MEMBER_PROTOCOL_SERVICE,
-  'recordJournal',
+  RUNTIME_RECORD_DATABASE_SERVICE,
 ] as const)
 
 export function createRepoEstablishmentProtocolPlugin() {
