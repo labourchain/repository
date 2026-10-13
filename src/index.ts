@@ -8,6 +8,7 @@
 export * from './bootstrap.ts'
 export * from './record-journal.ts'
 export * from './runtime-record-database.ts'
+export * from './journal-record-database.ts'
 export * from './mongo-record-database.ts'
 export * from './protocol-resolution.ts'
 export * from './asset-content.ts'
