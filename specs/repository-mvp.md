@@ -21,11 +21,11 @@ This umbrella Spec tracks the revised MVP. A merged implementation and a green C
 | Asset storage | Historical filesystem implementation exists | **Deferred — rework required** |
 | Repo-signed `repo.contribution@0.1.0` | Implemented | Retain confirmed fact fields; storage/Asset integration requires revalidation |
 | Contribution orchestration | Implemented against legacy providers | **Refactor pending** against the new DB and revised Asset contract |
-| Standalone contribution Recovery (#10) | Merged implementation exists | **Withdrawn; remove staging/recovery code** |
+| Standalone contribution Recovery (#10 / #47) | Withdrawn; runtime code removed | No staging/recovery service |
 | Contribution history (#11) | Unimplemented | Defer implementation until DB/Asset boundary is settled |
 | Concrete executable composition (#39) | Unimplemented | Defer integration until revised providers are ready |
 
-The current code on `main` is not yet the revised MongoDB-backed product architecture. The documentation correction is intentionally separate from runtime code deletion/migration.
+The current code on `main` is not yet the revised MongoDB-backed product architecture. The withdrawn standalone Recovery code was subsequently removed in #47; the MongoDB migration remains pending.
 
 ## Confirmed domain facts
 
@@ -125,12 +125,11 @@ No generic transaction coordinator, saga, Recovery intent Protocol, Contribution
 
 MongoDB is a chosen default **Runtime provider**; its BSON `_id`, collections and indexes are never protocol identity. DB interchangeability must satisfy real behavior, not produce a speculative generic persistence framework.
 
-## Next implementation sequence (not part of this documentation PR)
+## Next implementation sequence
 
-1. Remove dead `contribution-staging` and `contribution-recovery` code/tests/exports and #10-only interfaces.
-2. Replace previous Runtime Record persistence with the narrow MongoDB-default adapter and focused RecordId/one-Node Repo acceptance tests.
-3. Review and rework Asset/Asset Storage from product requirements before restoring them as accepted capabilities.
-4. Recheck contribution against the revised DB and Asset boundaries.
-5. Complete #11 and #39 after those prerequisites are settled.
+1. Replace previous Runtime Record persistence with the narrow MongoDB-default adapter and focused RecordId/one-Node Repo acceptance tests (#31).
+2. Review and rework Asset/Asset Storage from product requirements before restoring them as accepted capabilities (#8).
+3. Recheck contribution against the revised DB and Asset boundaries.
+4. Complete #11 and #39 after those prerequisites are settled.
 
 The old #10 merge remains visible in Git history, but it is **withdrawn**, not a completed current MVP requirement.

@@ -59,4 +59,4 @@ No standalone contribution staging, `recoverPending()`, automatic request replay
 
 ## Implementation follow-up (outside this docs PR)
 
-After this Spec is accepted: remove the withdrawn Recovery code (#47); implement the MongoDB-default provider behind this narrow interface (#31); reconcile existing Member/Repo/Contribution consumers with it; separately revisit all Asset-related functionality (#8). Do not silently retain obsolete persistence components or use the deferred Asset model as an implementation prerequisite.
+The withdrawn Recovery code was removed in #47. Implement the MongoDB-default provider behind this narrow interface (#31), reconcile existing Member/Repo/Contribution consumers, and separately revisit all Asset-related functionality (#8). Do not silently retain obsolete persistence components or use the deferred Asset model as an implementation prerequisite.

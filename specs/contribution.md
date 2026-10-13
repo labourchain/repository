@@ -41,7 +41,7 @@ The previous independent Contribution Recovery / staging behavior is withdrawn. 
 
 A caller can explicitly retry the original signed input. This is ordinary idempotent domain behavior, not application-level DB Recovery. D is not fabricated from partial earlier facts, and an existing D is not silently repaired from request material.
 
-Existing staged-request providers, recovery-specific preflight/helpers and tests will be removed separately under #47. The earlier filesystem Record persistence implementations are not part of the new target design.
+Staged-request providers, recovery-specific preflight/helpers and tests were removed in #47. The earlier filesystem Record persistence implementations are not part of the new target design.
 
 ## Asset-dependent behavior: DEFERRED
 

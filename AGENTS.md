@@ -104,27 +104,11 @@ Runtime Repo indexes may persist `Repo identity -> establishment RecordId` for e
 
 A Worker produces Record and may produce or modify Asset outside Repository. Repository receives an Asset contribution and participates in Repo-side confirmation of the related labour.
 
-The current Repository progression is:
+The Repository contribution path verifies the supplied signed facts and persists A, then L, then the Repo-signed acceptance D last. Only a valid durable D with readable required facts establishes Repository `COMMITTED`. A partial pre-D write is not an accepted contribution.
 
-```text
-STAGED
-  ↓ required domain confirmations satisfied
-CONFIRMED
-  ↓ exact Records durable + accepted Asset durable
-COMMITTED
-  ↓ later valid Block inclusion
-PACKED
-```
+A caller may explicitly retry the same signed request. Exact RecordId replay must remain idempotent, and conflicting acceptance for the same logical key must fail. An existing D must never be silently healed from the request. The owning Node does not stage requests or run automatic contribution Recovery.
 
-`COMMITTED` is the Repository product acceptance boundary. It can be pending-chain.
-
-`PACKED` is Block-confirmed chain status. It is not required before Repository returns accepted.
-
-Never describe a merely durable pending Record as already block-confirmed/canonical-chain state.
-
-STAGED is temporary Runtime state. A usable deployment requires durable recovery information, but persistence alone does not make staging accepted.
-
-Recovery must converge toward the durable Repository state: pre-commit work must not appear accepted; already durably accepted Records/Assets must not be lost or duplicated. Block-confirmation status is reconciled separately from chain state.
+Later accepted-Block evidence can establish block-confirmed status. A durable D alone never proves chain confirmation.
 
 See [`specs/contribution.md`](./specs/contribution.md) and [`specs/asset-storage.md`](./specs/asset-storage.md).
 
@@ -132,14 +116,13 @@ Repository does not own all chain Records. Contribution history is a projection 
 
 ## Runtime providers
 
-Storage, durable Record ingress, staging, cache, index, projection and external adapters are normal Cordis plugin/provider concerns unless they themselves define stable chain protocol semantics.
+Storage, durable Record ingress, cache, index, projection and external adapters are normal Cordis plugin/provider concerns unless they themselves define stable chain protocol semantics.
 
 Runtime persistence must not silently redefine Asset, Record, confirmation, identity or contribution semantics.
 
 Not every Runtime datum is equally disposable:
 
 - accepted pending Record journal is durable operational state until safe chain handoff/inclusion;
-- staging is recoverable in-flight state;
 - indexes/caches/projections are derived and should be repairable/rebuildable.
 
 Concrete database, filesystem and index choices are not fixed by the current Specs.
@@ -166,7 +149,7 @@ Do not add abstractions merely to make diagrams or Spec trees look complete. Reu
 
 ## Testing discipline
 
-Tests protect Requirements, Spec contracts, meaningful protocol behavior, recovery behavior, Cordis lifecycle behavior and reproduced regressions. Test count, CI job count and coverage percentage are not quality goals by themselves.
+Tests protect Requirements, Spec contracts, meaningful protocol behavior, restart/replay behavior, Cordis lifecycle behavior and reproduced regressions. Test count, CI job count and coverage percentage are not quality goals by themselves.
 
 Derive acceptance tests from the capability Specs relevant to the Story being implemented. Do not mechanically execute every test idea in every Spec for every Task.
 
@@ -184,4 +167,4 @@ The current package remains private.
 
 Use the relevant project checks when the corresponding integration is available and report actual evidence.
 
-Core v0.1.0 supplies the frozen Protocol/Entity/Record/Block primitives and ready-to-mount `cordis-js-esm` artifacts. Repository must consume those boundaries without rebuilding Core algorithms. Full Repository MVP integration still requires the remaining domain capabilities and restart/recovery evidence.
+Core v0.1.0 supplies the frozen Protocol/Entity/Record/Block primitives and ready-to-mount `cordis-js-esm` artifacts. Repository must consume those boundaries without rebuilding Core algorithms. Full Repository MVP integration still requires the remaining domain capabilities and restart/readback evidence.

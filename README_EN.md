@@ -4,7 +4,7 @@
 
 LabourChain Repository composes signed labour and Repo acceptance facts through Cordis plugins. Core owns Entity/Record/Protocol identity and signature primitives. `labour.record@0.1.0` expresses a Member's labour and `repo.contribution@0.1.0` expresses a Repo's positive acceptance of a selected result.
 
-> **October 2026 design correction (documentation first):** The standalone #10 Contribution Recovery feature is **withdrawn, code removal pending**. The target Runtime Record DB uses **MongoDB by default behind a narrow, replaceable interface**. #8 Asset and Asset Storage are **deferred / rework required**. Existing code is not proof that its product contract was accepted. #11 History and #39 MVP integration await the revised boundaries. This branch changes documentation only.
+> **October 2026 design correction (documentation first):** The standalone #10 Contribution Recovery feature is **withdrawn; its runtime code was removed in #47**. The target Runtime Record DB uses **MongoDB by default behind a narrow, replaceable interface**. #8 Asset and Asset Storage are **deferred / rework required**. Existing code is not proof that its product contract was accepted. #11 History and #39 MVP integration await the revised boundaries.
 
 ## Source-of-truth hierarchy
 
@@ -49,7 +49,7 @@ Cordis + exact verified Protocol implementations
 
 **Exactly one Node maintains each Repo.** This follows [Board's](https://github.com/Ri0n72Y/board) practical repository-interface/MongoDB-provider split without copying Board-specific `pid`, patch, tag or snapshot schema.
 
-The **current merged code still contains old persistence components**, deferred Asset storage, and withdrawn contribution staging/recovery. The DB migration (#31), code deletion (#47) and Asset redesign (#8) are future implementation work, **not complete**.
+The **current code still contains old persistence components** and deferred Asset storage; standalone contribution staging/recovery was removed in #47. The DB migration (#31) and Asset redesign (#8) remain pending.
 
 MongoDB handles persistence. On restart, the owning Node reconnects and reads stored facts and rebuildable projections; there is no cross-Node Repo write coordination, separate application DB recovery, or automatic replay of unfinished user contribution requests.
 
@@ -61,7 +61,7 @@ MongoDB handles persistence. On restart, the owning Node reconnects and reads st
 | Runtime Record persistence | Legacy code present; MongoDB-default adapter migration pending |
 | Asset / Asset Storage (#8) | **Deferred — rework required** |
 | Repo Contribution (#9) | Signed fact relation retained; DB/Asset orchestration review pending |
-| Standalone Recovery (#10) | **Withdrawn — remove dead code** |
+| Standalone Recovery (#10 / #47) | **Withdrawn; runtime code removed** |
 | History (#11) | Deferred |
 | Concrete MVP composition (#39) | Deferred |
 
