@@ -51,7 +51,7 @@ assets[]
     -> 表达这次劳动直接声明形成/留下的成果关联
 ```
 
-`references` / `assets` 的引用完整性不能成为快速劳动记录的前置负担。缺少引用不阻止 labour Record 成立；上层产品可以根据 Git、聊天、计时器、当前打开的资料或 LLM 分析提出引用建议，但未经确认的推测不写入基础劳动事实。
+`references` / `assets` 的引用完整性不能成为快速劳动记录的前置负担。**A（Asset）可选，L（Member 签名劳动记录）可以没有任何 Asset**；缺少引用不阻止 labour Record 成立，也不阻止其被持久保存、查询或提交日会／周会审议。上层产品可以根据 Git、聊天、计时器、当前打开的资料或 LLM 分析提出引用建议，但未经确认的推测不写入基础劳动事实。
 
 `labour.record` 不记录 tags、Project、pid、assignee、status、priority、日报/周报、项目推进统计或 LLM 分类。它们属于组织、分析或 projection。`labour.record@0.1.0` 仍只把 Asset reference 当作 opaque reference 保存；旧 `asset.content@0.1.0` 曾将引用实现为 AssetId，但该通用身份方案当前延后返工。
 
@@ -91,22 +91,21 @@ Repo identity 和创建来源在正常应用重启后必须能够从 durable fac
 
 组织中的成员资格、授权、角色和政治治理不由 Repository 技术层自动确权。技术层负责保存实际发生的 contribution、Repo decision、签名主体和 operator 留痕。
 
-## Asset contribution
+## 劳动记录与 Repo 集体采纳
 
-Member 对劳动的确认是签名的 `labour.record@0.1.0` Record L；Repo 的正向采纳事实是另一条 Repo 签名的 `repo.contribution@0.1.0` Record D：
+**劳动事实的记录与 Repo 的采纳是两个独立动作。** Member 在劳动发生后确认并签名 L；L 可以独立存储与回顾，其关联的成果 A 是可选的。Repo 通常在日会、周会等集体审议中，随后决定是否采纳一项劳动贡献及其相关成果。一次会议可以审议多条 L，但不强制每条 L 在创建时同步产生 D。
 
-```text
-L.createdBy = contributor EntityPublicKey
-L.data.references[] = 已确认上游引用
-L.data.assets[] = 此次劳动声明的成果引用
+- **L：** Member 对其劳动事实的签名声明，既不要求 A，也不预先推断 Repo 认可。
+- **A：** 存在具体劳动成果时由 L 的 `references[] / assets[]` 关联，具体身份、保存与管理仍由 #8 单独设计。
+- **D：** Repo 作出**正向采纳决定**后，以 Repo identity 签名的独立 Record；`operator` 记录实际操作人。暂缓或未采纳不能通过“缺少 D”反推出确定的拒绝决定；审议意见、候选列表和未采纳状态可作为应用层审议资料保留，必要的签名治理证据另行设计。
 
-D.createdBy = Repo EntityPublicKey
-D.data = { labourRecordId: L.id, assetId, operator }
-```
+**现有已发布协议的兼容边界：** `repo.contribution@0.1.0` 的签名数据仍严格为 `{ labourRecordId, assetId, operator }`，只能确认与 L 关联的指定 A。该历史协议不支持无 A 的劳动采纳，不能通过把 `assetId` 改成可选字段并沿用相同 ProtocolHash 解决。
 
-`D.data.assetId` 明确选中 `L.data.assets[]` 中的一项成果引用，不自动采纳其他成果。Repo identity 由 `D.createdBy` 表达，劳动者由 L 的签名确认，`operator` 仅用于该次操作留痕。不存在额外 Member confirmation、ContributionId、`pid`、`previous` 或通用 relation model。
+**后续协议设计目标：** Repo 能分别采纳「劳动 L 本身」或「L 及其指定成果 A」。概念上可采用 `{ labourRecordId, assetId?, operator }`；具体新协议版本、字段和验证规则必须在独立的版本化设计及实现中确定。已有 v0.1.0 Record 继续按原协议验证。对多个 L 的会议批量操作不意味着引入批量签名或新会议协议。
 
-**Asset 相关的实体身份、内容上传、保管、读取、可用性与实际仓库操作均延后讨论。** 不能继续以旧的 `asset.content` 文件存储当作 Contribution 成立的必需条件。已确认的是上述签名事实与引用关系，不是完整的 Asset 端到端入库实现。
+Repo 签名只直接证明 Repo identity 对采纳事实签名，`operator` 只证明签名记录所声明的操作人；这两者**本身不证明集体审议的参与、表决程序或授权有效性**。会议程序和治理证据需要另行讨论，不由本次技术字段推断。
+
+**Asset 身份、内容上传、保管、读取和可用性条件仍延后至 #8。** 不能以撤回的 `asset.content` 字节存储作为劳动记录成立的前提，也不能把旧的一次性 A → L → D `commit()` 当作所有劳动记录的入口。
 
 ## Repository acceptance 与链确证
 
@@ -122,7 +121,7 @@ Block confirmed
   = 相关事实进入经过独立验证且被接受的 Block
 ```
 
-D 不存在时，不得根据 L 或其他持久事实推断 Repo 已采纳。D 存在但必要的已持久化签名事实不可读取或损坏时，报告 storage/integrity 错误，而不是宣称健康接受或悄悄修复。签名采纳不自动完成尚未设计的 Asset 管理、存储或可用性保证。
+D 不存在时，不得根据 L 或其他持久事实推断 Repo 已采纳；但 L 仍然是独立有效的 Member 签名劳动事实，可以被保存和查询。D 存在但必要的已持久化签名事实不可读取或损坏时，报告 storage/integrity 错误，而不是宣称健康接受或悄悄修复。签名采纳不自动完成尚未设计的 Asset 管理、存储或可用性保证。
 
 只有 accepted Block/chain-state 证据可以使 `pending-chain` 升级为 `block-confirmed`；本地 DB 接收和 candidate Block 打包均不能替代。
 
