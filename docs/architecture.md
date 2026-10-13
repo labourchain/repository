@@ -323,7 +323,7 @@ signed L + signed D
 
 一个 Repo 只由一个 Node 维护。该 Node 可以在提交路径中按需要串行判断同键冲突；不再将跨 Node 竞争和数据库多文档事务作为本轮架构前提。
 
-独立 Contribution Recovery 及 staging 已撤回，相关运行时代码由后续 #47 删除。
+独立 Contribution Recovery 及 staging 已撤回，相关运行时代码已在 #47 删除。
 
 ## Contribution 状态
 

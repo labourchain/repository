@@ -1,6 +1,6 @@
 # Repository 产品要求
 
-> **设计纠偏（2026-10）**：持久化 Runtime DB 采用 MongoDB 默认实现并经窄接口解耦；原独立 Contribution Recovery 已撤回，代码待删除；Asset 与 Asset Storage **延后实现／待返工**，旧代码和历史 Specs 不再作为已验收产品基线。本轮先修正文档，不更改运行代码。
+> **设计纠偏（2026-10）**：持久化 Runtime DB 采用 MongoDB 默认实现并经窄接口解耦；原独立 Contribution Recovery 已撤回，代码已由 #47 删除；Asset 与 Asset Storage **延后实现／待返工**，旧代码和历史 Specs 不再作为已验收产品基线。
 
 Repository 是 LabourChain 中用于保存劳动成果（Asset）并对相关劳动进行仓库侧确证的仓库能力。本页定义 Repository MVP 的产品要求，是当前 Repository 产品行为的事实来源。
 
@@ -150,7 +150,7 @@ Node 默认使用 MongoDB 保存 Core signed Records，领域服务通过窄 Run
 
 **MongoDB 负责自身持久化与数据库故障恢复。** Node 只连接 DB、读取已持久保存的事实，按需验证 exact Protocol 并重建衍生索引/视图。不设计额外的数据库持久化策略、事务配置、DB 自检或应用层数据库恢复机制。
 
-已撤回的 #10 独立 Contribution Recovery 不再属于系统：没有 persisted request staging、`recoverPending()`、自动续办未完成请求或恢复状态机。相关旧代码在后续清理任务中删除。
+已撤回的 #10 独立 Contribution Recovery 不再属于系统：没有 persisted request staging、`recoverPending()`、自动续办未完成请求或恢复状态机。相关运行时代码已在 #47 删除。
 
 已持久化且有效的 D 是 Repo 采纳事实；D 不存在意味着未被当前 Repo 接受。调用方可以自行重试同一已签名的请求；使用现有 RecordId 幂等和单 Node 中的具体同键冲突检查即可。这不是启动时自动恢复用户操作。
 

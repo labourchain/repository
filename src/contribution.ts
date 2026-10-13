@@ -239,21 +239,6 @@ export class RepositoryContributionService {
     this.ctx = ctx
   }
 
-  /**
-   * Validate one complete request before durable local staging.
-   *
-   * This performs the same semantic checks as commit(), including exact replay
-   * integrity, but never publishes a missing A, L or D.
-   */
-  async validateForStaging(
-    request: ContributionRequest,
-  ): Promise<RepositoryContributionCommit | undefined> {
-    const validated = await this.validateRequest(request)
-    return validated.replay === undefined
-      ? undefined
-      : committed(validated.replay)
-  }
-
   async commit(
     request: ContributionRequest,
   ): Promise<RepositoryContributionCommit> {

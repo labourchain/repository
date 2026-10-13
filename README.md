@@ -4,7 +4,7 @@
 
 LabourChain Repository 是保存、验证和组织劳动相关事实的 Repository 节点能力。Core Record 是通用签名事实容器，`labour.record@0.1.0` 表达劳动，`repo.contribution@0.1.0` 表达 Repo 对某项明确成果的正向采纳。Cordis 是唯一插件组合与生命周期系统。
 
-> **2026-10 设计纠偏（文档先行）：** 原 #10 独立 Contribution Recovery 撤回、代码待删除；Runtime DB 改为 **MongoDB 默认实现 + 窄抽象接口支持其他 DB**；#8 Asset / Asset Storage **延后实现／待返工**，旧代码不代表已验收的领域设计。#11 History、#39 MVP 组合暂缓，等待依赖边界收敛。此分支只修改文档，不修改运行代码。
+> **2026-10 设计纠偏（文档先行）：** 原 #10 独立 Contribution Recovery 已撤回，相关运行时代码已在 #47 删除；Runtime DB 改为 **MongoDB 默认实现 + 窄抽象接口支持其他 DB**；#8 Asset / Asset Storage **延后实现／待返工**，旧代码不代表已验收的领域设计。#11 History、#39 MVP 组合暂缓，等待依赖边界收敛。
 
 ## 设计与规范
 
@@ -56,7 +56,7 @@ Cordis + verified Protocol implementations
 
 **每个 Repo 仅由一个 Node 负责维护。** 参考 [Ri0n72Y/board](https://github.com/Ri0n72Y/board) 已使用的接口分离与 MongoDB provider 模式，但不拷贝 Board 的 `pid`、`patch`、tags、业务 schema。
 
-**当前 `main` 仍保留待替换的旧持久化代码、Asset 存储和已撤回的 Contribution Recovery。** 后续分别处理 MongoDB provider 改造（#31）、Recovery 删除（#47）以及 Asset 返工（#8）；目标架构尚未全部落地。
+**当前实现仍保留待替换的旧持久化代码和 Asset 存储；独立 Contribution Recovery 已在 #47 移除。** MongoDB provider 改造（#31）与 Asset 返工（#8）尚未实施；目标架构尚未全部落地。
 
 DB 负责已经写入的数据在数据库故障/重启后的持久性；Node 重新启动后读取 DB 已存事实并重建必要的索引。不要求跨 Node 的 Repo 并发协调，也不需要自动续办未完成的 Contribution 请求或额外的 DB 恢复机制。
 
@@ -68,7 +68,7 @@ DB 负责已经写入的数据在数据库故障/重启后的持久性；Node �
 | Core Record 持久化 / Runtime DB | 旧实现存在，**MongoDB 默认 provider 改造待实现** |
 | Asset / Asset Storage (#8) | 旧实现存在，**延后实现／待返工** |
 | Repo Contribution (#9) | 签名事实与关系已确认，DB/Asset 编排待复核 |
-| 独立 Recovery (#10) | **撤回，代码待移除** |
+| 独立 Recovery (#10 / #47) | **已撤回并删除运行时代码** |
 | Contribution History (#11) | 暂缓实现 |
 | Concrete MVP Composition (#39) | 暂缓，等待改造 |
 
