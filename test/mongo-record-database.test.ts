@@ -66,7 +66,13 @@ test('Mongo Record provider reads and replays exact persisted Records across ser
   const second = new MongoRuntimeRecordDatabaseService(db.collection)
   await second.runExclusive(async (session) => session.accept({ ...signed }))
   assert.deepEqual(await second.get('a'), signed)
-  const restored = await second.get('a') as { data: { content: string } }
+  const restored = await second.get('a')
+  assert.ok(
+    'data' in restored &&
+    typeof restored.data === 'object' &&
+    restored.data !== null &&
+    'content' in restored.data,
+  )
   restored.data.content = 'changed'
   assert.deepEqual(await second.get('a'), signed)
   await assert.rejects(
@@ -134,21 +140,18 @@ test('Mongo Record provider distinguishes input, corruption, conflict and provid
     service.runExclusive(async (session) => session.accept({ id: '' })),
     RuntimeRecordDatabaseInputError,
   )
-  await assert.rejects(
-    service.runExclusive(async (session) =>
-      session.accept({ id: 'broken', data: { value: 1n } })),
-    RuntimeRecordDatabaseInputError,
-  )
-  await assert.rejects(
-    service.runExclusive(async (session) =>
-      session.accept({ id: 'lossy', data: { optional: undefined } })),
-    RuntimeRecordDatabaseInputError,
-  )
-  await assert.rejects(
-    service.runExclusive(async (session) =>
-      session.accept({ id: 'date', data: new Date('2026-10-13T00:00:00Z') })),
-    RuntimeRecordDatabaseInputError,
-  )
+  const invalidBigInt = { id: 'broken', data: { value: 1n } }
+  const lossyRecord = { id: 'lossy', data: { optional: undefined } }
+  const invalidDate = {
+    id: 'date',
+    data: new Date('2026-10-13T00:00:00Z'),
+  }
+  for (const invalid of [invalidBigInt, lossyRecord, invalidDate]) {
+    await assert.rejects(
+      service.runExclusive(async (session) => session.accept(invalid)),
+      RuntimeRecordDatabaseInputError,
+    )
+  }
   db.setFailure('insert')
   await assert.rejects(
     service.runExclusive(async (session) => session.accept(record('x'))),

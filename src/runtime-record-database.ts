@@ -3,7 +3,10 @@ import {
   RECORD_JOURNAL_INTERNAL_RUN_EXCLUSIVE,
   RUNTIME_RECORD_DATABASE_INTERNAL_RUN_EXCLUSIVE,
 } from './internal-publication.ts'
-import type { RecordJournalExclusiveSession } from './record-journal.ts'
+import {
+  RecordJournalNotFoundError,
+  type RecordJournalExclusiveSession,
+} from './record-journal.ts'
 
 export const RUNTIME_RECORD_DATABASE_SERVICE = 'runtimeRecordDatabase' as const
 export const JOURNAL_RECORD_DATABASE_PLUGIN_NAME =
@@ -11,6 +14,17 @@ export const JOURNAL_RECORD_DATABASE_PLUGIN_NAME =
 
 export interface RuntimeRecord {
   readonly id: string
+}
+
+/** Shared absence contract for every Runtime Record DB provider. */
+export class RuntimeRecordDatabaseNotFoundError extends Error {
+  readonly recordId: string
+
+  constructor(recordId: string, options?: ErrorOptions) {
+    super('Persisted Record not found: ' + recordId, options)
+    this.name = 'RuntimeRecordDatabaseNotFoundError'
+    this.recordId = recordId
+  }
 }
 
 export interface RuntimeRecordDatabase {
@@ -58,8 +72,15 @@ export class RuntimeRecordDatabaseService implements RuntimeRecordDatabase {
     )
   }
 
-  get(recordId: string): Promise<RuntimeRecord> {
-    return this.ctx.recordJournal.get(recordId)
+  async get(recordId: string): Promise<RuntimeRecord> {
+    try {
+      return await this.ctx.recordJournal.get(recordId)
+    } catch (cause) {
+      if (cause instanceof RecordJournalNotFoundError) {
+        throw new RuntimeRecordDatabaseNotFoundError(recordId, { cause })
+      }
+      throw cause
+    }
   }
 
   iterateAccepted(): AsyncIterableIterator<RuntimeRecord> {
@@ -71,7 +92,7 @@ export class RuntimeRecordDatabaseService implements RuntimeRecordDatabase {
   ): RuntimeRecordDatabaseSession {
     return {
       accept: (record) => journal.accept(record),
-      get: (recordId) => journal.get(recordId),
+      get: (recordId) => this.get(recordId),
       iterateAccepted: () => journal.iterateAccepted(),
     }
   }

@@ -39,9 +39,10 @@ test('MongoDB stores exact Record facts across independent Cordis Node restarts'
     await node.context.runtimeRecordDatabase.runExclusive(
       async (db) => db.accept({ ...signed }),
     )
+    const conflicting = { ...signed, signature: 'different' }
     await assert.rejects(
       node.context.runtimeRecordDatabase.runExclusive(
-        async (db) => db.accept({ ...signed, signature: 'different' }),
+        async (db) => db.accept(conflicting),
       ),
       RuntimeRecordDatabaseConflictError,
     )

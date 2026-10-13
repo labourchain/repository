@@ -5,8 +5,12 @@ import {
   RUNTIME_RECORD_DATABASE_INTERNAL_RUN_EXCLUSIVE,
   isProtectedRepositoryPublication,
 } from './internal-publication.ts'
-import { RUNTIME_RECORD_DATABASE_SERVICE, type RuntimeRecord,
-  type RuntimeRecordDatabase, type RuntimeRecordDatabaseSession,
+import {
+  RUNTIME_RECORD_DATABASE_SERVICE,
+  RuntimeRecordDatabaseNotFoundError,
+  type RuntimeRecord,
+  type RuntimeRecordDatabase,
+  type RuntimeRecordDatabaseSession,
 } from './runtime-record-database.ts'
 
 export const RUNTIME_RECORD_DATABASE_PLUGIN_NAME =
@@ -33,15 +37,6 @@ export class RuntimeRecordDatabaseInputError extends RuntimeRecordDatabaseError 
   constructor(message: string, options?: ErrorOptions) {
     super(message, options)
     this.name = 'RuntimeRecordDatabaseInputError'
-  }
-}
-
-export class RuntimeRecordDatabaseNotFoundError extends RuntimeRecordDatabaseError {
-  readonly recordId: string
-  constructor(recordId: string) {
-    super('Persisted Record not found: ' + recordId)
-    this.name = 'RuntimeRecordDatabaseNotFoundError'
-    this.recordId = recordId
   }
 }
 

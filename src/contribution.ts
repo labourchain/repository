@@ -29,12 +29,9 @@ import {
   type ValidatedRepoContributionRecord,
 } from './repo-contribution.ts'
 import {
-  RecordJournalNotFoundError,
-} from './record-journal.ts'
-import { RuntimeRecordDatabaseNotFoundError } from './mongo-record-database.ts'
-import type { RuntimeRecord } from './runtime-record-database.ts'
-import {
   RUNTIME_RECORD_DATABASE_SERVICE,
+  RuntimeRecordDatabaseNotFoundError,
+  type RuntimeRecord,
   type RuntimeRecordDatabaseSession,
 } from './runtime-record-database.ts'
 import {
@@ -374,7 +371,7 @@ export class RepositoryContributionService {
           try {
             await database.get(acceptance.id)
           } catch (cause) {
-            if (cause instanceof RecordJournalNotFoundError || cause instanceof RuntimeRecordDatabaseNotFoundError) return undefined
+            if (cause instanceof RuntimeRecordDatabaseNotFoundError) return undefined
             throw cause
           }
 
