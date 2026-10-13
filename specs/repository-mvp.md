@@ -46,7 +46,13 @@ Member and Repo are compatible capabilities composed over Core identities. Repo 
 
 No `previous`, `pid`, mandatory full reference graph, tag, Project or status schema enters the base labour fact.
 
-### Repo acceptance fact
+### Repo deliberation and acceptance fact
+
+A Member-signed L is a complete labour record even without an Asset and without a Repo decision. The node can persist and present it independently. An associated Asset A is optional, with its actual identity/storage contract still deferred to #8.
+
+Repo acceptance is **a later, independent positive decision**, ordinarily following a collective daily/weekly review of one or more labour records. Saving L, importing a Session, or storing an Asset does not itself mean that the Repo accepted labour. Deferred/rejected deliberation results are not inferred from absence of D; application-side review annotations and any future signed governance evidence remain distinct.
+
+**Existing v0.1.0 contract (unchanged for historical compatibility):**
 
 ```text
 Repo-signed Record D
@@ -55,9 +61,11 @@ Repo-signed Record D
   data = { labourRecordId, assetId, operator }
 ```
 
-The acceptance fact selects one claimed result from the referenced labour Record, and `operator` records the actual Repo operation. Member declaration and Repo establishment remain separate signed facts. The Repo's positive acceptance is not a chain membership, general owner or delegation model.
+This v0.1.0 fact selects an Asset reference from the linked L. Its `assetId` is **required**. Positive Repo recognition of labour without an Asset is an agreed target **not representable by v0.1.0**; it requires a separately reviewed, versioned Protocol contract (conceptually `assetId?`). Do not reinterpret signed historical data or reuse the same exact ProtocolHash.
 
-**D, if valid and durably accepted with required prerequisites intact, is the Repository acceptance marker.** No pre-D database content, local function phase or app staging can establish an accepted contribution.
+D and its `operator` identify the Repo-signed decision and recorded operator; they do not establish voting rules, quorum or authorization. One meeting may review many labour records without requiring a new meeting Record or batch-signing protocol now.
+
+**A valid durable D is the Repository-local acceptance marker for a concrete Repo decision**, not a prerequisite for storing L. No pre-D database content, local function phase or app staging establishes an accepted contribution.
 
 ### Chain confirmation
 
@@ -97,7 +105,8 @@ The revised node does not have a standalone Recovery capability, staging queue o
 
 - Validate the supplied signed facts and concrete relations.
 - Use the configured Runtime DB provider to persist accepted facts under the provider's actual uniqueness/atomicity guarantees.
-- Repo acceptance `D` is written last under the established domain decision. D absent means there is no Repo acceptance fact, even if earlier facts survive. Concrete Asset-related completion is deferred.
+- A signed L may be persisted, read and reviewed by itself; no A or D is required for this operation.
+- Following an independent Repo positive decision, a valid D is written last in that concrete acceptance operation. D absent means no positive Repo acceptance fact is available, not that L is invalid or that the Repo rejected it. Existing v0.1.0 D still requires an Asset reference; no-A acceptance awaits a versioned Protocol change. Concrete Asset completion is deferred.
 - On startup, read persisted facts and rebuild only derived state. Do not replay pre-D commands.
 - Explicit caller retry of the same signed request remains allowed under RecordId and contribution-key idempotency rules.
 - A durable acceptance Record whose required dependencies are corrupt/unavailable must surface an integrity/storage failure; do not silently heal it from the original request.
