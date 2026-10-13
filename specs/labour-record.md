@@ -120,6 +120,8 @@ The Record must pass Core Record validation and signature verification, referenc
 the mounted exact `labour.record@0.1.0` ProtocolHash, and then pass the
 labour-data validation above.
 
+**L is an independent labour fact.** A Member can sign, persist, query and review L without declaring an A and without any Repo acceptance D. A later Repo meeting may decide whether to accept L or a related result, but the meeting and D are not prerequisites of L's validity.
+
 For the current Repository #9 contribution path, this valid Member-signed
 labour Record is also the complete Member-side confirmation. No second
 Member-confirmation Record is required. Its signed `references[]` and

@@ -12,6 +12,14 @@
 
 > **Architecture correction (2026-10):** Signed Protocol fields remain as defined here. The previous persistence implementation and unreviewed Asset-byte provider is legacy; MongoDB-default Runtime DB migration is pending, and Asset identity/storage is **deferred — rework required**. No independent contribution Recovery/staging feature remains in scope.
 
+## Scope of the published v0.1.0 contract
+
+This **Accepted** specification preserves the existing signed `repo.contribution@0.1.0` shape, including **required `assetId`**. It describes the narrower historical positive decision to accept a *selected Asset A linked to labour Record L*. It does **not** mean every valid L must declare an A, nor that merely persisting L is a Repo decision.
+
+The agreed product flow also needs **positive Repo acceptance of labour L without A**, ordinarily after a later daily/weekly collective meeting. A prospective Protocol version may represent this with optional `assetId`, but that is a **future versioned design requirement**, not the validation or ProtocolHash contract of v0.1.0. Its precise version, possible change to same-key uniqueness and historical compatibility must be separately reviewed before implementation. Previously signed v0.1.0 D remains valid under v0.1.0 only.
+
+Repo signature and the `operator` field identify a positive decision and its reported operator; they do not prove meeting attendance, voting, quorum or organizational authorization. A meeting may consider several labour records; absence of D is neither a negative vote nor proof of rejection.
+
 ## Purpose
 
 `repo.contribution@0.1.0` defines the minimum signed Repo-side fact required

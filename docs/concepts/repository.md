@@ -1,6 +1,6 @@
 # Repo
 
-Repo 是 LabourChain 中的仓库。它以 Asset 为存放对象，并在接收劳动者 contribution 时参与相关劳动的确证。
+Repo 是 LabourChain 中记录与回顾劳动、管理相关成果并作出采纳决定的仓库。Member 签名劳动记录 L 可以独立持久保存和查询；关联的成果 Asset A 是可选的。Repo 是否采纳该劳动，由之后独立作出的签名决定 D 表达，而不是由 L 的入库自动推定。
 
 ## 定义
 
@@ -16,16 +16,20 @@ Repo identity
     └─ other protocols...
 ```
 
-Repo 用于保存劳动成果，并留下其采纳了哪些劳动贡献的可验证事实。Repo 不把 Record 作为另一类仓库内容保存；与 Repo 有关的劳动历史由相关 LabourChain facts 重新构建。劳动者与 Repo 之间不额外建立链上 membership 状态。
+Repo Runtime 通过数据库保存、查询已验证的 Core 签名事实，包括独立成立的劳动记录 L；劳动形成具体成果时可以关联 Asset A，但保存 L 不要求先有 A 或 Repo 采纳决定 D。Repo 可在后续集体审议后签名采纳决定 D。Core Record 是协议事实，不能因在 Runtime DB 中持久保存，就被重新定义为 Repo 的 Asset 内容或规范的 `repo.records[]`；贡献历史从相关事实投影得到。劳动者与 Repo 之间不额外建立链上 membership 状态。
 
 ```text
 Member performs labour
   ↓
-Record<data = labourRecord>
-  ↓ relates to
-Asset
-  ↓ contribution
-Repo
+Member-signed labour Record L
+  ├──> Runtime DB: save L / query / review (no A or D required)
+  └──> optional association ──> Asset A
+
+L (+ optional A)
+  ↓ later: Repo daily / weekly collective deliberation
+  ↓ positive acceptance, if supported by the applicable Protocol
+Repo-signed decision Record D
+  (v0.1.0 requires selected A; acceptance without A needs a new version)
 ```
 
 ## establishment 与 operator
@@ -48,24 +52,24 @@ Entity K
 
 这种同 identity 的 Repo 能力可用于暂时收集尚未进入集体 Repo 的劳动成果与相关事实，但它不构成“Member 私有财产”的定义。Repo 的存放或关联关系本身不决定 Asset 的所有权、排他权、转让权或收益权。
 
-## Asset contribution
+## Labour contribution 与集体采纳
 
-Repo contribution 的对象是 Asset。一次 contribution 通常同时关联描述相关劳动的 labour Record。
+Repo 能保存 Member 的劳动事实 L 以供回顾，也能在日会、周会等集体审议后，对劳动贡献形成 Repo 签名的正向采纳决定 D。**保存 L 不等于采纳 L**；没有独立 A 的劳动（例如会议、沟通、组织工作）同样可以被记录和审议。
 
 ```text
-Member performs labour
-        ↓
-labour Record + Asset
-        ↓
-Asset contribution
-        ↓
-Repo accepts Asset
-and confirms related labour
+Member signs labour Record L
+      |-- optional -> Asset A
+      |
+      v
+Repo daily/weekly deliberation (later)
+      |
+      v
+positive Repo-signed decision D
 ```
 
-Repo 接受 contribution 后保存 Asset，并对相关劳动形成仓库侧确证。该处理不会改变 labour Record 的劳动主体，也不会把 Record 转移到 Repo 名下。
+A 是可选劳动成果，不应成为日常劳动记录的入库前提。现行 `repo.contribution@0.1.0` 只表达「Repo 采纳 L 所关联的指定 A」，其 `assetId` 仍为必需字段；未来要支持不带 A 的劳动采纳，必须通过新的版本化 Protocol 合同实现，不能重解释历史 D。
 
-没有形成或提交 Asset 的劳动仍然可以产生承载 labourRecord 的 Record，只是不构成 Repo contribution。
+D 记录的是 Repo 的正向采纳事实，而不是会议程序本身。实际操作人通过 `operator` 留痕；投票、集体决策依据和权限的可验证表示另行讨论。
 
 ## Contribution history
 
