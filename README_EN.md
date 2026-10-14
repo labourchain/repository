@@ -53,6 +53,14 @@ The **#31 implementation provides MongoDB as the default Runtime Record DB**. Le
 
 MongoDB handles persistence. On restart, the owning Node reconnects and reads stored facts and rebuildable projections; there is no cross-Node Repo write coordination, separate application DB recovery, or automatic replay of unfinished user contribution requests.
 
+## #48 M1: natural-language capture
+
+Compose `labourCapturePlugin` with the existing Member and `labour.record@0.1.0` capabilities and the MongoDB `runtimeRecordDatabasePlugin`. The Mongo provider shares one connection but separates signed Core facts (`records`) from unsigned capture metadata (`labour_inputs`) through the replaceable `labourInputStore` port.
+
+`labourCapture.create({ originalText, source, sourceReference?, memberIdentity, suggested? })` retains the exact input and unconfirmed proposed fields as a **draft**. It neither constructs nor signs an L. After explicit human confirmation, the caller passes an **already signed** Core Labour Record to `labourCapture.confirm(inputId, signedRecord)`. Existing Member/signature/exact ProtocolHash validation governs acceptance. `get`/`list` read capture status; `loadSigned`/`listSigned` read independently persisted, revalidated L, without requiring an Asset A or Repo Decision D.
+
+If L persists before its input is linked, an explicit retry using the same signed L is supported; no automatic signing, replay or recovery runs. Agent Session import, Patch/Projection, Review UI and Block/History are later stages.
+
 ## Status
 
 | Area | Status |

@@ -1,4 +1,8 @@
 import { isDeepStrictEqual } from 'node:util'
+import {
+  LABOUR_INPUT_STORE_SERVICE,
+} from './labour-input.ts'
+import { MongoLabourInputStore } from './mongo-labour-input-store.ts'
 import type { Context } from '@deepseek-ai/cordis'
 import { MongoClient, type Collection } from 'mongodb'
 import {
@@ -260,9 +264,19 @@ export const runtimeRecordDatabasePlugin = {
       )
     }
     ctx.effect(() => () => client.close())
+    const database = client.db(config.databaseName)
     ctx.provide(RUNTIME_RECORD_DATABASE_SERVICE,
       new MongoRuntimeRecordDatabaseService(
-        client.db(config.databaseName).collection<StoredRecord>('records'),
+        database.collection<StoredRecord>('records'),
+      ),
+    )
+    ctx.provide(LABOUR_INPUT_STORE_SERVICE,
+      new MongoLabourInputStore(
+        database.collection<{
+          _id: string
+          serialized: string
+          confirmedRecordId?: string
+        }>('labour_inputs'),
       ),
     )
   },
