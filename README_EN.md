@@ -61,6 +61,14 @@ Compose `labourCapturePlugin` with the existing Member and `labour.record@0.1.0`
 
 If L persists before its input is linked, an explicit retry using the same signed L is supported; no automatic signing, replay or recovery runs. Agent Session import, Patch/Projection, Review UI and Block/History are later stages.
 
+## #48 M2: append-only annotations and rebuildable projection
+
+Compose `labourReviewPlugin` with the existing Labour, Member and Runtime Record DB services plus the Mongo-provided `labourPatchStore`. Local annotation facts use a separate `labour_patches` collection; **signed Core L in `records` is never rewritten**. Neither Asset A nor Decision D nor a new Patch Protocol is required.
+
+`labourReview.getCurrent(recordId)` rebuilds a current view with verified signed L, `version`, `lastPatchId`, `labels`, `annotations` and `history`; `listCurrent()` reads standalone L as well. `append(recordId, { parentId, memberIdentity, note?, labelsAdd?, labelsRemove? })` requires `parentId: null` for the first annotation and the returned `lastPatchId` thereafter. The Mongo parent uniqueness index prevents forks; disconnected or malformed histories fail closed on replay. No persisted projection cache is needed.
+
+The supplied `memberIdentity` is checked against established Members but is **not a cryptographic signature or proof of the submitter's private key**. No new authentication/authorization layer is implied. M3 review UI and Agent Session ingestion are deferred/outside this scope.
+
 ## Status
 
 | Area | Status |

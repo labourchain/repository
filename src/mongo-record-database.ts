@@ -3,6 +3,11 @@ import {
   LABOUR_INPUT_STORE_SERVICE,
 } from './labour-input.ts'
 import { MongoLabourInputStore } from './mongo-labour-input-store.ts'
+import { LABOUR_PATCH_STORE_SERVICE } from './labour-patch.ts'
+import {
+  MongoLabourPatchStore,
+  type StoredLabourPatch,
+} from './mongo-labour-patch-store.ts'
 import type { Context } from '@deepseek-ai/cordis'
 import { MongoClient, type Collection } from 'mongodb'
 import {
@@ -279,5 +284,11 @@ export const runtimeRecordDatabasePlugin = {
         }>('labour_inputs'),
       ),
     )
+    const patches = database.collection<StoredLabourPatch>('labour_patches')
+    await patches.createIndex(
+      { targetId: 1, parentId: 1 },
+      { unique: true },
+    )
+    ctx.provide(LABOUR_PATCH_STORE_SERVICE, new MongoLabourPatchStore(patches))
   },
 }
