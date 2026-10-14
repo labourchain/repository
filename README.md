@@ -68,6 +68,14 @@ DB 负责已经写入的数据在数据库故障/重启后的持久性；Node �
 
 若签名 L 已持久化但尚未关联原始输入，调用者可使用**同一签名 L**显式重试确认；没有自动恢复或隐式签名。当前仅支持自然语言录入，Agent Session、Patch/Projection、Review UI 和 Block/History 留待后续阶段。
 
+## #48 M2：追加式 Patch 与可重建 Projection
+
+`labourReviewPlugin` 依赖已有 `labour.record@0.1.0`、Member、Runtime Record DB 和独立的 `labourPatchStore`。现有 Mongo Provider 共用连接，使用专门的 `labour_patches` 集合保存本地注释事实；**不会修改或重新签署 `records` 中的 L**。无需 A、D 或新增 Patch Protocol。
+
+`labourReview.getCurrent(recordId)` 返回经过现有签名、Member 和精确 ProtocolHash 验证的 L，以及重放得到的 `version`、`lastPatchId`、`labels`、`annotations`、`history`。`listCurrent()` 按独立 L 枚举生成同类视图。`append(recordId, { parentId, memberIdentity, note?, labelsAdd?, labelsRemove? })` 仅接受指向当前头节点的追加操作；首个 Patch 使用 `parentId: null`，后续使用已返回的 `lastPatchId`。Mongo 唯一索引禁止同一父节点分叉；读取发现孤立、重复或不合法 Patch 时失败，不静默修补。Projection 由签名 L 与 Patch 重建，不另存缓存。
+
+Patch 的 `memberIdentity` 是**调用方提供的 Member 归属信息**，会检查其已注册，但 Patch **没有 Core 签名、不能作为该 Member 私钥签署的证明**。此处不增加身份验证或授权体系。M3 最小 Review UI 与 Agent Session 相关功能均不在本轮范围。
+
 ## 当前进度
 
 | 领域 | 状态 |
