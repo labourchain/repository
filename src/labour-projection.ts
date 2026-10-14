@@ -47,7 +47,7 @@ export function projectLabourHistory(
   const seen = new Set<string>()
   let parent: string | null = null
   while (byParent.has(parent)) {
-    const patch = byParent.get(parent)!
+    const patch: LabourPatch = byParent.get(parent)!
     if (seen.has(patch.id)) {
       throw new LabourPatchIntegrityError('Labour Patch history has a cycle.')
     }
